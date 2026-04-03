@@ -1,58 +1,227 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# WoW Guild Service API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A World of Warcraft guild and character lookup API. Fetches and caches data from the Blizzard API, provides search, character profiles, guild rosters, and mythic+ dungeon run tracking.
 
-## About Laravel
+## Stack
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- **Laravel 13** (PHP 8.4)
+- **PostgreSQL 16** with JSONB columns
+- **Redis 7** for cache + queues
+- **Laravel Horizon** for queue management
+- **Laravel Sanctum** for API authentication
+- **Docker Compose** (6 containers)
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## API Base URL
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+```
+http://localhost:8091/api/v1
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+## Quick Start
 
-## Contributing
+```bash
+# 1. Clone and enter the project
+cd guild-service-be-v2
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+# 2. Copy environment file
+cp .env.example .env
 
-## Code of Conduct
+# 3. Copy dev docker override
+cp docker-compose.override.yml.example docker-compose.override.yml
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+# 4. Install PHP dependencies (via Docker)
+docker run --rm -v $(pwd):/app -w /app composer:2 composer install --ignore-platform-req=ext-pcntl
 
-## Security Vulnerabilities
+# 5. Generate app key
+docker run --rm -v $(pwd):/app -w /app composer:2 php artisan key:generate
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+# 6. Start all services
+docker compose up -d
 
-## License
+# 7. Run database migrations
+docker compose exec app php artisan migrate
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+# 8. (Optional) Publish Sanctum migration if not present
+docker compose exec app php artisan vendor:publish --provider="Laravel\Sanctum\SanctumServiceProvider"
+docker compose exec app php artisan migrate
+
+# 9. Fix storage permissions (dev only)
+docker compose exec app chmod -R 777 storage bootstrap/cache
+```
+
+The API is now running at **http://localhost:8091/api/v1**.
+
+## Docker Services
+
+| Service | Port (dev) | Description |
+|---------|-----------|-------------|
+| **nginx** | `8091` | Reverse proxy, serves the API |
+| **app** | (internal) | PHP 8.4-FPM, runs Laravel |
+| **horizon** | (internal) | Queue worker supervisor + dashboard |
+| **scheduler** | (internal) | Runs scheduled tasks (cron replacement) |
+| **postgres** | `5433` | PostgreSQL 16 database |
+| **redis** | `6380` | Cache, queues, sessions |
+
+### Useful Commands
+
+```bash
+# View all container status
+docker compose ps
+
+# View logs (all or specific service)
+docker compose logs -f
+docker compose logs -f app
+
+# Run artisan commands
+docker compose exec app php artisan <command>
+
+# Access Horizon dashboard (dev only)
+# http://localhost:8091/horizon
+
+# Restart Horizon after code changes
+docker compose restart horizon
+
+# Stop everything
+docker compose down
+
+# Stop and destroy volumes (database data!)
+docker compose down -v
+```
+
+## API Endpoints
+
+### Health
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/health` | No | Database + Redis connectivity check |
+
+### Authentication
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/auth/register` | No | Register a new user |
+| POST | `/auth/login` | No | Login, returns bearer token |
+| POST | `/auth/logout` | Yes | Invalidate current token |
+| GET | `/auth/user` | Yes | Get authenticated user + characters |
+| POST | `/auth/password/forgot` | No | Request password reset email |
+| POST | `/auth/password/reset` | No | Reset password with token |
+
+### Characters
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/characters/popular` | No | Recently searched + most popular |
+| GET | `/characters/{region}/{realm}/{name}` | No | Character lookup (returns 202 if syncing) |
+| PATCH | `/characters/{id}/recruitment` | Yes | Toggle "looking for guild" status |
+
+### Guilds
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/guilds/popular` | No | Recently searched + most popular |
+| GET | `/guilds/{region}/{realm}/{name}` | No | Guild lookup with paginated roster |
+
+### Blizzard OAuth
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| POST | `/{region}/blizzard-oauth` | Yes | Link Battle.net account |
+
+### Response Behavior
+
+- **200**: Data found and fresh
+- **202 + Retry-After: 5**: Entity not yet in DB, sync dispatched. Poll after 5 seconds.
+- **X-Data-Staleness: stale** header: Cached data returned, background refresh dispatched.
+
+## Postman Collection
+
+Import `postman.json` into Postman for a ready-to-use collection with all endpoints, variables, and auto-token management.
+
+## Blizzard API Setup
+
+1. Create an application at [Blizzard Developer Portal](https://develop.battle.net/)
+2. Set the redirect URI to your frontend's OAuth callback URL
+3. Add your credentials to `.env`:
+
+```env
+BLIZZARD_CLIENT_ID=your_client_id
+BLIZZARD_CLIENT_SECRET=your_client_secret
+```
+
+## Configuration
+
+Key `.env` variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `APP_PORT` | `8091` | Port nginx listens on |
+| `FRONTEND_URL` | `http://localhost:5173` | Frontend URL for CORS and password reset links |
+| `BLIZZARD_STALE_CHARACTER_PROFILE` | `900` | Seconds before character data is re-fetched |
+| `BLIZZARD_STALE_GUILD_ROSTER` | `7200` | Seconds before guild roster is re-synced |
+| `BLIZZARD_MIN_LEVEL_FOR_LOOKUP` | `70` | Min level to sync characters from guild rosters |
+| `BLIZZARD_MYTHIC_SEASON_OVERRIDE` | (empty) | Override auto-detected M+ season ID |
+
+## Architecture
+
+```
+app/
+  Blizzard/           # Blizzard API integration module
+    Client/           # HTTP clients (auth, profile, game data, user)
+    Contracts/        # Interfaces (TokenManager)
+    DTO/              # Readonly data transfer objects
+    Exceptions/       # API-specific exceptions
+    Jobs/             # Queue jobs (sync character, guild, roster, proactive)
+    Mappers/          # API response -> DTO transformers
+    Middleware/        # Job middleware (rate limiter, health check)
+  Enums/              # Region, Faction, SyncDepth, ItemQuality
+  Http/
+    Controllers/      # Thin controllers (Auth, Character, Guild, Blizzard)
+    Middleware/        # ForceJsonResponse
+    Requests/         # Form request validation
+    Resources/        # API response transformers
+  Models/             # Eloquent models (User, Character, Guild, etc.)
+  Policies/           # Authorization (CharacterPolicy)
+  Services/           # Business logic (CharacterService, GuildService)
+config/
+  blizzard.php        # Blizzard API config (credentials, timeouts, staleness)
+  horizon.php         # Queue supervisor config
+docker/               # Docker infrastructure files
+```
+
+## Queue Architecture
+
+Jobs are processed by Horizon with priority queues:
+
+| Queue | Priority | Jobs |
+|-------|----------|------|
+| `blizzard-auth` | Highest | Token refresh, OAuth |
+| `blizzard-user-sync` | High | User-initiated character/guild lookups |
+| `blizzard-roster-sync` | Medium | Guild roster fan-out (batched) |
+| `blizzard-background` | Low | Proactive sync for popular entities |
+| `default` | Normal | Everything else |
+
+### Scheduled Tasks
+
+| Task | Schedule |
+|------|----------|
+| Blizzard token refresh | Every 12 hours |
+| Horizon metrics snapshot | Every 5 minutes |
+| Proactive sync tier 1 (popular chars) | Every 30 minutes |
+| Proactive sync tier 2 (active chars) | Every 2 hours |
+| Proactive guild roster sync | Daily at 04:00 |
+| Prune old batches | Daily |
+| Prune failed jobs | Daily |
+
+## Production Deployment
+
+See `deploy.sh` for the deployment script. Key steps:
+
+1. Build the Docker image (uses multi-stage Dockerfile with PHP 8.4-FPM Alpine)
+2. Run migrations
+3. Gracefully terminate Horizon
+4. Recreate containers
+5. Cache config/routes/events
+6. Verify health
+
+For SSL, add the Caddy container (config in `docker/caddy/Caddyfile`) and set your domain.
