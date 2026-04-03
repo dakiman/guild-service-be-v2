@@ -1,6 +1,11 @@
 <?php
 
+use App\Blizzard\Exceptions\BlizzardApiException;
+use App\Blizzard\Exceptions\BlizzardNotFoundException;
+use App\Blizzard\Jobs\ProactiveSyncCharacters;
+use App\Blizzard\Jobs\ProactiveSyncGuilds;
 use App\Http\Middleware\ForceJsonResponse;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -13,6 +18,15 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
         apiPrefix: 'api/v1',
     )
+    ->withSchedule(function (Schedule $schedule) {
+        $schedule->command('blizzard:token')->everyTwelveHours()->withoutOverlapping();
+        $schedule->command('horizon:snapshot')->everyFiveMinutes();
+        $schedule->job(new ProactiveSyncCharacters(tier: 1))->everyThirtyMinutes()->withoutOverlapping();
+        $schedule->job(new ProactiveSyncCharacters(tier: 2))->everyTwoHours()->withoutOverlapping();
+        $schedule->job(new ProactiveSyncGuilds())->dailyAt('04:00')->withoutOverlapping();
+        $schedule->command('queue:prune-batches --hours=48')->daily();
+        $schedule->command('queue:prune-failed --hours=168')->daily();
+    })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->api(prepend: [
             ForceJsonResponse::class,
@@ -21,5 +35,15 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        $exceptions->renderable(function (BlizzardNotFoundException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 404);
+        });
+
+        $exceptions->renderable(function (BlizzardApiException $e) {
+            return response()->json([
+                'message' => 'Blizzard services are temporarily unavailable',
+            ], 503);
+        });
     })->create();

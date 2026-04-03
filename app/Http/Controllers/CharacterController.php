@@ -1,0 +1,58 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Http\Controllers;
+
+use App\Blizzard\Jobs\SyncCharacterData;
+use App\Enums\SyncDepth;
+use App\Http\Resources\CharacterResource;
+use App\Http\Resources\CharacterSummaryResource;
+use App\Models\Character;
+use App\Services\CharacterService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Gate;
+
+class CharacterController extends Controller
+{
+    public function show(string $region, string $realm, string $character, CharacterService $service): JsonResponse
+    {
+        $result = $service->getByIdentity($region, $realm, $character);
+
+        if ($result === null) {
+            SyncCharacterData::dispatch($region, $realm, $character, SyncDepth::Standard);
+
+            return response()->json(['message' => 'Character sync initiated'], 202)
+                ->header('Retry-After', '5');
+        }
+
+        $result->load(['guild', 'dungeonRuns']);
+
+        $response = response()->json(new CharacterResource($result));
+
+        if ($result->isStale()) {
+            $response->header('X-Data-Staleness', 'stale');
+        }
+
+        return $response;
+    }
+
+    public function popular(CharacterService $service): JsonResponse
+    {
+        $data = $service->getPopular();
+
+        return response()->json([
+            'recently_searched' => CharacterSummaryResource::collection($data['recently_searched']),
+            'most_popular' => CharacterSummaryResource::collection($data['most_popular']),
+        ]);
+    }
+
+    public function toggleRecruitment(Character $character, CharacterService $service): JsonResponse
+    {
+        Gate::authorize('toggleRecruitment', $character);
+
+        $character = $service->toggleRecruitment($character);
+
+        return response()->json(new CharacterResource($character));
+    }
+}

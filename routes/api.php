@@ -5,6 +5,9 @@ declare(strict_types=1);
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\ResetPasswordController;
+use App\Http\Controllers\BlizzardController;
+use App\Http\Controllers\CharacterController;
+use App\Http\Controllers\GuildController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', function () {
@@ -51,36 +54,25 @@ Route::prefix('auth')->group(function () {
 | Character Routes
 |--------------------------------------------------------------------------
 */
-Route::get('/characters/popular', function () {
-    // Placeholder
-})->name('characters.popular');
-
-Route::get('/characters/{region}/{realm}/{character}', function () {
-    // Placeholder
-})->name('characters.show');
-
-Route::patch('/characters/{character}/recruitment', function () {
-    // Placeholder
-})->middleware('auth:sanctum')->name('characters.recruitment');
+Route::get('/characters/popular', [CharacterController::class, 'popular'])->name('characters.popular');
+Route::get('/characters/{region}/{realm}/{character}', [CharacterController::class, 'show'])->name('characters.show');
+Route::patch('/characters/{character}/recruitment', [CharacterController::class, 'toggleRecruitment'])
+    ->middleware('auth:sanctum')
+    ->name('characters.recruitment');
 
 /*
 |--------------------------------------------------------------------------
 | Guild Routes
 |--------------------------------------------------------------------------
 */
-Route::get('/guilds/popular', function () {
-    // Placeholder
-})->name('guilds.popular');
-
-Route::get('/guilds/{region}/{realm}/{guild}', function () {
-    // Placeholder
-})->name('guilds.show');
+Route::get('/guilds/popular', [GuildController::class, 'popular'])->name('guilds.popular');
+Route::get('/guilds/{region}/{realm}/{guild}', [GuildController::class, 'show'])->name('guilds.show');
 
 /*
 |--------------------------------------------------------------------------
 | Blizzard OAuth Route
 |--------------------------------------------------------------------------
 */
-Route::post('/{region}/blizzard-oauth', function () {
-    // Placeholder
-})->middleware('auth:sanctum')->name('blizzard.oauth');
+Route::post('/{region}/blizzard-oauth', [BlizzardController::class, 'handleCode'])
+    ->middleware('auth:sanctum')
+    ->name('blizzard.oauth');
