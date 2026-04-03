@@ -1,0 +1,81 @@
+<?php
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Blizzard API Credentials
+    |--------------------------------------------------------------------------
+    */
+
+    'client' => [
+        'id' => env('BLIZZARD_CLIENT_ID'),
+        'secret' => env('BLIZZARD_CLIENT_SECRET'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Supported Regions
+    |--------------------------------------------------------------------------
+    */
+
+    'regions' => ['eu', 'us', 'kr', 'tw'],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Staleness Thresholds (seconds)
+    |--------------------------------------------------------------------------
+    | How long before cached data is considered stale and a background
+    | refresh is triggered.
+    */
+
+    'staleness' => [
+        'character' => [
+            'profile' => (int) env('BLIZZARD_STALE_CHARACTER_PROFILE', 900),
+            'mythic_plus' => (int) env('BLIZZARD_STALE_CHARACTER_MYTHIC', 1800),
+            'equipment' => (int) env('BLIZZARD_STALE_CHARACTER_EQUIPMENT', 900),
+        ],
+        'guild' => [
+            'basic' => (int) env('BLIZZARD_STALE_GUILD_BASIC', 3600),
+            'roster' => (int) env('BLIZZARD_STALE_GUILD_ROSTER', 7200),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Sync Configuration
+    |--------------------------------------------------------------------------
+    */
+
+    'min_level_for_character_lookup' => (int) env('BLIZZARD_MIN_LEVEL_FOR_LOOKUP', 70),
+
+    'mythic_plus' => [
+        'season_override' => env('BLIZZARD_MYTHIC_SEASON_OVERRIDE'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | HTTP Client Timeouts (seconds)
+    |--------------------------------------------------------------------------
+    */
+
+    'timeouts' => [
+        'auth' => 10,
+        'character_profile' => 15,
+        'character_pool' => 20,
+        'guild_roster' => 20,
+        'game_data' => 30,
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Rate Limiting
+    |--------------------------------------------------------------------------
+    */
+
+    'rate_limit' => [
+        'per_second' => 80,
+        'per_hour' => 30000,
+    ],
+
+];
