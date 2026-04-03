@@ -1,0 +1,357 @@
+{
+	"info": {
+		"_postman_id": "guild-service-be-v2",
+		"name": "Guild Service API v1",
+		"description": "WoW Guild/Character Lookup API - Laravel 13 + PostgreSQL + Redis + Horizon",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost/api/v1",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "region",
+			"value": "eu",
+			"type": "string"
+		},
+		{
+			"key": "realm",
+			"value": "draenor",
+			"type": "string"
+		},
+		{
+			"key": "character_name",
+			"value": "arthas",
+			"type": "string"
+		},
+		{
+			"key": "guild_name",
+			"value": "method",
+			"type": "string"
+		},
+		{
+			"key": "character_id",
+			"value": "1",
+			"type": "string"
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{token}}",
+				"type": "string"
+			}
+		]
+	},
+	"item": [
+		{
+			"name": "Health",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/health",
+							"host": ["{{base_url}}"],
+							"path": ["health"]
+						},
+						"description": "Checks database and Redis connectivity. Returns 200 if all ok, 503 if any service is down."
+					}
+				}
+			]
+		},
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Register",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var json = pm.response.json();",
+									"    pm.collectionVariables.set('token', json.data.access_token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Test User\",\n    \"email\": \"test@example.com\",\n    \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/register",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "register"]
+						},
+						"description": "Register a new user. Auto-saves the returned token to the collection variable."
+					}
+				},
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var json = pm.response.json();",
+									"    pm.collectionVariables.set('token', json.data.access_token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"test@example.com\",\n    \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "login"]
+						},
+						"description": "Login with email/password. Auto-saves the returned token to the collection variable."
+					}
+				},
+				{
+					"name": "Get User",
+					"request": {
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"url": {
+							"raw": "{{base_url}}/auth/user",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "user"]
+						},
+						"description": "Get the authenticated user with their characters. Requires auth token."
+					}
+				},
+				{
+					"name": "Logout",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    pm.collectionVariables.set('token', '');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"url": {
+							"raw": "{{base_url}}/auth/logout",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "logout"]
+						},
+						"description": "Logout and invalidate the current token. Clears saved token."
+					}
+				},
+				{
+					"name": "Forgot Password",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"test@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/password/forgot",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "password", "forgot"]
+						},
+						"description": "Request a password reset link. Sends email with reset URL pointing to the frontend."
+					}
+				},
+				{
+					"name": "Reset Password",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"test@example.com\",\n    \"token\": \"reset-token-from-email\",\n    \"password\": \"newpassword123\",\n    \"password_confirmation\": \"newpassword123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/password/reset",
+							"host": ["{{base_url}}"],
+							"path": ["auth", "password", "reset"]
+						},
+						"description": "Reset password using the token from the reset email."
+					}
+				}
+			]
+		},
+		{
+			"name": "Characters",
+			"item": [
+				{
+					"name": "Popular Characters",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"url": {
+							"raw": "{{base_url}}/characters/popular",
+							"host": ["{{base_url}}"],
+							"path": ["characters", "popular"]
+						},
+						"description": "Get recently searched and most popular characters. No auth required."
+					}
+				},
+				{
+					"name": "Get Character",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"url": {
+							"raw": "{{base_url}}/characters/{{region}}/{{realm}}/{{character_name}}",
+							"host": ["{{base_url}}"],
+							"path": ["characters", "{{region}}", "{{realm}}", "{{character_name}}"]
+						},
+						"description": "Lookup a character by region/realm/name. Returns cached data if available, or 202 if the character needs to be synced from Blizzard. Check the X-Data-Staleness header to know if a background refresh was dispatched."
+					}
+				},
+				{
+					"name": "Toggle Recruitment",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"url": {
+							"raw": "{{base_url}}/characters/{{character_id}}/recruitment",
+							"host": ["{{base_url}}"],
+							"path": ["characters", "{{character_id}}", "recruitment"]
+						},
+						"description": "Toggle the 'looking for guild' recruitment status on a character. Only the character owner can do this. Requires auth token."
+					}
+				}
+			]
+		},
+		{
+			"name": "Guilds",
+			"item": [
+				{
+					"name": "Popular Guilds",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"url": {
+							"raw": "{{base_url}}/guilds/popular",
+							"host": ["{{base_url}}"],
+							"path": ["guilds", "popular"]
+						},
+						"description": "Get recently searched and most popular guilds. No auth required."
+					}
+				},
+				{
+					"name": "Get Guild",
+					"request": {
+						"auth": { "type": "noauth" },
+						"method": "GET",
+						"header": [
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"url": {
+							"raw": "{{base_url}}/guilds/{{region}}/{{realm}}/{{guild_name}}?per_page=50",
+							"host": ["{{base_url}}"],
+							"path": ["guilds", "{{region}}", "{{realm}}", "{{guild_name}}"],
+							"query": [
+								{
+									"key": "per_page",
+									"value": "50",
+									"description": "Roster members per page (default 50)"
+								}
+							]
+						},
+						"description": "Lookup a guild by region/realm/name. Returns guild info with a paginated roster. Returns 202 if the guild needs to be synced from Blizzard."
+					}
+				}
+			]
+		},
+		{
+			"name": "Blizzard OAuth",
+			"item": [
+				{
+					"name": "Link Battle.net Account",
+					"request": {
+						"method": "POST",
+						"header": [
+							{ "key": "Content-Type", "value": "application/json" },
+							{ "key": "Accept", "value": "application/json" }
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"code\": \"authorization-code-from-blizzard-redirect\",\n    \"redirectUri\": \"http://localhost:5173/blizzard-oauth\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/{{region}}/blizzard-oauth",
+							"host": ["{{base_url}}"],
+							"path": ["{{region}}", "blizzard-oauth"]
+						},
+						"description": "Exchange a Blizzard OAuth authorization code for account linking. The frontend redirects the user to Blizzard's OAuth page, then sends the received code here. The API exchanges it synchronously and dispatches background character sync. Returns 202. Requires auth token."
+					}
+				}
+			]
+		}
+	]
+}
