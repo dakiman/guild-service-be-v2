@@ -15,6 +15,9 @@ A World of Warcraft guild and character lookup API. Fetches and caches data from
 
 ```
 http://localhost:8091/api/v1
+
+# Or from other machines on the LAN:
+http://192.168.100.253:8091/api/v1
 ```
 
 ## Quick Start
@@ -112,15 +115,15 @@ docker compose down -v
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | GET | `/characters/popular` | No | Recently searched + most popular |
-| GET | `/characters/{region}/{realm}/{name}` | No | Character lookup (returns 202 if syncing) |
-| PATCH | `/characters/{id}/recruitment` | Yes | Toggle "looking for guild" status |
+| GET | `/characters/{region}/{realm}/{character}` | No | Character lookup (returns 202 if syncing) |
+| PATCH | `/characters/{character}/recruitment` | Yes | Toggle "looking for guild" status |
 
 ### Guilds
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | GET | `/guilds/popular` | No | Recently searched + most popular |
-| GET | `/guilds/{region}/{realm}/{name}` | No | Guild lookup with paginated roster |
+| GET | `/guilds/{region}/{realm}/{guild}` | No | Guild lookup with paginated roster |
 
 ### Blizzard OAuth
 
@@ -174,6 +177,7 @@ app/
     Jobs/             # Queue jobs (sync character, guild, roster, proactive)
     Mappers/          # API response -> DTO transformers
     Middleware/        # Job middleware (rate limiter, health check)
+  Console/Commands/   # Artisan commands (RefreshBlizzardToken)
   Enums/              # Region, Faction, SyncDepth, ItemQuality
   Http/
     Controllers/      # Thin controllers (Auth, Character, Guild, Blizzard)
@@ -182,10 +186,12 @@ app/
     Resources/        # API response transformers
   Models/             # Eloquent models (User, Character, Guild, etc.)
   Policies/           # Authorization (CharacterPolicy)
+  Providers/          # Service providers (App, Horizon, Blizzard)
   Services/           # Business logic (CharacterService, GuildService)
 config/
   blizzard.php        # Blizzard API config (credentials, timeouts, staleness)
   horizon.php         # Queue supervisor config
+  sanctum.php         # Sanctum token auth config
 docker/               # Docker infrastructure files
 ```
 
