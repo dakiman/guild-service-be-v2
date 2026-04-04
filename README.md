@@ -164,6 +164,7 @@ Key `.env` variables:
 | `BLIZZARD_STALE_GUILD_ROSTER` | `7200` | Seconds before guild roster is re-synced |
 | `BLIZZARD_MIN_LEVEL_FOR_LOOKUP` | `70` | Min level to sync characters from guild rosters |
 | `BLIZZARD_MYTHIC_SEASON_OVERRIDE` | (empty) | Override auto-detected M+ season ID |
+| `HORIZON_ADMIN_EMAILS` | (empty) | Comma-separated emails allowed to access Horizon dashboard |
 
 ## Architecture
 
@@ -186,7 +187,7 @@ app/
     Resources/        # API response transformers
   Models/             # Eloquent models (User, Character, Guild, etc.)
   Policies/           # Authorization (CharacterPolicy)
-  Providers/          # Service providers (App, Horizon, Blizzard)
+  Providers/          # Service providers (App, Horizon)
   Services/           # Business logic (CharacterService, GuildService)
 config/
   blizzard.php        # Blizzard API config (credentials, timeouts, staleness)
