@@ -21,12 +21,10 @@ class CharacterService
         $character->increment('num_of_searches');
         $character->update(['last_searched_at' => now()]);
 
-        if ($character->isStale()) {
-            SyncCharacterData::dispatch($region, $realm, $name, SyncDepth::Standard);
-        }
-
         if ($character->isMythicsStale()) {
             SyncCharacterData::dispatch($region, $realm, $name, SyncDepth::Full);
+        } elseif ($character->isStale()) {
+            SyncCharacterData::dispatch($region, $realm, $name, SyncDepth::Standard);
         }
 
         return $character;

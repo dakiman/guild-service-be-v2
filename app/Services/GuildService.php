@@ -20,11 +20,7 @@ class GuildService
         $guild->increment('num_of_searches');
         $guild->update(['last_searched_at' => now()]);
 
-        if ($guild->isStale()) {
-            SyncGuildData::dispatch($region, $realm, $name);
-        }
-
-        if ($guild->isRosterStale()) {
+        if ($guild->isStale() || $guild->isRosterStale()) {
             SyncGuildData::dispatch($region, $realm, $name);
         }
 
