@@ -59,6 +59,9 @@ Self-contained module with its own service provider (`BlizzardServiceProvider`),
 - **Jobs/** — All implement `ShouldQueue` + `ShouldBeUnique` (60s). Retries: 3 with backoff [30, 120, 300]s. Each job uses two middleware: `BlizzardRateLimiter` (Redis throttle, 80 req/s) and `BlizzardHealthCheck` (circuit breaker via cache flag).
 - **Mappers/** — Transform raw Blizzard API JSON arrays into readonly DTOs. One mapper per data type.
 - **DTO/** — Readonly classes with constructor promotion. Carry only the fields we need from Blizzard's deeply nested responses.
+- **Equipment shape.** `EquippedItem` and the persisted `equipment` JSONB carry the Wowhead-ready fields: `id, name, quality, slot, item_level, bonus: int[], gems: int[], enchantments: int[], set_id: ?int, stats: [{type,value,is_negated}]`. The frontend's `WowheadLink.vue` consumes this shape directly — do not transform in controllers.
+- **Talent shape.** `talents` JSONB has four branches: `class`, `spec`, `hero`, `pvp`. Retail only; Classic does not populate `talents`. The Blizzard-provided `talent_loadout_code` is a separate top-level column on `characters`, not nested in the JSONB.
+- **`game_version` column.** Every character row carries `game_version` ('retail' | 'classic') with unique index `(name, realm, region, game_version)`. Retail is the default; Classic persistence is gated behind a feature flag (Plan 3).
 - **TokenManager** — Caches OAuth client-credentials tokens per region with double-check locking to prevent thundering herd on refresh.
 
 ### Sync Depth
