@@ -34,6 +34,9 @@ return [
             'profile' => (int) env('BLIZZARD_STALE_CHARACTER_PROFILE', 900),
             'mythic_plus' => (int) env('BLIZZARD_STALE_CHARACTER_MYTHIC', 1800),
             'equipment' => (int) env('BLIZZARD_STALE_CHARACTER_EQUIPMENT', 900),
+            'pvp' => (int) env('BLIZZARD_STALE_CHARACTER_PVP', 1800),
+            'professions' => (int) env('BLIZZARD_STALE_CHARACTER_PROFESSIONS', 21600),
+            'raids' => (int) env('BLIZZARD_STALE_CHARACTER_RAIDS', 3600),
         ],
         'guild' => [
             'basic' => (int) env('BLIZZARD_STALE_GUILD_BASIC', 3600),
