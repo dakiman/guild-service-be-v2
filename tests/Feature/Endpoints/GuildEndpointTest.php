@@ -43,6 +43,6 @@ class GuildEndpointTest extends EndpointIntegrationTestCase
             ],
         ]);
 
-        $this->assertSame('eu', $response->json('data.region'));
+        $this->assertSame($fixture['region'], $response->json('data.region'));
     }
 }

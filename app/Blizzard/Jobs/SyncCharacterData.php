@@ -144,12 +144,15 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             }
         }
 
-        // Upsert the character
+        // Upsert the character.
+        // game_version is always 'retail' here — Classic uses a separate read-through
+        // service and does not flow through this job.
         $character = Character::updateOrCreate(
             [
                 'name' => $this->name,
                 'realm' => $this->realm,
                 'region' => $this->region,
+                'game_version' => 'retail',
             ],
             $characterData,
         );

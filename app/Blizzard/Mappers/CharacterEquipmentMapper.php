@@ -41,14 +41,22 @@ class CharacterEquipmentMapper
         return array_values(array_map('intval', $bonus));
     }
 
-    /** @return int[] */
+    /**
+     * Positional gem list matching Wowhead's `&gems=id1:id2:id3` convention.
+     * Empty sockets are represented as 0 so the socket order is preserved.
+     *
+     * @return int[]
+     */
     private function mapGems(array $raw): array
     {
+        $sockets = $raw['sockets'] ?? [];
+        if ($sockets === []) {
+            return [];
+        }
+
         $gems = [];
-        foreach ($raw['sockets'] ?? [] as $socket) {
-            if (isset($socket['item']['id'])) {
-                $gems[] = (int) $socket['item']['id'];
-            }
+        foreach ($sockets as $socket) {
+            $gems[] = (int) ($socket['item']['id'] ?? 0);
         }
 
         return $gems;
