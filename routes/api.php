@@ -55,7 +55,9 @@ Route::prefix('auth')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::get('/characters/popular', [CharacterController::class, 'popular'])->name('characters.popular');
-Route::get('/characters/{region}/{realm}/{character}', [CharacterController::class, 'show'])->name('characters.show');
+Route::get('/characters/{region}/{realm}/{character}', [CharacterController::class, 'show'])
+    ->middleware('throttle:10,1')
+    ->name('characters.show');
 Route::patch('/characters/{character}/recruitment', [CharacterController::class, 'toggleRecruitment'])
     ->middleware('auth:sanctum')
     ->name('characters.recruitment');
