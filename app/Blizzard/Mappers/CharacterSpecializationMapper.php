@@ -10,12 +10,14 @@ class CharacterSpecializationMapper
 {
     public function map(array $data): CharacterSpecialization
     {
-        $activeSpec = $data['active_specialization']['name'] ?? 'Unknown';
+        $activeSpec = (string) ($data['active_specialization']['name'] ?? 'Unknown');
         $loadouts = $data['specializations'] ?? [];
 
         $classTalents = [];
         $specTalents = [];
         $heroTalents = [];
+        $pvpTalents = [];
+        $loadoutCode = null;
 
         foreach ($loadouts as $loadout) {
             if (! isset($loadout['is_active']) || $loadout['is_active'] !== true) {
@@ -25,6 +27,10 @@ class CharacterSpecializationMapper
             $classTalents = $this->extractTalents($loadout['selected_class_talents'] ?? []);
             $specTalents = $this->extractTalents($loadout['selected_spec_talents'] ?? []);
             $heroTalents = $this->extractTalents($loadout['selected_hero_talents'] ?? []);
+            $pvpTalents = $this->extractPvpTalents($loadout['pvp_talent_slots'] ?? []);
+            $loadoutCode = isset($loadout['talent_loadout_code'])
+                ? (string) $loadout['talent_loadout_code']
+                : null;
 
             break;
         }
@@ -34,9 +40,12 @@ class CharacterSpecializationMapper
             classTalents: $classTalents,
             specTalents: $specTalents,
             heroTalents: $heroTalents,
+            pvpTalents: $pvpTalents,
+            talentLoadoutCode: $loadoutCode,
         );
     }
 
+    /** @return array<int, array{id: int, rank: int}> */
     private function extractTalents(array $talents): array
     {
         $result = [];
@@ -48,6 +57,22 @@ class CharacterSpecializationMapper
                     'rank' => (int) ($talent['rank'] ?? 1),
                 ];
             }
+        }
+
+        return $result;
+    }
+
+    /** @return array<int, array{slot: int, talent_id: int, spell_id: int}> */
+    private function extractPvpTalents(array $slots): array
+    {
+        $result = [];
+
+        foreach ($slots as $slot) {
+            $result[] = [
+                'slot' => (int) ($slot['slot_number'] ?? 0),
+                'talent_id' => (int) ($slot['selected']['talent']['id'] ?? 0),
+                'spell_id' => (int) ($slot['selected']['spell_tooltip']['spell']['id'] ?? 0),
+            ];
         }
 
         return $result;
