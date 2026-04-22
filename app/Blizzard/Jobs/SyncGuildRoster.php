@@ -8,7 +8,6 @@ use App\Blizzard\Middleware\BlizzardHealthCheck;
 use App\Blizzard\Middleware\BlizzardRateLimiter;
 use App\Enums\SyncDepth;
 use App\Models\Guild;
-use Illuminate\Bus\Batch;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -19,7 +18,7 @@ use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
-class SyncGuildRoster implements ShouldQueue, ShouldBeUnique
+class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 

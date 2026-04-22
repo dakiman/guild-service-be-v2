@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Blizzard\Jobs\SyncCharacterData;
 use App\Enums\SyncDepth;
 use App\Models\Character;
+use Illuminate\Database\Eloquent\Collection;
 
 class CharacterService
 {
@@ -31,7 +32,7 @@ class CharacterService
     }
 
     /**
-     * @return array{recently_searched: \Illuminate\Database\Eloquent\Collection, most_popular: \Illuminate\Database\Eloquent\Collection}
+     * @return array{recently_searched: Collection, most_popular: Collection}
      */
     public function getPopular(): array
     {

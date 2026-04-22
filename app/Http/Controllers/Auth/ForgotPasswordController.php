@@ -20,7 +20,7 @@ class ForgotPasswordController extends Controller
         Password::sendResetLink(
             $request->only('email'),
             function ($user, $token) {
-                $url = config('app.frontend_url') . '/reset-password?token=' . $token . '&email=' . urlencode($user->email);
+                $url = config('app.frontend_url').'/reset-password?token='.$token.'&email='.urlencode($user->email);
 
                 $user->sendPasswordResetNotification($token);
             }

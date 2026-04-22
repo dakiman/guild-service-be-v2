@@ -8,22 +8,24 @@ use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\BlizzardController;
 use App\Http\Controllers\CharacterController;
 use App\Http\Controllers\GuildController;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', function () {
     $checks = [];
 
     try {
-        \Illuminate\Support\Facades\DB::connection()->getPdo();
+        DB::connection()->getPdo();
         $checks['database'] = 'ok';
-    } catch (\Throwable) {
+    } catch (Throwable) {
         $checks['database'] = 'failed';
     }
 
     try {
-        \Illuminate\Support\Facades\Redis::ping();
+        Redis::ping();
         $checks['redis'] = 'ok';
-    } catch (\Throwable) {
+    } catch (Throwable) {
         $checks['redis'] = 'failed';
     }
 

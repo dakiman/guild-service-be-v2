@@ -18,17 +18,17 @@ abstract class EndpointIntegrationTestCase extends TestCase
      * @var array<string, array{region: string, realm: string, name: string}>
      */
     public const RETAIL_CHARACTERS = [
-        'geared_main'     => ['region' => 'eu', 'realm' => '', 'name' => ''], // sockets + enchants + tier set
-        'pvp_player'      => ['region' => 'eu', 'realm' => '', 'name' => ''], // active PvP
+        'geared_main' => ['region' => 'eu', 'realm' => '', 'name' => ''], // sockets + enchants + tier set
+        'pvp_player' => ['region' => 'eu', 'realm' => '', 'name' => ''], // active PvP
         'profession_rich' => ['region' => 'eu', 'realm' => '', 'name' => ''], // 2 primaries + secondaries
-        'raider'          => ['region' => 'eu', 'realm' => '', 'name' => ''], // active raider
+        'raider' => ['region' => 'eu', 'realm' => '', 'name' => ''], // active raider
     ];
 
     /**
      * @var array<string, array{region: string, realm: string, name: string}>
      */
     public const CLASSIC_CHARACTERS = [
-        'vanilla_era'  => ['region' => 'eu', 'realm' => '', 'name' => ''],
+        'vanilla_era' => ['region' => 'eu', 'realm' => '', 'name' => ''],
         'cata_classic' => ['region' => 'eu', 'realm' => '', 'name' => ''],
     ];
 

@@ -32,6 +32,7 @@ class HorizonServiceProvider extends HorizonApplicationServiceProvider
             if (app()->environment('local')) {
                 return true;
             }
+
             // In production, protect via nginx basic auth or check specific user
             return $user !== null && in_array($user->email, config('horizon.admin_emails', []));
         });

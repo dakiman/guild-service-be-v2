@@ -9,6 +9,7 @@ use App\Blizzard\Client\BlizzardGameDataClient;
 use App\Blizzard\Client\BlizzardProfileClient;
 use App\Blizzard\Client\BlizzardUserClient;
 use App\Blizzard\Contracts\TokenManagerInterface;
+use Illuminate\Cache\CacheManager;
 use Illuminate\Support\ServiceProvider;
 
 class BlizzardServiceProvider extends ServiceProvider
@@ -25,7 +26,7 @@ class BlizzardServiceProvider extends ServiceProvider
         $this->app->singleton(TokenManagerInterface::class, function ($app) {
             return new TokenManager(
                 authClient: $app->make(BlizzardAuthClient::class),
-                cacheManager: $app->make(\Illuminate\Cache\CacheManager::class),
+                cacheManager: $app->make(CacheManager::class),
             );
         });
 

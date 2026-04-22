@@ -7,9 +7,9 @@ namespace App\Blizzard\DTO;
 final readonly class EquippedItem
 {
     /**
-     * @param  int[]  $bonus          Blizzard `bonus_list` — Wowhead `&bonus=`
-     * @param  int[]  $gems           Gem item_ids in socket order — Wowhead `&gems=`
-     * @param  int[]  $enchantments   Enchantment ids — Wowhead `&ench=`
+     * @param  int[]  $bonus  Blizzard `bonus_list` — Wowhead `&bonus=`
+     * @param  int[]  $gems  Gem item_ids in socket order — Wowhead `&gems=`
+     * @param  int[]  $enchantments  Enchantment ids — Wowhead `&ench=`
      * @param  array<int, array{type: string, value: int, is_negated: bool}>  $stats
      */
     public function __construct(

@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Blizzard\Jobs\SyncGuildData;
 use App\Models\Guild;
+use Illuminate\Database\Eloquent\Collection;
 
 class GuildService
 {
@@ -28,7 +29,7 @@ class GuildService
     }
 
     /**
-     * @return array{recently_searched: \Illuminate\Database\Eloquent\Collection, most_popular: \Illuminate\Database\Eloquent\Collection}
+     * @return array{recently_searched: Collection, most_popular: Collection}
      */
     public function getPopular(): array
     {
