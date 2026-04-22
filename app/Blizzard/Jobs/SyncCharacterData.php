@@ -119,19 +119,27 @@ class SyncCharacterData implements ShouldQueue, ShouldBeUnique
                 $equipment = $equipmentMapper->map($response['equipment']);
                 $characterData['equipment'] = array_map(fn ($item) => [
                     'id' => $item->id,
-                    'item_level' => $item->itemLevel,
+                    'name' => $item->name,
                     'quality' => $item->quality,
                     'slot' => $item->slot,
+                    'item_level' => $item->itemLevel,
+                    'bonus' => $item->bonus,
+                    'gems' => $item->gems,
+                    'enchantments' => $item->enchantments,
+                    'set_id' => $item->setId,
+                    'stats' => $item->stats,
                 ], $equipment);
             }
 
             if ($response['specializations']) {
                 $spec = $specMapper->map($response['specializations']);
                 $characterData['active_specialization'] = $spec->activeSpecialization;
+                $characterData['talent_loadout_code'] = $spec->talentLoadoutCode;
                 $characterData['talents'] = [
                     'class' => $spec->classTalents,
                     'spec' => $spec->specTalents,
                     'hero' => $spec->heroTalents,
+                    'pvp' => $spec->pvpTalents,
                 ];
             }
         }
