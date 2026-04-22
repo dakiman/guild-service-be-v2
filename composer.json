@@ -48,7 +48,11 @@
         ],
         "test": [
             "@php artisan config:clear --ansi",
-            "@php artisan test"
+            "@php artisan test --exclude-group=integration"
+        ],
+        "test:integration": [
+            "@php artisan config:clear --ansi",
+            "@php artisan test --group=integration"
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
