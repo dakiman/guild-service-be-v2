@@ -14,6 +14,7 @@ class CharacterFactory extends Factory
             'name' => strtolower(fake()->firstName()),
             'realm' => fake()->slug(2),
             'region' => fake()->randomElement(['eu', 'us', 'kr', 'tw']),
+            'game_version' => 'retail',
             'gender' => fake()->randomElement(['Male', 'Female']),
             'faction' => fake()->randomElement(['Alliance', 'Horde']),
             'race_id' => fake()->numberBetween(1, 30),
