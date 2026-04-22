@@ -22,6 +22,7 @@ class Character extends Model
         'name',
         'realm',
         'region',
+        'game_version',
         'gender',
         'faction',
         'race_id',
@@ -30,7 +31,10 @@ class Character extends Model
         'achievement_points',
         'average_item_level',
         'equipped_item_level',
+        'mythic_plus_rating',
+        'mythic_plus_rating_by_spec',
         'active_specialization',
+        'talent_loadout_code',
         'media',
         'talents',
         'equipment',
@@ -38,6 +42,9 @@ class Character extends Model
         'num_of_searches',
         'last_searched_at',
         'mythics_synced_at',
+        'pvp_synced_at',
+        'professions_synced_at',
+        'raids_synced_at',
     ];
 
     protected function casts(): array
@@ -46,12 +53,17 @@ class Character extends Model
             'media' => 'array',
             'talents' => 'array',
             'equipment' => 'array',
+            'mythic_plus_rating_by_spec' => 'array',
             'recruitment' => 'boolean',
             'mythics_synced_at' => 'datetime',
+            'pvp_synced_at' => 'datetime',
+            'professions_synced_at' => 'datetime',
+            'raids_synced_at' => 'datetime',
             'last_searched_at' => 'datetime',
             'race_id' => 'integer',
             'class_id' => 'integer',
             'level' => 'integer',
+            'mythic_plus_rating' => 'integer',
             'num_of_searches' => 'integer',
         ];
     }
