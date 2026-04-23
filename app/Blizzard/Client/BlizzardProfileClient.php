@@ -178,6 +178,20 @@ class BlizzardProfileClient extends BlizzardClient
         return $response->json();
     }
 
+    public function getCharacterRaidEncounters(string $realm, string $name): ?array
+    {
+        $response = $this->request()
+            ->get("/profile/wow/character/{$realm}/{$name}/encounters/raids");
+
+        if ($response->status() === 404) {
+            return null;
+        }
+
+        $response->throw();
+
+        return $response->json();
+    }
+
     public function getGuildData(string $realm, string $guild): array
     {
         $response = $this->request()

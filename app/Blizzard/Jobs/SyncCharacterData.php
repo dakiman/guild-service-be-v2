@@ -15,6 +15,7 @@ use App\Blizzard\Mappers\CharacterSpecializationMapper;
 use App\Blizzard\Mappers\MythicPlusMapper;
 use App\Blizzard\Mappers\MythicPlusRatingMapper;
 use App\Blizzard\Mappers\PvpBracketStatsMapper;
+use App\Blizzard\Mappers\RaidEncounterKillMapper;
 use App\Blizzard\Middleware\BlizzardHealthCheck;
 use App\Blizzard\Middleware\BlizzardRateLimiter;
 use App\Enums\SyncDepth;
@@ -23,6 +24,7 @@ use App\Models\CharacterProfession;
 use App\Models\CharacterPvpBracket;
 use App\Models\DungeonRun;
 use App\Models\Guild;
+use App\Models\RaidEncounterKill;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -76,6 +78,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         MythicPlusRatingMapper $ratingMapper,
         PvpBracketStatsMapper $pvpMapper,
         CharacterProfessionMapper $professionMapper,
+        RaidEncounterKillMapper $raidMapper,
         BlizzardGameDataClient $gameDataClient,
     ): void {
         $client = new BlizzardProfileClient($tokenManager, $this->region);
@@ -192,6 +195,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $this->syncMythicPlus($client, $gameDataClient, $mythicPlusMapper, $ratingMapper, $character);
             $this->syncPvpData($client, $pvpMapper, $character);
             $this->syncProfessions($client, $professionMapper, $character);
+            $this->syncRaidEncounters($client, $raidMapper, $character);
         }
     }
 
@@ -366,6 +370,55 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             });
         } catch (Throwable $e) {
             Log::warning('Failed to sync professions for character', [
+                'character' => "{$this->name}-{$this->realm}-{$this->region}",
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function syncRaidEncounters(
+        BlizzardProfileClient $client,
+        RaidEncounterKillMapper $mapper,
+        Character $character,
+    ): void {
+        if (! config('blizzard.sync.raids_enabled')) {
+            return;
+        }
+
+        try {
+            $data = $client->getCharacterRaidEncounters($this->realm, $this->name);
+            $dtos = $mapper->map($data);
+
+            DB::transaction(function () use ($character, $dtos) {
+                $keep = [];
+                foreach ($dtos as $dto) {
+                    RaidEncounterKill::updateOrCreate(
+                        [
+                            'character_id' => $character->id,
+                            'encounter_id' => $dto->encounterId,
+                            'difficulty' => $dto->difficulty,
+                        ],
+                        [
+                            'expansion_name' => $dto->expansionName,
+                            'instance_id' => $dto->instanceId,
+                            'instance_name' => $dto->instanceName,
+                            'encounter_name' => $dto->encounterName,
+                            'completed_count' => $dto->completedCount,
+                            'last_kill_timestamp' => $dto->lastKillTimestamp,
+                        ],
+                    );
+                    $keep[] = $dto->encounterId.'|'.$dto->difficulty;
+                }
+
+                RaidEncounterKill::where('character_id', $character->id)
+                    ->get(['id', 'encounter_id', 'difficulty'])
+                    ->reject(fn ($row) => in_array($row->encounter_id.'|'.$row->difficulty, $keep, true))
+                    ->each(fn ($row) => RaidEncounterKill::whereKey($row->id)->delete());
+
+                $character->update(['raids_synced_at' => now()]);
+            });
+        } catch (Throwable $e) {
+            Log::warning('Failed to sync raid encounters for character', [
                 'character' => "{$this->name}-{$this->realm}-{$this->region}",
                 'error' => $e->getMessage(),
             ]);

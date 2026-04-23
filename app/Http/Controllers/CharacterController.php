@@ -27,7 +27,7 @@ class CharacterController extends Controller
                 ->header('Retry-After', '5');
         }
 
-        $result->load(['guild', 'dungeonRuns', 'pvpBrackets', 'professions']);
+        $result->load(['guild', 'dungeonRuns', 'pvpBrackets', 'professions', 'raidEncounterKills']);
 
         $response = (new CharacterResource($result))->response($request);
 

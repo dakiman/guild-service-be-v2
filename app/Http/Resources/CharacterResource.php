@@ -42,7 +42,7 @@ class CharacterResource extends JsonResource
             'equipment' => $this->equipment ?? [],
             'pvp_brackets' => PvpBracketResource::collection($this->whenLoaded('pvpBrackets')),
             'professions' => ProfessionResource::collection($this->whenLoaded('professions')),
-            'raid_progress' => null,
+            'raid_progress' => RaidEncounterResource::collection($this->whenLoaded('raidEncounterKills')),
             'recruitment' => $this->recruitment,
             'guild' => new GuildSummaryResource($this->whenLoaded('guild')),
             'dungeon_runs' => DungeonRunResource::collection($this->whenLoaded('dungeonRuns')),
