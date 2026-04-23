@@ -34,7 +34,7 @@ class CharacterResource extends JsonResource
                 ? [
                     'rating' => (int) $this->mythic_plus_rating,
                     'color' => $this->mythic_plus_rating_color,
-                    'per_spec' => $this->mythic_plus_rating_by_spec ?? [],
+                    'per_spec' => $this->perSpecForResponse(),
                 ]
                 : null,
             'media' => $this->media,
@@ -82,5 +82,23 @@ class CharacterResource extends JsonResource
         $threshold = (int) config("blizzard.staleness.character.{$configKey}", 900);
 
         return $ts->diffInSeconds(now()) > $threshold ? 'stale' : 'fresh';
+    }
+
+    /**
+     * Return per-spec as a stdClass so JsonResource::filter() does not
+     * reindex the map. Integer-keyed PHP arrays get re-indexed to a
+     * positional list inside the Resource pipeline regardless of whether
+     * keys are sequential, which would collapse `{"258": 227}` to `[227]`
+     * on the wire. Objects are left alone, so json_encode emits a JSON
+     * object with string property names.
+     */
+    private function perSpecForResponse(): \stdClass
+    {
+        $out = new \stdClass;
+        foreach ($this->mythic_plus_rating_by_spec ?? [] as $specId => $rating) {
+            $out->{(string) $specId} = (int) $rating;
+        }
+
+        return $out;
     }
 }
