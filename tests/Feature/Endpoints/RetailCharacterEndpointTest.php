@@ -107,10 +107,10 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
         $response = $this->getJson($url)->assertOk(); // second call returns populated data
 
         match ($slot) {
-            'geared_main'     => $this->assertMythicPlusRatingShape($response),
-            'pvp_player'      => $this->assertPvpBracketsShape($response),
+            'geared_main' => $this->assertMythicPlusRatingShape($response),
+            'pvp_player' => $this->assertPvpBracketsShape($response),
             'profession_rich' => $this->assertProfessionsShape($response),
-            'raider'          => $this->assertRaidProgressShape($response),
+            'raider' => $this->assertRaidProgressShape($response),
         };
     }
 
@@ -129,7 +129,9 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
     private function assertMythicPlusRatingShape($r): void
     {
         $x = $r->json('data.mythic_plus_rating');
-        if ($x === null) { $this->markTestSkipped('fixture has no current_mythic_rating right now'); }
+        if ($x === null) {
+            $this->markTestSkipped('fixture has no current_mythic_rating right now');
+        }
         $this->assertIsInt($x['rating']);
         $this->assertArrayHasKey('color', $x);
         $this->assertIsArray($x['per_spec']);
@@ -139,7 +141,9 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
     {
         $b = $r->json('data.pvp_brackets');
         $this->assertIsArray($b);
-        if ($b === []) { $this->markTestSkipped('fixture has no pvp brackets right now'); }
+        if ($b === []) {
+            $this->markTestSkipped('fixture has no pvp brackets right now');
+        }
         foreach ($b as $row) {
             $this->assertMatchesRegularExpression('/^(2v2|3v3|rbg|shuffle(-.+)?|blitz-[a-z-]+)$/', $row['bracket']);
             $this->assertArrayHasKey('season', $row);
@@ -151,7 +155,9 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
     {
         $p = $r->json('data.professions');
         $this->assertIsArray($p);
-        if ($p === []) { $this->markTestSkipped('fixture has no professions right now'); }
+        if ($p === []) {
+            $this->markTestSkipped('fixture has no professions right now');
+        }
         foreach ($p as $row) {
             $this->assertArrayHasKey('profession_id', $row);
             $this->assertArrayHasKey('tier_name', $row);
@@ -163,8 +169,12 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
     {
         $x = $r->json('data.raid_progress');
         $this->assertIsArray($x);
-        if ($x === []) { $this->markTestSkipped('fixture has no raid progress right now'); }
+        if ($x === []) {
+            $this->markTestSkipped('fixture has no raid progress right now');
+        }
         $difficulties = array_unique(array_column($x, 'difficulty'));
-        foreach ($difficulties as $d) $this->assertContains($d, ['lfr','normal','heroic','mythic']);
+        foreach ($difficulties as $d) {
+            $this->assertContains($d, ['lfr', 'normal', 'heroic', 'mythic']);
+        }
     }
 }

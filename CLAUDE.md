@@ -64,7 +64,12 @@ Self-contained module with its own service provider (`BlizzardServiceProvider`),
 - **DTO/** — Readonly classes with constructor promotion. Carry only the fields we need from Blizzard's deeply nested responses.
 - **Equipment shape.** `EquippedItem` and the persisted `equipment` JSONB carry the Wowhead-ready fields: `id, name, quality, slot, item_level, bonus: int[], gems: int[], enchantments: int[], set_id: ?int, stats: [{type,value,is_negated}]`. The frontend's `WowheadLink.vue` consumes this shape directly — do not transform in controllers.
 - **Talent shape.** `talents` JSONB has four branches: `class`, `spec`, `hero`, `pvp`. Retail only; Classic does not populate `talents`. The Blizzard-provided `talent_loadout_code` is a separate top-level column on `characters`, not nested in the JSONB. The source response nests talents as `specializations.specializations[<matches active_specialization.id>].loadouts[<is_active=true>].selected_{class,spec,hero}_talents`; `pvp_talent_slots` lives on the spec entry, not the loadout.
-- **`game_version` column.** Every character row carries `game_version` ('retail' | 'classic') with unique index `(name, realm, region, game_version)`. Retail is the default; Classic persistence is gated behind a feature flag (Plan 3).
+- **`game_version` column.** Every character row carries `game_version` ('retail' | 'classic') with unique index `(name, realm, region, game_version)`. Retail is the default; Classic persistence is gated behind a feature flag (Plan 3). `Character::scopeByIdentity()` filters `game_version='retail'` — Classic rows never match this scope.
+- **Per-slice Full sync with feature flags.** `SyncCharacterData::handle()` on `SyncDepth::Full` runs four independent slice writes (mythic+, pvp, professions, raids) after the Standard-depth writes. Each slice is gated on `config('blizzard.sync.{slice}_enabled')` (backed by `BLIZZARD_SYNC_{SLICE}_ENABLED` env, default true), wraps its own try/catch around a single `DB::transaction`, and owns a `*_synced_at` column plus a config staleness threshold. One slice failing never aborts the others; `*_synced_at` updates only on success. Kill a misbehaving slice via env without a revert.
+- **PvP bracket slugs are dynamic; fan-out is chunked.** `pvp-summary.brackets[].href` is the source of truth. Current patch: `2v2`, `3v3`, `blitz-{class}-{spec}` (solo-shuffle replaced by Blitz). `PvpBracketStatsMapper::extractSlug()` parses via regex — do not hardcode an enum. `BlizzardProfileClient::getCharacterPvpBracketsChunked()` caps each `Http::pool()` at 3 parallel slugs so a single Full-sync job cannot burst past the 80 req/s budget under Horizon max concurrency. `tier_name` is persisted as NULL (resolution requires a separate game-data endpoint — out of scope for Plan 2).
+- **Delete-missing semantics.** `character_pvp_brackets`, `character_professions`, `raid_encounter_kills` all upsert then delete rows not present in the latest response, inside the slice's `DB::transaction`. An empty response (or 404) wipes that slice for the character — required behavior so a dropped profession, unplayed bracket, or reset lockout disappears.
+- **Mythic+ per-spec is character-identity-filtered.** `mythic_plus_rating_by_spec` is `{specId => highest single-run rating}` from `/mythic-keystone-profile/season/{id}.best_runs[]`, reading `specialization.id` **only from the member whose `character.name` + `character.realm.slug` match the synced character** (otherwise party members' specs get credited with this character's rating). `mythic_plus_rating_color` stores the Blizzard-provided `#rrggbb` hex converted from the response's RGBA object.
+- **ProactiveSyncCharacters tier 1 dispatches Full.** Tier 1 (popular chars, every 30 min) refreshes all slices. Tier 2 (long-tail, every 2h) stays Standard. For on-demand backfill of specific characters that never hit either tier (e.g., roster imports), run `artisan blizzard:backfill-slices --limit=N` which dispatches Full for any retail character with any null `*_synced_at`.
 - **TokenManager** — Caches OAuth client-credentials tokens per region with double-check locking to prevent thundering herd on refresh.
 
 ### Sync Depth
@@ -72,7 +77,7 @@ Self-contained module with its own service provider (`BlizzardServiceProvider`),
 The `SyncDepth` enum controls how much data a character sync fetches:
 - **Shallow**: basic profile only (used for roster members)
 - **Standard**: profile + media + equipment + specializations
-- **Full**: standard + mythic+ dungeon runs
+- **Full**: standard + mythic+ dungeon runs + mythic+ rating + pvp brackets + professions + raid encounter kills
 
 ### Auth
 
@@ -88,7 +93,7 @@ Jobs are dispatched to named queues with priority ordering in Horizon:
 
 ### Staleness Model
 
-Models (`Character`, `Guild`) have `isStale()` / `isRosterStale()` methods comparing `synced_at` timestamps against configurable thresholds in `config/blizzard.php`. Services check staleness on every lookup and dispatch refresh jobs as needed.
+Models (`Character`, `Guild`) have `isStale()` / `isRosterStale()` methods comparing `synced_at` timestamps against configurable thresholds in `config/blizzard.php`. `Character` additionally has per-slice helpers: `isMythicsStale()`, `isPvpStale()`, `isProfessionsStale()`, `isRaidsStale()`. `CharacterService::getByIdentity()` dispatches `SyncDepth::Full` when **any** slice is stale (or when its `$forceRefresh` arg is true), falling back to `SyncDepth::Standard` only when profile alone is stale. The `$forceRefresh` arg is accepted today but `?refresh=1` wiring + nonced `uniqueId` bypass of `ShouldBeUnique` is Plan 3 work — see the `TODO(Plan 3)` comment in `CharacterService`.
 
 ## Key Conventions
 
