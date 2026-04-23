@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Collection;
 
 class CharacterService
 {
-    public function getByIdentity(string $region, string $realm, string $name): ?Character
+    public function getByIdentity(string $region, string $realm, string $name, bool $forceRefresh = false): ?Character
     {
         $character = Character::byIdentity($name, $realm, $region)->first();
 
@@ -22,7 +22,14 @@ class CharacterService
         $character->increment('num_of_searches');
         $character->update(['last_searched_at' => now()]);
 
-        if ($character->isMythicsStale()) {
+        $anySliceStale = $character->isMythicsStale()
+            || $character->isPvpStale()
+            || $character->isProfessionsStale()
+            || $character->isRaidsStale();
+
+        // TODO(Plan 3): $forceRefresh must also bypass SyncCharacterData::$uniqueFor
+        //               (nonced uniqueId) or back-to-back dispatches get dedup'd.
+        if ($forceRefresh || $anySliceStale) {
             SyncCharacterData::dispatch($region, $realm, $name, SyncDepth::Full);
         } elseif ($character->isStale()) {
             SyncCharacterData::dispatch($region, $realm, $name, SyncDepth::Standard);
