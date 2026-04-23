@@ -47,7 +47,7 @@ class ProactiveSyncCharacters implements ShouldBeUnique, ShouldQueue
                 region: $character->region,
                 realm: $character->realm,
                 name: $character->name,
-                depth: SyncDepth::Standard,
+                depth: $this->tier === 1 ? SyncDepth::Full : SyncDepth::Standard,
             );
         });
     }
