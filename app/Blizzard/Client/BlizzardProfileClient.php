@@ -104,6 +104,66 @@ class BlizzardProfileClient extends BlizzardClient
         ];
     }
 
+    public function getCharacterPvpSummary(string $realm, string $name): ?array
+    {
+        $response = $this->request()
+            ->get("/profile/wow/character/{$realm}/{$name}/pvp-summary");
+
+        if ($response->status() === 404) {
+            return null;
+        }
+
+        $response->throw();
+
+        return $response->json();
+    }
+
+    /**
+     * Chunked fan-out — at most 3 parallel requests per chunk so a single
+     * Full-sync job can't burst past the per-second rate-limit budget under
+     * Horizon's max concurrency. Returns [slug => decoded_body | null].
+     *
+     * @param  string[]  $slugs
+     * @return array<string, ?array>
+     */
+    public function getCharacterPvpBracketsChunked(string $realm, string $name, array $slugs, int $chunkSize = 3): array
+    {
+        if ($slugs === []) {
+            return [];
+        }
+
+        $basePath = "/profile/wow/character/{$realm}/{$name}/pvp-bracket";
+        $token = $this->tokenManager->getToken($this->region);
+        $namespace = $this->namespace();
+        $baseUrl = $this->baseUrl();
+        $timeout = (int) config('blizzard.timeouts.character_pool', 20);
+        $out = [];
+
+        foreach (array_chunk($slugs, $chunkSize) as $chunk) {
+            $responses = Http::pool(function (Pool $pool) use ($chunk, $basePath, $token, $namespace, $baseUrl, $timeout) {
+                $reqs = [];
+                foreach ($chunk as $slug) {
+                    $reqs[] = $pool->as($slug)
+                        ->withToken($token)
+                        ->baseUrl($baseUrl)
+                        ->withQueryParameters(['namespace' => $namespace, 'locale' => 'en_GB'])
+                        ->timeout($timeout)
+                        ->connectTimeout(5)
+                        ->get("{$basePath}/{$slug}");
+                }
+
+                return $reqs;
+            });
+
+            foreach ($chunk as $slug) {
+                $r = $responses[$slug] ?? null;
+                $out[$slug] = ($r && $r->successful()) ? $r->json() : null;
+            }
+        }
+
+        return $out;
+    }
+
     public function getGuildData(string $realm, string $guild): array
     {
         $response = $this->request()

@@ -13,10 +13,12 @@ use App\Blizzard\Mappers\CharacterProfileMapper;
 use App\Blizzard\Mappers\CharacterSpecializationMapper;
 use App\Blizzard\Mappers\MythicPlusMapper;
 use App\Blizzard\Mappers\MythicPlusRatingMapper;
+use App\Blizzard\Mappers\PvpBracketStatsMapper;
 use App\Blizzard\Middleware\BlizzardHealthCheck;
 use App\Blizzard\Middleware\BlizzardRateLimiter;
 use App\Enums\SyncDepth;
 use App\Models\Character;
+use App\Models\CharacterPvpBracket;
 use App\Models\DungeonRun;
 use App\Models\Guild;
 use Illuminate\Bus\Queueable;
@@ -25,6 +27,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -69,6 +72,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         CharacterSpecializationMapper $specMapper,
         MythicPlusMapper $mythicPlusMapper,
         MythicPlusRatingMapper $ratingMapper,
+        PvpBracketStatsMapper $pvpMapper,
         BlizzardGameDataClient $gameDataClient,
     ): void {
         $client = new BlizzardProfileClient($tokenManager, $this->region);
@@ -183,6 +187,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         // Full depth: also sync mythic+ data
         if ($this->depth === SyncDepth::Full) {
             $this->syncMythicPlus($client, $gameDataClient, $mythicPlusMapper, $ratingMapper, $character);
+            $this->syncPvpData($client, $pvpMapper, $character);
         }
     }
 
@@ -248,6 +253,68 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             ]);
         } catch (Throwable $e) {
             Log::warning('Failed to sync mythic+ data for character', [
+                'character' => "{$this->name}-{$this->realm}-{$this->region}",
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function syncPvpData(
+        BlizzardProfileClient $client,
+        PvpBracketStatsMapper $mapper,
+        Character $character,
+    ): void {
+        if (! config('blizzard.sync.pvp_enabled')) {
+            return;
+        }
+
+        try {
+            $summary = $client->getCharacterPvpSummary($this->realm, $this->name);
+
+            $slugs = [];
+            foreach ($summary['brackets'] ?? [] as $entry) {
+                $slug = $mapper->extractSlug((string) ($entry['href'] ?? ''));
+                if ($slug !== null) {
+                    $slugs[] = $slug;
+                }
+            }
+
+            $bodies = $client->getCharacterPvpBracketsChunked($this->realm, $this->name, $slugs);
+            $dtos = [];
+            foreach ($bodies as $slug => $body) {
+                $dto = $mapper->map($slug, $body);
+                if ($dto !== null) {
+                    $dtos[] = $dto;
+                }
+            }
+
+            DB::transaction(function () use ($character, $dtos) {
+                $keep = [];
+                foreach ($dtos as $dto) {
+                    CharacterPvpBracket::updateOrCreate(
+                        ['character_id' => $character->id, 'bracket' => $dto->bracket],
+                        [
+                            'rating' => $dto->rating,
+                            'season_won' => $dto->seasonWon,
+                            'season_lost' => $dto->seasonLost,
+                            'season_played' => $dto->seasonPlayed,
+                            'weekly_won' => $dto->weeklyWon,
+                            'weekly_lost' => $dto->weeklyLost,
+                            'weekly_played' => $dto->weeklyPlayed,
+                            'tier_name' => $dto->tierName,
+                        ],
+                    );
+                    $keep[] = $dto->bracket;
+                }
+
+                CharacterPvpBracket::where('character_id', $character->id)
+                    ->when($keep !== [], fn ($q) => $q->whereNotIn('bracket', $keep))
+                    ->delete();
+
+                $character->update(['pvp_synced_at' => now()]);
+            });
+        } catch (Throwable $e) {
+            Log::warning('Failed to sync pvp data for character', [
                 'character' => "{$this->name}-{$this->realm}-{$this->region}",
                 'error' => $e->getMessage(),
             ]);

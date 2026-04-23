@@ -40,7 +40,7 @@ class CharacterResource extends JsonResource
             'media' => $this->media,
             'talents' => $this->talents,
             'equipment' => $this->equipment ?? [],
-            'pvp_brackets' => null,
+            'pvp_brackets' => PvpBracketResource::collection($this->whenLoaded('pvpBrackets')),
             'professions' => null,
             'raid_progress' => null,
             'recruitment' => $this->recruitment,
