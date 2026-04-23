@@ -33,6 +33,7 @@ class Character extends Model
         'equipped_item_level',
         'mythic_plus_rating',
         'mythic_plus_rating_by_spec',
+        'mythic_plus_rating_color',
         'active_specialization',
         'talent_loadout_code',
         'media',
