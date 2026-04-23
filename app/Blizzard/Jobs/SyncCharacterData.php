@@ -9,6 +9,7 @@ use App\Blizzard\Client\BlizzardProfileClient;
 use App\Blizzard\Contracts\TokenManagerInterface;
 use App\Blizzard\Mappers\CharacterEquipmentMapper;
 use App\Blizzard\Mappers\CharacterMediaMapper;
+use App\Blizzard\Mappers\CharacterProfessionMapper;
 use App\Blizzard\Mappers\CharacterProfileMapper;
 use App\Blizzard\Mappers\CharacterSpecializationMapper;
 use App\Blizzard\Mappers\MythicPlusMapper;
@@ -18,6 +19,7 @@ use App\Blizzard\Middleware\BlizzardHealthCheck;
 use App\Blizzard\Middleware\BlizzardRateLimiter;
 use App\Enums\SyncDepth;
 use App\Models\Character;
+use App\Models\CharacterProfession;
 use App\Models\CharacterPvpBracket;
 use App\Models\DungeonRun;
 use App\Models\Guild;
@@ -73,6 +75,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         MythicPlusMapper $mythicPlusMapper,
         MythicPlusRatingMapper $ratingMapper,
         PvpBracketStatsMapper $pvpMapper,
+        CharacterProfessionMapper $professionMapper,
         BlizzardGameDataClient $gameDataClient,
     ): void {
         $client = new BlizzardProfileClient($tokenManager, $this->region);
@@ -188,6 +191,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         if ($this->depth === SyncDepth::Full) {
             $this->syncMythicPlus($client, $gameDataClient, $mythicPlusMapper, $ratingMapper, $character);
             $this->syncPvpData($client, $pvpMapper, $character);
+            $this->syncProfessions($client, $professionMapper, $character);
         }
     }
 
@@ -315,6 +319,53 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             });
         } catch (Throwable $e) {
             Log::warning('Failed to sync pvp data for character', [
+                'character' => "{$this->name}-{$this->realm}-{$this->region}",
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function syncProfessions(
+        BlizzardProfileClient $client,
+        CharacterProfessionMapper $mapper,
+        Character $character,
+    ): void {
+        if (! config('blizzard.sync.professions_enabled')) {
+            return;
+        }
+
+        try {
+            $data = $client->getCharacterProfessions($this->realm, $this->name);
+            $dtos = $mapper->map($data);
+
+            DB::transaction(function () use ($character, $dtos) {
+                $keep = [];
+                foreach ($dtos as $dto) {
+                    CharacterProfession::updateOrCreate(
+                        [
+                            'character_id' => $character->id,
+                            'profession_id' => $dto->professionId,
+                            'tier_name' => $dto->tierName,
+                        ],
+                        [
+                            'profession_name' => $dto->professionName,
+                            'skill_points' => $dto->skillPoints,
+                            'max_skill_points' => $dto->maxSkillPoints,
+                            'is_primary' => $dto->isPrimary,
+                        ],
+                    );
+                    $keep[] = $dto->professionId.'|'.$dto->tierName;
+                }
+
+                CharacterProfession::where('character_id', $character->id)
+                    ->get(['id', 'profession_id', 'tier_name'])
+                    ->reject(fn ($row) => in_array($row->profession_id.'|'.$row->tier_name, $keep, true))
+                    ->each(fn ($row) => CharacterProfession::whereKey($row->id)->delete());
+
+                $character->update(['professions_synced_at' => now()]);
+            });
+        } catch (Throwable $e) {
+            Log::warning('Failed to sync professions for character', [
                 'character' => "{$this->name}-{$this->realm}-{$this->region}",
                 'error' => $e->getMessage(),
             ]);

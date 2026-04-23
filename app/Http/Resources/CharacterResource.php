@@ -41,7 +41,7 @@ class CharacterResource extends JsonResource
             'talents' => $this->talents,
             'equipment' => $this->equipment ?? [],
             'pvp_brackets' => PvpBracketResource::collection($this->whenLoaded('pvpBrackets')),
-            'professions' => null,
+            'professions' => ProfessionResource::collection($this->whenLoaded('professions')),
             'raid_progress' => null,
             'recruitment' => $this->recruitment,
             'guild' => new GuildSummaryResource($this->whenLoaded('guild')),
