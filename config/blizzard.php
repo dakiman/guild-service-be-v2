@@ -46,6 +46,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Per-Slice Sync Feature Flags
+    |--------------------------------------------------------------------------
+    | Each retail Full-sync slice can be individually disabled via env so a
+    | misbehaving slice can be killed without a code revert.
+    */
+
+    'sync' => [
+        'mythic_plus_enabled' => (bool) env('BLIZZARD_SYNC_MYTHIC_PLUS_ENABLED', true),
+        'pvp_enabled' => (bool) env('BLIZZARD_SYNC_PVP_ENABLED', true),
+        'professions_enabled' => (bool) env('BLIZZARD_SYNC_PROFESSIONS_ENABLED', true),
+        'raids_enabled' => (bool) env('BLIZZARD_SYNC_RAIDS_ENABLED', true),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Sync Configuration
     |--------------------------------------------------------------------------
     */
