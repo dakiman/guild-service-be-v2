@@ -36,6 +36,22 @@ RUN docker-php-ext-install \
 # Install phpredis via PECL
 RUN pecl install redis && docker-php-ext-enable redis
 
+# Optionally install Xdebug (dev only). Enable via --build-arg INSTALL_XDEBUG=true.
+ARG INSTALL_XDEBUG=false
+RUN if [ "$INSTALL_XDEBUG" = "true" ]; then \
+        pecl install xdebug \
+        && docker-php-ext-enable xdebug \
+        && { \
+            echo 'xdebug.mode=debug'; \
+            echo 'xdebug.start_with_request=trigger'; \
+            echo 'xdebug.client_host=host.docker.internal'; \
+            echo 'xdebug.client_port=9003'; \
+            echo 'xdebug.idekey=PHPSTORM'; \
+            echo 'xdebug.discover_client_host=false'; \
+            echo 'xdebug.log_level=0'; \
+        } > /usr/local/etc/php/conf.d/zz-xdebug.ini; \
+    fi
+
 # Cleanup build dependencies
 RUN apk del $PHPIZE_DEPS && rm -rf /var/cache/apk/*
 

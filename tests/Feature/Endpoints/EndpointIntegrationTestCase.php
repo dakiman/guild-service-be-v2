@@ -18,10 +18,10 @@ abstract class EndpointIntegrationTestCase extends TestCase
      * @var array<string, array{region: string, realm: string, name: string}>
      */
     public const RETAIL_CHARACTERS = [
-        'geared_main' => ['region' => 'eu', 'realm' => '', 'name' => ''], // sockets + enchants + tier set
-        'pvp_player' => ['region' => 'eu', 'realm' => '', 'name' => ''], // active PvP
-        'profession_rich' => ['region' => 'eu', 'realm' => '', 'name' => ''], // 2 primaries + secondaries
-        'raider' => ['region' => 'eu', 'realm' => '', 'name' => ''], // active raider
+        'geared_main' => ['region' => 'eu', 'realm' => 'the maelstrom', 'name' => 'Melaniya'], // sockets + enchants + tier set
+        'pvp_player' => ['region' => 'us', 'realm' => 'blades-edge', 'name' => 'leonardmccoy'], // active PvP
+        'profession_rich' => ['region' => 'eu', 'realm' => 'the maelstrom', 'name' => 'Melaniya'], // 2 primaries + secondaries
+        'raider' => ['region' => 'us', 'realm' => 'illidan', 'name' => 'Sconysoprano'], // active raider
     ];
 
     /**
@@ -36,12 +36,20 @@ abstract class EndpointIntegrationTestCase extends TestCase
      * @var array<int, array{region: string, realm: string, name: string}>
      */
     public const GUILDS = [
-        ['region' => 'eu', 'realm' => '', 'name' => ''],
+        ['region' => 'us', 'realm' => 'illidan', 'name' => 'liquid'],
     ];
 
     protected function setUp(): void
     {
         parent::setUp();
+
+        // Docker exports QUEUE_CONNECTION / CACHE_STORE via $_SERVER, which beats
+        // phpunit.xml's <env> entries (those only populate $_ENV / putenv). Force
+        // the test values on the already-booted config so sync jobs run inline.
+        config([
+            'queue.default' => 'sync',
+            'cache.default' => 'array',
+        ]);
 
         if (! env('BLIZZARD_CLIENT_ID') || ! env('BLIZZARD_CLIENT_SECRET')) {
             $this->markTestSkipped('Blizzard credentials not configured (BLIZZARD_CLIENT_ID / BLIZZARD_CLIENT_SECRET).');

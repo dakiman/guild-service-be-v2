@@ -11,11 +11,12 @@ use App\Http\Resources\CharacterSummaryResource;
 use App\Models\Character;
 use App\Services\CharacterService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 
 class CharacterController extends Controller
 {
-    public function show(string $region, string $realm, string $character, CharacterService $service): JsonResponse
+    public function show(string $region, string $realm, string $character, CharacterService $service, Request $request): JsonResponse
     {
         $result = $service->getByIdentity($region, $realm, $character);
 
@@ -28,7 +29,7 @@ class CharacterController extends Controller
 
         $result->load(['guild', 'dungeonRuns']);
 
-        $response = response()->json(new CharacterResource($result));
+        $response = (new CharacterResource($result))->response($request);
 
         if ($result->isStale()) {
             $response->header('X-Data-Staleness', 'stale');
