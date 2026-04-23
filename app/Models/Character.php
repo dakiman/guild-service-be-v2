@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Character extends Model
@@ -82,6 +83,21 @@ class Character extends Model
         return $this->belongsToMany(DungeonRun::class, 'dungeon_run_members')
             ->withPivot(['spec_id', 'spec_name', 'equipped_item_level'])
             ->withTimestamps();
+    }
+
+    public function pvpBrackets(): HasMany
+    {
+        return $this->hasMany(CharacterPvpBracket::class);
+    }
+
+    public function professions(): HasMany
+    {
+        return $this->hasMany(CharacterProfession::class);
+    }
+
+    public function raidEncounterKills(): HasMany
+    {
+        return $this->hasMany(RaidEncounterKill::class);
     }
 
     public function guildMembership(): HasOne
