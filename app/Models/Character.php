@@ -110,7 +110,8 @@ class Character extends Model
     {
         return $query->where('name', $name)
             ->where('realm', $realm)
-            ->where('region', $region);
+            ->where('region', $region)
+            ->where('game_version', 'retail');
     }
 
     public function scopeMostPopular(Builder $query, int $limit = 5): Builder
@@ -146,5 +147,23 @@ class Character extends Model
         }
 
         return $this->mythics_synced_at->diffInSeconds(now()) > config('blizzard.staleness.character.mythic_plus');
+    }
+
+    public function isPvpStale(): bool
+    {
+        return ! $this->pvp_synced_at
+            || $this->pvp_synced_at->diffInSeconds(now()) > config('blizzard.staleness.character.pvp');
+    }
+
+    public function isProfessionsStale(): bool
+    {
+        return ! $this->professions_synced_at
+            || $this->professions_synced_at->diffInSeconds(now()) > config('blizzard.staleness.character.professions');
+    }
+
+    public function isRaidsStale(): bool
+    {
+        return ! $this->raids_synced_at
+            || $this->raids_synced_at->diffInSeconds(now()) > config('blizzard.staleness.character.raids');
     }
 }
