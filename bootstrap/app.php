@@ -9,7 +9,6 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -19,11 +18,11 @@ return Application::configure(basePath: dirname(__DIR__))
         apiPrefix: 'api/v1',
     )
     ->withSchedule(function (Schedule $schedule) {
-        $schedule->command('blizzard:token')->everyTwelveHours()->withoutOverlapping();
+        $schedule->command('blizzard:token')->twiceDaily()->withoutOverlapping();
         $schedule->command('horizon:snapshot')->everyFiveMinutes();
         $schedule->job(new ProactiveSyncCharacters(tier: 1))->everyThirtyMinutes()->withoutOverlapping();
         $schedule->job(new ProactiveSyncCharacters(tier: 2))->everyTwoHours()->withoutOverlapping();
-        $schedule->job(new ProactiveSyncGuilds())->dailyAt('04:00')->withoutOverlapping();
+        $schedule->job(new ProactiveSyncGuilds)->dailyAt('04:00')->withoutOverlapping();
         $schedule->command('queue:prune-batches --hours=48')->daily();
         $schedule->command('queue:prune-failed --hours=168')->daily();
     })

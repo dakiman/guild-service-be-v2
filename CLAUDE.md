@@ -24,7 +24,9 @@ composer dev
 # Docker
 docker compose up -d
 docker compose exec app php artisan <command>
-docker compose restart horizon   # after code changes affecting jobs
+docker compose restart horizon   # after code changes affecting jobs/mappers/clients
+                                 # (container runs with PHP_OPCACHE_VALIDATE_TIMESTAMPS=0
+                                 #  so a restart is required to pick up edits)
 ```
 
 Tests use SQLite in-memory with queue=sync, cache=array (see phpunit.xml).
@@ -55,12 +57,13 @@ Scheduler → ProactiveSyncCharacters/Guilds job
 Self-contained module with its own service provider (`BlizzardServiceProvider`), organized as:
 
 - **Client/** — HTTP clients extending abstract `BlizzardClient`. Token injection via `TokenManager`. Retry logic: never retry 4xx (except 429 which respects `Retry-After`), always retry 5xx/timeouts, max 3 attempts.
-  - `BlizzardProfileClient` uses `Http::pool()` for parallel character data requests
+  - `BlizzardProfileClient` uses `Http::pool()` for parallel character data requests.
+  - **Namespace per client.** `BlizzardProfileClient` sends `namespace=profile-{region}`; `BlizzardGameDataClient` sends `namespace=dynamic-{region}`. Both character *and guild* profile endpoints (`/data/wow/guild/...`, `/profile/wow/character/...`) require `profile-{region}` — do not override. Game-data endpoints (season index, item, playable-race, etc.) require `dynamic-{region}`.
 - **Jobs/** — All implement `ShouldQueue` + `ShouldBeUnique` (60s). Retries: 3 with backoff [30, 120, 300]s. Each job uses two middleware: `BlizzardRateLimiter` (Redis throttle, 80 req/s) and `BlizzardHealthCheck` (circuit breaker via cache flag).
 - **Mappers/** — Transform raw Blizzard API JSON arrays into readonly DTOs. One mapper per data type.
 - **DTO/** — Readonly classes with constructor promotion. Carry only the fields we need from Blizzard's deeply nested responses.
 - **Equipment shape.** `EquippedItem` and the persisted `equipment` JSONB carry the Wowhead-ready fields: `id, name, quality, slot, item_level, bonus: int[], gems: int[], enchantments: int[], set_id: ?int, stats: [{type,value,is_negated}]`. The frontend's `WowheadLink.vue` consumes this shape directly — do not transform in controllers.
-- **Talent shape.** `talents` JSONB has four branches: `class`, `spec`, `hero`, `pvp`. Retail only; Classic does not populate `talents`. The Blizzard-provided `talent_loadout_code` is a separate top-level column on `characters`, not nested in the JSONB.
+- **Talent shape.** `talents` JSONB has four branches: `class`, `spec`, `hero`, `pvp`. Retail only; Classic does not populate `talents`. The Blizzard-provided `talent_loadout_code` is a separate top-level column on `characters`, not nested in the JSONB. The source response nests talents as `specializations.specializations[<matches active_specialization.id>].loadouts[<is_active=true>].selected_{class,spec,hero}_talents`; `pvp_talent_slots` lives on the spec entry, not the loadout.
 - **`game_version` column.** Every character row carries `game_version` ('retail' | 'classic') with unique index `(name, realm, region, game_version)`. Retail is the default; Classic persistence is gated behind a feature flag (Plan 3).
 - **TokenManager** — Caches OAuth client-credentials tokens per region with double-check locking to prevent thundering herd on refresh.
 

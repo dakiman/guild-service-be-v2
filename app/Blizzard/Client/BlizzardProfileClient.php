@@ -82,7 +82,6 @@ class BlizzardProfileClient extends BlizzardClient
     public function getGuildData(string $realm, string $guild): array
     {
         $response = $this->request()
-            ->withQueryParameters(['namespace' => "dynamic-{$this->region}"])
             ->get("/data/wow/guild/{$realm}/{$guild}");
 
         $response->throw();
@@ -93,7 +92,6 @@ class BlizzardProfileClient extends BlizzardClient
     public function getGuildRoster(string $realm, string $guild): array
     {
         $response = $this->request()
-            ->withQueryParameters(['namespace' => "dynamic-{$this->region}"])
             ->get("/data/wow/guild/{$realm}/{$guild}/roster");
 
         $response->throw();

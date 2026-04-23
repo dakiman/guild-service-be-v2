@@ -26,7 +26,7 @@ class BlizzardGameDataClient extends BlizzardClient
             return (int) $override;
         }
 
-        return Cache::remember('blizzard:mythic-plus:current-season', 86400, function () {
+        return (int) Cache::remember('blizzard:mythic-plus:current-season', 86400, function () {
             $response = $this->request()
                 ->get('/data/wow/mythic-keystone/season/index');
 

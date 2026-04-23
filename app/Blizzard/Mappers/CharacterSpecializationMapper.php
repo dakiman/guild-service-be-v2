@@ -11,7 +11,10 @@ class CharacterSpecializationMapper
     public function map(array $data): CharacterSpecialization
     {
         $activeSpec = (string) ($data['active_specialization']['name'] ?? 'Unknown');
-        $loadouts = $data['specializations'] ?? [];
+        $activeSpecId = isset($data['active_specialization']['id'])
+            ? (int) $data['active_specialization']['id']
+            : null;
+        $specs = $data['specializations'] ?? [];
 
         $classTalents = [];
         $specTalents = [];
@@ -19,18 +22,28 @@ class CharacterSpecializationMapper
         $pvpTalents = [];
         $loadoutCode = null;
 
-        foreach ($loadouts as $loadout) {
-            if (! isset($loadout['is_active']) || $loadout['is_active'] !== true) {
+        foreach ($specs as $spec) {
+            $specId = isset($spec['specialization']['id']) ? (int) $spec['specialization']['id'] : null;
+            if ($activeSpecId !== null && $specId !== $activeSpecId) {
                 continue;
             }
 
-            $classTalents = $this->extractTalents($loadout['selected_class_talents'] ?? []);
-            $specTalents = $this->extractTalents($loadout['selected_spec_talents'] ?? []);
-            $heroTalents = $this->extractTalents($loadout['selected_hero_talents'] ?? []);
-            $pvpTalents = $this->extractPvpTalents($loadout['pvp_talent_slots'] ?? []);
-            $loadoutCode = isset($loadout['talent_loadout_code'])
-                ? (string) $loadout['talent_loadout_code']
-                : null;
+            $pvpTalents = $this->extractPvpTalents($spec['pvp_talent_slots'] ?? []);
+
+            foreach ($spec['loadouts'] ?? [] as $loadout) {
+                if (! isset($loadout['is_active']) || $loadout['is_active'] !== true) {
+                    continue;
+                }
+
+                $classTalents = $this->extractTalents($loadout['selected_class_talents'] ?? []);
+                $specTalents = $this->extractTalents($loadout['selected_spec_talents'] ?? []);
+                $heroTalents = $this->extractTalents($loadout['selected_hero_talents'] ?? []);
+                $loadoutCode = isset($loadout['talent_loadout_code'])
+                    ? (string) $loadout['talent_loadout_code']
+                    : null;
+
+                break;
+            }
 
             break;
         }
