@@ -208,7 +208,7 @@ return [
                 'balance' => 'auto',
                 'autoScalingStrategy' => 'time',
                 'minProcesses' => 2,
-                'maxProcesses' => 8,
+                'maxProcesses' => 10,
                 'balanceMaxShift' => 2,
                 'balanceCooldown' => 3,
                 'maxTime' => 3600,
