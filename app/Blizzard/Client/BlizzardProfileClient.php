@@ -69,14 +69,39 @@ class BlizzardProfileClient extends BlizzardClient
         ];
     }
 
-    public function getCharacterMythicPlus(string $realm, string $name, int $season): array
+    /**
+     * @return array{base: ?array, season: ?array}
+     */
+    public function getCharacterMythicPlusPool(string $realm, string $name, int $season): array
     {
-        $response = $this->request()
-            ->get("/profile/wow/character/{$realm}/{$name}/mythic-keystone-profile/season/{$season}");
+        $basePath = "/profile/wow/character/{$realm}/{$name}";
+        $token = $this->tokenManager->getToken($this->region);
+        $namespace = $this->namespace();
+        $baseUrl = $this->baseUrl();
+        $timeout = (int) config('blizzard.timeouts.character_pool', 20);
 
-        $response->throw();
+        $responses = Http::pool(fn (Pool $pool) => [
+            $pool->as('base')
+                ->withToken($token)
+                ->baseUrl($baseUrl)
+                ->withQueryParameters(['namespace' => $namespace, 'locale' => 'en_GB'])
+                ->timeout($timeout)
+                ->connectTimeout(5)
+                ->get("{$basePath}/mythic-keystone-profile"),
 
-        return $response->json();
+            $pool->as('season')
+                ->withToken($token)
+                ->baseUrl($baseUrl)
+                ->withQueryParameters(['namespace' => $namespace, 'locale' => 'en_GB'])
+                ->timeout($timeout)
+                ->connectTimeout(5)
+                ->get("{$basePath}/mythic-keystone-profile/season/{$season}"),
+        ]);
+
+        return [
+            'base' => $responses['base']->successful() ? $responses['base']->json() : null,
+            'season' => $responses['season']->successful() ? $responses['season']->json() : null,
+        ];
     }
 
     public function getGuildData(string $realm, string $guild): array

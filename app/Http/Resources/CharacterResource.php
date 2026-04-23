@@ -33,6 +33,7 @@ class CharacterResource extends JsonResource
             'mythic_plus_rating' => $this->mythic_plus_rating !== null
                 ? [
                     'rating' => (int) $this->mythic_plus_rating,
+                    'color' => $this->mythic_plus_rating_color,
                     'per_spec' => $this->mythic_plus_rating_by_spec ?? [],
                 ]
                 : null,

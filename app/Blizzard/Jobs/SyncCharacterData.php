@@ -12,6 +12,7 @@ use App\Blizzard\Mappers\CharacterMediaMapper;
 use App\Blizzard\Mappers\CharacterProfileMapper;
 use App\Blizzard\Mappers\CharacterSpecializationMapper;
 use App\Blizzard\Mappers\MythicPlusMapper;
+use App\Blizzard\Mappers\MythicPlusRatingMapper;
 use App\Blizzard\Middleware\BlizzardHealthCheck;
 use App\Blizzard\Middleware\BlizzardRateLimiter;
 use App\Enums\SyncDepth;
@@ -67,6 +68,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         CharacterEquipmentMapper $equipmentMapper,
         CharacterSpecializationMapper $specMapper,
         MythicPlusMapper $mythicPlusMapper,
+        MythicPlusRatingMapper $ratingMapper,
         BlizzardGameDataClient $gameDataClient,
     ): void {
         $client = new BlizzardProfileClient($tokenManager, $this->region);
@@ -180,20 +182,27 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
 
         // Full depth: also sync mythic+ data
         if ($this->depth === SyncDepth::Full) {
-            $this->syncMythicPlus($client, $gameDataClient, $mythicPlusMapper, $character);
+            $this->syncMythicPlus($client, $gameDataClient, $mythicPlusMapper, $ratingMapper, $character);
         }
     }
 
     private function syncMythicPlus(
         BlizzardProfileClient $client,
-        BlizzardGameDataClient $gameDataClient,
+        BlizzardGameDataClient $gameData,
         MythicPlusMapper $mapper,
+        MythicPlusRatingMapper $ratingMapper,
         Character $character,
     ): void {
+        if (! config('blizzard.sync.mythic_plus_enabled')) {
+            return;
+        }
+
         try {
-            $season = $gameDataClient->getCurrentMythicPlusSeason();
-            $data = $client->getCharacterMythicPlus($this->realm, $this->name, $season);
-            $runs = $mapper->map($data, $season);
+            $season = $gameData->getCurrentMythicPlusSeason();
+            ['base' => $base, 'season' => $seasonData] = $client->getCharacterMythicPlusPool(
+                $this->realm, $this->name, $season
+            );
+            $runs = $mapper->map($seasonData ?? [], $season);
 
             foreach ($runs as $run) {
                 $dungeonRun = DungeonRun::updateOrCreate(
@@ -230,7 +239,13 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 }
             }
 
-            $character->update(['mythics_synced_at' => now()]);
+            $rating = $ratingMapper->map($base, $seasonData, $this->name, $this->realm);
+            $character->update([
+                'mythic_plus_rating' => $rating->rating,
+                'mythic_plus_rating_color' => $rating->color,
+                'mythic_plus_rating_by_spec' => $rating->perSpec ?: null,
+                'mythics_synced_at' => now(),
+            ]);
         } catch (Throwable $e) {
             Log::warning('Failed to sync mythic+ data for character', [
                 'character' => "{$this->name}-{$this->realm}-{$this->region}",
