@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace App\Blizzard\Client;
 
+use App\Blizzard\Exceptions\BlizzardNotFoundException;
+use App\Support\BlizzardIdentity;
 use Illuminate\Http\Client\Pool;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
 
 class BlizzardProfileClient extends BlizzardClient
@@ -21,6 +24,9 @@ class BlizzardProfileClient extends BlizzardClient
 
     public function getCharacterData(string $realm, string $name): array
     {
+        $realm = BlizzardIdentity::realm($realm);
+        $name = BlizzardIdentity::name($name);
+
         $basePath = "/profile/wow/character/{$realm}/{$name}";
         $token = $this->tokenManager->getToken($this->region);
         $namespace = $this->namespace();
@@ -61,11 +67,17 @@ class BlizzardProfileClient extends BlizzardClient
                 ->get("{$basePath}/specializations"),
         ]);
 
+        $basic = $responses['basic'];
+        if ($basic->status() === 404) {
+            throw new BlizzardNotFoundException("character not found: {$this->region}/{$realm}/{$name}");
+        }
+        $basic->throw();
+
         return [
-            'basic' => $responses['basic']->json(),
-            'media' => $responses['media']->json(),
-            'equipment' => $responses['equipment']->json(),
-            'specializations' => $responses['specializations']->json(),
+            'basic' => $basic->json(),
+            'media' => $responses['media']->successful() ? $responses['media']->json() : null,
+            'equipment' => $responses['equipment']->successful() ? $responses['equipment']->json() : null,
+            'specializations' => $responses['specializations']->successful() ? $responses['specializations']->json() : null,
         ];
     }
 
@@ -74,6 +86,9 @@ class BlizzardProfileClient extends BlizzardClient
      */
     public function getCharacterMythicPlusPool(string $realm, string $name, int $season): array
     {
+        $realm = BlizzardIdentity::realm($realm);
+        $name = BlizzardIdentity::name($name);
+
         $basePath = "/profile/wow/character/{$realm}/{$name}";
         $token = $this->tokenManager->getToken($this->region);
         $namespace = $this->namespace();
@@ -106,6 +121,9 @@ class BlizzardProfileClient extends BlizzardClient
 
     public function getCharacterPvpSummary(string $realm, string $name): ?array
     {
+        $realm = BlizzardIdentity::realm($realm);
+        $name = BlizzardIdentity::name($name);
+
         $response = $this->request()
             ->get("/profile/wow/character/{$realm}/{$name}/pvp-summary");
 
@@ -128,6 +146,9 @@ class BlizzardProfileClient extends BlizzardClient
      */
     public function getCharacterPvpBracketsChunked(string $realm, string $name, array $slugs, int $chunkSize = 3): array
     {
+        $realm = BlizzardIdentity::realm($realm);
+        $name = BlizzardIdentity::name($name);
+
         if ($slugs === []) {
             return [];
         }
@@ -166,6 +187,9 @@ class BlizzardProfileClient extends BlizzardClient
 
     public function getCharacterProfessions(string $realm, string $name): ?array
     {
+        $realm = BlizzardIdentity::realm($realm);
+        $name = BlizzardIdentity::name($name);
+
         $response = $this->request()
             ->get("/profile/wow/character/{$realm}/{$name}/professions");
 
@@ -180,6 +204,9 @@ class BlizzardProfileClient extends BlizzardClient
 
     public function getCharacterRaidEncounters(string $realm, string $name): ?array
     {
+        $realm = BlizzardIdentity::realm($realm);
+        $name = BlizzardIdentity::name($name);
+
         $response = $this->request()
             ->get("/profile/wow/character/{$realm}/{$name}/encounters/raids");
 
@@ -194,20 +221,38 @@ class BlizzardProfileClient extends BlizzardClient
 
     public function getGuildData(string $realm, string $guild): array
     {
-        $response = $this->request()
-            ->get("/data/wow/guild/{$realm}/{$guild}");
+        $realm = BlizzardIdentity::realm($realm);
+        $guild = BlizzardIdentity::realm($guild);
 
-        $response->throw();
+        try {
+            $response = $this->request()
+                ->get("/data/wow/guild/{$realm}/{$guild}");
+        } catch (RequestException $e) {
+            if ($e->response->status() === 404) {
+                throw new BlizzardNotFoundException("guild not found: {$this->region}/{$realm}/{$guild}", previous: $e);
+            }
+
+            throw $e;
+        }
 
         return $response->json();
     }
 
     public function getGuildRoster(string $realm, string $guild): array
     {
-        $response = $this->request()
-            ->get("/data/wow/guild/{$realm}/{$guild}/roster");
+        $realm = BlizzardIdentity::realm($realm);
+        $guild = BlizzardIdentity::realm($guild);
 
-        $response->throw();
+        try {
+            $response = $this->request()
+                ->get("/data/wow/guild/{$realm}/{$guild}/roster");
+        } catch (RequestException $e) {
+            if ($e->response->status() === 404) {
+                throw new BlizzardNotFoundException("guild roster not found: {$this->region}/{$realm}/{$guild}", previous: $e);
+            }
+
+            throw $e;
+        }
 
         return $response->json();
     }
