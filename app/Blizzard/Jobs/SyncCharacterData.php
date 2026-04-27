@@ -7,6 +7,7 @@ namespace App\Blizzard\Jobs;
 use App\Blizzard\Client\BlizzardGameDataClient;
 use App\Blizzard\Client\BlizzardProfileClient;
 use App\Blizzard\Contracts\TokenManagerInterface;
+use App\Blizzard\Exceptions\BlizzardNotFoundException;
 use App\Blizzard\Mappers\CharacterEquipmentMapper;
 use App\Blizzard\Mappers\CharacterMediaMapper;
 use App\Blizzard\Mappers\CharacterProfessionMapper;
@@ -31,6 +32,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -83,6 +85,20 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
     ): void {
         $client = new BlizzardProfileClient($tokenManager, $this->region);
 
+        try {
+            $response = $client->getCharacterData($this->realm, $this->name);
+        } catch (BlizzardNotFoundException) {
+            Cache::put(
+                "blizzard:not-found:character:{$this->region}:{$this->realm}:{$this->name}",
+                true,
+                (int) config('blizzard.not_found_ttl', 86_400),
+            );
+
+            return;
+        }
+
+        $profile = $profileMapper->map($response['basic']);
+
         $characterData = [
             'name' => $this->name,
             'realm' => $this->realm,
@@ -90,9 +106,6 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         ];
 
         if ($this->depth === SyncDepth::Shallow) {
-            $response = $client->getCharacterData($this->realm, $this->name);
-            $profile = $profileMapper->map($response['basic']);
-
             $characterData = array_merge($characterData, [
                 'gender' => $profile->gender,
                 'faction' => $profile->faction,
@@ -104,8 +117,6 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 'equipped_item_level' => $profile->equippedItemLevel,
             ]);
         } else {
-            $response = $client->getCharacterData($this->realm, $this->name);
-            $profile = $profileMapper->map($response['basic']);
 
             $characterData = array_merge($characterData, [
                 'gender' => $profile->gender,
