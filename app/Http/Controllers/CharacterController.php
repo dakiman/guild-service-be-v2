@@ -6,10 +6,12 @@ namespace App\Http\Controllers;
 
 use App\Blizzard\Jobs\SyncCharacterData;
 use App\Enums\SyncDepth;
+use App\Exceptions\EntityNotFoundException;
 use App\Http\Resources\CharacterResource;
 use App\Http\Resources\CharacterSummaryResource;
 use App\Models\Character;
 use App\Services\CharacterService;
+use App\Support\BlizzardIdentity;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -18,7 +20,14 @@ class CharacterController extends Controller
 {
     public function show(string $region, string $realm, string $character, CharacterService $service, Request $request): JsonResponse
     {
-        $result = $service->getByIdentity($region, $realm, $character);
+        $realm = BlizzardIdentity::realm($realm);
+        $character = BlizzardIdentity::name($character);
+
+        try {
+            $result = $service->getByIdentity($region, $realm, $character);
+        } catch (EntityNotFoundException) {
+            return response()->json(['message' => 'Character not found'], 404);
+        }
 
         if ($result === null) {
             SyncCharacterData::dispatch($region, $realm, $character, SyncDepth::Standard);
