@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Blizzard\Jobs\SyncGuildData;
+use App\Exceptions\EntityNotFoundException;
 use App\Models\Guild;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Cache;
 
 class GuildService
 {
@@ -15,6 +17,10 @@ class GuildService
         $guild = Guild::byIdentity($name, $realm, $region)->first();
 
         if (! $guild) {
+            if (Cache::has("blizzard:not-found:guild:{$region}:{$realm}:{$name}")) {
+                throw new EntityNotFoundException;
+            }
+
             return null;
         }
 
