@@ -6,8 +6,10 @@ namespace App\Services;
 
 use App\Blizzard\Jobs\SyncCharacterData;
 use App\Enums\SyncDepth;
+use App\Exceptions\EntityNotFoundException;
 use App\Models\Character;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Cache;
 
 class CharacterService
 {
@@ -16,6 +18,10 @@ class CharacterService
         $character = Character::byIdentity($name, $realm, $region)->first();
 
         if (! $character) {
+            if (Cache::has("blizzard:not-found:character:{$region}:{$realm}:{$name}")) {
+                throw new EntityNotFoundException;
+            }
+
             return null;
         }
 
