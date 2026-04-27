@@ -46,6 +46,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Not-Found Cache TTL (seconds)
+    |--------------------------------------------------------------------------
+    | When Blizzard returns 404 for a character/guild lookup, we cache that
+    | result so subsequent searches return HTTP 404 immediately instead of
+    | re-dispatching a sync job that will 404 again. Default 24h: long enough
+    | to absorb retry storms, short enough that a renamed/created entity
+    | becomes searchable within a day.
+    */
+
+    'not_found_ttl' => (int) env('BLIZZARD_NOT_FOUND_TTL', 86_400),
+
+    /*
+    |--------------------------------------------------------------------------
     | Per-Slice Sync Feature Flags
     |--------------------------------------------------------------------------
     | Each retail Full-sync slice can be individually disabled via env so a
