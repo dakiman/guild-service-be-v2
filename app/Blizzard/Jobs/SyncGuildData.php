@@ -6,6 +6,7 @@ namespace App\Blizzard\Jobs;
 
 use App\Blizzard\Client\BlizzardProfileClient;
 use App\Blizzard\Contracts\TokenManagerInterface;
+use App\Blizzard\Exceptions\BlizzardNotFoundException;
 use App\Blizzard\Mappers\GuildProfileMapper;
 use App\Blizzard\Mappers\GuildRosterMapper;
 use App\Blizzard\Middleware\BlizzardHealthCheck;
@@ -18,6 +19,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -60,7 +62,18 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
         $client = new BlizzardProfileClient($tokenManager, $this->region);
 
         // Fetch guild data
-        $guildData = $client->getGuildData($this->realm, $this->name);
+        try {
+            $guildData = $client->getGuildData($this->realm, $this->name);
+        } catch (BlizzardNotFoundException) {
+            Cache::put(
+                "blizzard:not-found:guild:{$this->region}:{$this->realm}:{$this->name}",
+                true,
+                (int) config('blizzard.not_found_ttl', 86_400),
+            );
+
+            return;
+        }
+
         $profile = $profileMapper->map($guildData);
 
         // Upsert guild
