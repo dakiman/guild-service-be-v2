@@ -24,7 +24,7 @@ http://192.168.100.253:8091/api/v1
 
 ```bash
 # 1. Clone and enter the project
-cd guild-service-be-v2
+cd guild-service-v2/backend
 
 # 2. Copy environment file
 cp .env.example .env
