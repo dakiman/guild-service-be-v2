@@ -95,6 +95,25 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
         $this->assertArrayHasKey('spec', $talents);
         $this->assertArrayHasKey('hero', $talents);
         $this->assertArrayHasKey('pvp', $talents);
+
+        $dungeonRuns = $response->json('data.dungeon_runs');
+        $this->assertIsArray($dungeonRuns);
+
+        if (!empty($dungeonRuns)) {
+            foreach ($dungeonRuns as $i => $run) {
+                $this->assertArrayHasKey('members', $run, "dungeon_runs[{$i}] missing members — controller must eager-load dungeonRuns.members");
+                $this->assertIsArray($run['members'], "dungeon_runs[{$i}].members must be an array");
+
+                foreach ($run['members'] as $j => $member) {
+                    $this->assertArrayHasKey('character_id', $member, "dungeon_runs[{$i}].members[{$j}] missing character_id");
+                    $this->assertArrayHasKey('character_name', $member, "dungeon_runs[{$i}].members[{$j}] missing character_name");
+                    $this->assertArrayHasKey('character_realm', $member, "dungeon_runs[{$i}].members[{$j}] missing character_realm");
+                    $this->assertArrayHasKey('character_region', $member, "dungeon_runs[{$i}].members[{$j}] missing character_region");
+                    $this->assertArrayHasKey('spec_name', $member, "dungeon_runs[{$i}].members[{$j}] missing spec_name");
+                    $this->assertArrayHasKey('equipped_item_level', $member, "dungeon_runs[{$i}].members[{$j}] missing equipped_item_level");
+                }
+            }
+        }
     }
 
     #[DataProvider('retailCharacterProvider')]
