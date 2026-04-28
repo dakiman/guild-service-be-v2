@@ -1,8 +1,8 @@
 # Character Collections + Stats — Design (informal "Plan 4")
 
-- **Status:** DRAFT — open decisions pending. Not yet approved. Do not start implementation until §2 is resolved.
+- **Status:** APPROVED — decisions locked 2026-04-28. Ready for per-slice plans.
 - **Date:** 2026-04-28
-- **Branch target:** TBD (see §2.4 — current `feature/plan-2-retail-character-enrichment` is misnamed for new scope)
+- **Branch target:** `feature/character-collections-and-stats` (off `master`; see §2.4)
 - **Scope:** five FE-pending character data domains the Path B empty-state tabs are waiting on
 
 ## 1. Context
@@ -17,9 +17,11 @@ After Path B (the masked-armory.com character-page redesign) shipped on 2026-04-
 
 CLAUDE.md's "Plan 2" (mythic+ rating, PvP brackets, professions, raid encounter kills — see `e4dbadf`) is fully shipped. Plan 3 in CLAUDE.md is Classic persistence (status TBD; verify before assuming). This document is a **successor scope** — informally called "Plan 4" — but the label is unblessed (see §2.4).
 
-## 2. Open decisions (must resolve before implementation)
+## 2. Decisions
 
-### 2.1 Stats schema: JSONB column vs flat `character_stats` table — TBD
+All four decisions resolved 2026-04-28; rationale captured below for posterity.
+
+### 2.1 Stats schema: JSONB column vs flat `character_stats` table
 
 Blizzard's `/profile/wow/character/{realm}/{name}/character-stats` endpoint returns ~80 fields with class- and spec-conditional schemas (e.g. `mana_regen` only for casters; `melee_crit_chance` separate from `ranged_crit_chance`; weapon skill values appear only in Classic). Two options:
 
@@ -31,30 +33,28 @@ Blizzard's `/profile/wow/character/{realm}/{name}/character-stats` endpoint retu
   - Pros: queryable, indexable, type-safe at the Eloquent layer. Future leaderboard-by-stat features come for free.
   - Cons: painful migrations every expansion. Schema bikeshedding (which fields? class-conditional nullables?).
 
-**Recommendation:** JSONB. Lowest line count, matches existing slice pattern, and the FE never queries by stat — it just renders the payload. If the team later wants leaderboards by stat, denormalize at that point.
+**DECISION:** JSONB. Lowest line count, matches existing slice pattern, and the FE never queries by stat — it just renders the payload. If a future leaderboard-by-stat feature emerges, denormalize at that point.
 
-**TBD:** confirm or override.
-
-### 2.2 Reputations scope — TBD
+### 2.2 Reputations scope
 
 The 2026-04-22 spec (`docs/superpowers/specs/2026-04-22-v1-feature-parity-and-enrichment-design.md`) does not mention reputations. They are neither in nor out of v1 scope. Three sub-decisions:
 
-- Persist faction id, name, standing, value? **Yes** (table stakes if the slice ships at all).
-- Paragon counts (Shadowlands+ factions)? **TBD** — extra Blizzard call cost per faction.
-- Renown levels (Dragonflight major factions)? **TBD** — separate `/reputations/{faction-id}` endpoint, rate-limit cost.
+- Persist faction id, name, standing, value? **Yes** (table stakes).
+- Paragon counts (Shadowlands+ factions)? **DEFERRED** to a follow-up slice.
+- Renown levels (Dragonflight major factions)? **DEFERRED** to a follow-up slice.
 
-**Recommendation:** ship faction id/name/standing/value first; defer paragon and renown to a follow-up slice unless the FE needs them for masked-armory parity. Verify FE need by checking how `frontend/src/pages/character/CharacterReputationsTab.vue` is intended to render once it's de-stubbed.
+**DECISION:** ship faction id/name/standing/value in this slice. Paragon and renown require additional per-faction or per-id endpoint calls (rate-limit cost) and are not load-bearing for masked-armory parity at the basic-table level. Revisit once `CharacterReputationsTab.vue` renders the basic table and a concrete parity gap is identified.
 
-### 2.3 "Statistics dropped after Q5" line in 2026-04-22 spec — TBD
+### 2.3 "Statistics dropped after Q5" line in 2026-04-22 spec
 
 The earlier spec (line 35) lists "Character titles, achievement summary, statistics (dropped after Q5)" as out-of-scope. Two readings:
 
 - **(a)** "statistics" = Blizzard's `/character-stats` endpoint (the very thing we now want to expose). If so, this slice **reverses a prior decision** and §1 of this doc should call out the rationale.
 - **(b)** "statistics" = the v1 UI's separate "Statistics" tab (a distinct concept from the modern Blizzard endpoint). If so, no reversal.
 
-**TBD:** confirm interpretation. If (a), document why we changed our minds (likely answer: the masked-armory reference page features a stats grid prominently, so user value is reassessed).
+**DECISION:** interpretation (b). The line sits between "character titles" and "achievement summary", which are themselves v1-tab concepts (the v1 character page had separate Titles, Achievements, and Statistics tabs as discrete UI surfaces). "Statistics" in that context refers to the v1 UI tab — counts of /played, deaths, quests completed, etc. — not Blizzard's modern `/character-stats` endpoint (which surfaces item-level / primary stats / secondary ratings — the kind of data masked-armory features prominently). No reversal of prior intent: this slice ships the modern endpoint, not v1's Statistics tab. The v1 Statistics tab remains out of scope.
 
-### 2.4 Branch name and Plan numbering — TBD
+### 2.4 Branch name and Plan numbering
 
 `feature/plan-2-retail-character-enrichment` already holds Plan 2 + Blizzard name normalization + 404-marker caching. Adding Plan 4 work to it would compound the misnamed branch. Options:
 
@@ -62,7 +62,7 @@ The earlier spec (line 35) lists "Character titles, achievement summary, statist
 - New branch `feature/plan-4-character-collections` if the team adopts the Plan-N labelling.
 - Avoid the Plan 4 label entirely and use a thematic name like `feature/fe-pending-character-domains`.
 
-**TBD:** confirm. There is no Plan 4 file in `docs/` today; if the team adopts a different label, update CLAUDE.md's "Plan 2 / Plan 3 / Plan ?" enumeration to match.
+**DECISION:** new branch `feature/character-collections-and-stats` off `master`. Branched when the first slice begins (timing: after `feature/plan-2-retail-character-enrichment` merges into `master`, or rebased onto whatever lands first). The "Plan 4" label is **dropped from branch naming** but kept as an informal in-doc reference. When the first slice ships, add a CLAUDE.md bullet under the existing per-slice section noting the new scope (collections + stats) — keep using "Plan N" labels inline (CLAUDE.md already references Plan 2 and Plan 3 inline) but the team need not bless "Plan 4" as a formal name.
 
 ## 3. Slices in scope
 
