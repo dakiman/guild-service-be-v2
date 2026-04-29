@@ -25,7 +25,8 @@ class BackfillSlices extends Command
                     ->orWhereNull('pvp_synced_at')
                     ->orWhereNull('professions_synced_at')
                     ->orWhereNull('raids_synced_at')
-                    ->orWhereNull('stats_synced_at');
+                    ->orWhereNull('stats_synced_at')
+                    ->orWhereNull('titles_synced_at');
             })
             ->orderByDesc('num_of_searches')
             ->limit($limit);
