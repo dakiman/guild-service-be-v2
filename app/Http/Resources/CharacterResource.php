@@ -40,6 +40,7 @@ class CharacterResource extends JsonResource
             'media' => $this->media,
             'talents' => $this->talents,
             'equipment' => $this->equipment ?? [],
+            'stats' => $this->stats,
             'pvp_brackets' => PvpBracketResource::collection($this->whenLoaded('pvpBrackets')),
             'professions' => ProfessionResource::collection($this->whenLoaded('professions')),
             'raid_progress' => RaidEncounterResource::collection($this->whenLoaded('raidEncounterKills')),
@@ -48,6 +49,7 @@ class CharacterResource extends JsonResource
             'dungeon_runs' => DungeonRunResource::collection($this->whenLoaded('dungeonRuns')),
             'last_searched_at' => $this->last_searched_at?->toIso8601String(),
             'mythics_synced_at' => $this->mythics_synced_at?->toIso8601String(),
+            'stats_synced_at' => $this->stats_synced_at?->toIso8601String(),
             'synced_at' => $this->updated_at?->toIso8601String(),
         ];
     }
@@ -67,6 +69,7 @@ class CharacterResource extends JsonResource
                     'pvp' => $this->freshnessFor('pvp_synced_at', 'pvp'),
                     'professions' => $this->freshnessFor('professions_synced_at', 'professions'),
                     'raids' => $this->freshnessFor('raids_synced_at', 'raids'),
+                    'stats' => $this->freshnessFor('stats_synced_at', 'stats'),
                 ],
             ],
         ];
