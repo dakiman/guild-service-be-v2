@@ -60,11 +60,12 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
                 'professions',
                 'raid_progress',
                 'titles',
+                'reputations',
             ],
             'meta' => [
                 'game_version',
                 'forced_refresh',
-                'freshness' => ['profile', 'mythic_plus', 'pvp', 'professions', 'raids', 'stats', 'titles'],
+                'freshness' => ['profile', 'mythic_plus', 'pvp', 'professions', 'raids', 'stats', 'titles', 'reputations'],
             ],
         ]);
 
@@ -140,7 +141,53 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
             'pvp_player' => $this->assertPvpBracketsShape($response),
             'profession_rich' => $this->assertProfessionsShape($response),
             'raider' => $this->assertRaidProgressShape($response),
+            'rep_grinder' => $this->assertReputationsShape($response),
         };
+    }
+
+    /**
+     * Reputations only populates when BLIZZARD_SYNC_REPUTATIONS_ENABLED=true.
+     * Skip cleanly when the flag is off so the test passes in default env.
+     */
+    #[DataProvider('retailCharacterProvider')]
+    public function test_retail_endpoint_includes_reputations_when_flag_enabled(array $fixture, string $slot): void
+    {
+        $this->requireFixture($fixture, $slot);
+
+        if (! config('blizzard.sync.reputations_enabled')) {
+            $this->markTestSkipped('BLIZZARD_SYNC_REPUTATIONS_ENABLED is false; populated-reputations assertion is gated.');
+        }
+
+        $url = "/api/v1/characters/{$fixture['region']}/{$fixture['realm']}/{$fixture['name']}";
+        $this->warmCharacterOrSkip($url);
+
+        $response = $this->getJson($url);
+        $response->assertOk();
+
+        $reputations = $response->json('data.reputations');
+        $this->assertIsArray($reputations);
+
+        if ($slot === 'rep_grinder') {
+            $this->assertNotEmpty(
+                $reputations,
+                "rep_grinder fixture should expose at least one reputation entry; set BLIZZARD_SYNC_REPUTATIONS_ENABLED=true and re-run if empty.",
+            );
+        }
+
+        foreach ($reputations as $i => $rep) {
+            $this->assertArrayHasKey('faction_id', $rep, "reputations[{$i}] missing faction_id");
+            $this->assertArrayHasKey('faction_name', $rep, "reputations[{$i}] missing faction_name");
+            $this->assertArrayHasKey('standing', $rep, "reputations[{$i}] missing standing");
+            $this->assertArrayHasKey('value', $rep, "reputations[{$i}] missing value");
+            $this->assertArrayHasKey('max', $rep, "reputations[{$i}] missing max");
+            $this->assertContains(
+                $rep['standing'],
+                ['hated', 'hostile', 'unfriendly', 'neutral', 'friendly', 'honored', 'revered', 'exalted'],
+                "reputations[{$i}].standing has unexpected value '{$rep['standing']}'",
+            );
+        }
+
+        $this->assertSame('fresh', $response->json('meta.freshness.reputations'), 'reputations freshness should be fresh after warm sync');
     }
 
     /**
@@ -243,6 +290,24 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
         $difficulties = array_unique(array_column($x, 'difficulty'));
         foreach ($difficulties as $d) {
             $this->assertContains($d, ['lfr', 'normal', 'heroic', 'mythic']);
+        }
+    }
+
+    private function assertReputationsShape($r): void
+    {
+        $x = $r->json('data.reputations');
+        $this->assertIsArray($x);
+        if ($x === []) {
+            $this->markTestSkipped('fixture has no reputations right now (flag off, or empty list)');
+        }
+        foreach ($x as $row) {
+            $this->assertArrayHasKey('faction_id', $row);
+            $this->assertIsInt($row['faction_id']);
+            $this->assertArrayHasKey('standing', $row);
+            $this->assertContains(
+                $row['standing'],
+                ['hated', 'hostile', 'unfriendly', 'neutral', 'friendly', 'honored', 'revered', 'exalted'],
+            );
         }
     }
 }

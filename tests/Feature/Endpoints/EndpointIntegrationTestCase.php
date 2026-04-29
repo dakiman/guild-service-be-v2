@@ -22,6 +22,7 @@ abstract class EndpointIntegrationTestCase extends TestCase
         'pvp_player' => ['region' => 'us', 'realm' => 'blades-edge', 'name' => 'leonardmccoy'], // active PvP
         'profession_rich' => ['region' => 'eu', 'realm' => 'the maelstrom', 'name' => 'Melaniya'], // 2 primaries + secondaries
         'raider' => ['region' => 'us', 'realm' => 'illidan', 'name' => 'Sconysoprano'], // active raider
+        'rep_grinder' => ['region' => 'eu', 'realm' => '', 'name' => ''], // many reputations across expansions
     ];
 
     /**
