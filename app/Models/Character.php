@@ -48,6 +48,7 @@ class Character extends Model
         'professions_synced_at',
         'raids_synced_at',
         'stats_synced_at',
+        'titles_synced_at',
     ];
 
     protected function casts(): array
@@ -64,6 +65,7 @@ class Character extends Model
             'professions_synced_at' => 'datetime',
             'raids_synced_at' => 'datetime',
             'stats_synced_at' => 'datetime',
+            'titles_synced_at' => 'datetime',
             'last_searched_at' => 'datetime',
             'race_id' => 'integer',
             'class_id' => 'integer',
@@ -103,6 +105,11 @@ class Character extends Model
     public function raidEncounterKills(): HasMany
     {
         return $this->hasMany(RaidEncounterKill::class);
+    }
+
+    public function titles(): HasMany
+    {
+        return $this->hasMany(CharacterTitle::class);
     }
 
     public function guildMembership(): HasOne
@@ -175,5 +182,11 @@ class Character extends Model
     {
         return ! $this->stats_synced_at
             || $this->stats_synced_at->diffInSeconds(now()) > config('blizzard.staleness.character.stats');
+    }
+
+    public function isTitlesStale(): bool
+    {
+        return ! $this->titles_synced_at
+            || $this->titles_synced_at->diffInSeconds(now()) > config('blizzard.staleness.character.titles');
     }
 }
