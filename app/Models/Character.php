@@ -39,6 +39,7 @@ class Character extends Model
         'media',
         'talents',
         'equipment',
+        'stats',
         'recruitment',
         'num_of_searches',
         'last_searched_at',
@@ -46,6 +47,7 @@ class Character extends Model
         'pvp_synced_at',
         'professions_synced_at',
         'raids_synced_at',
+        'stats_synced_at',
     ];
 
     protected function casts(): array
@@ -54,12 +56,14 @@ class Character extends Model
             'media' => 'array',
             'talents' => 'array',
             'equipment' => 'array',
+            'stats' => 'array',
             'mythic_plus_rating_by_spec' => 'array',
             'recruitment' => 'boolean',
             'mythics_synced_at' => 'datetime',
             'pvp_synced_at' => 'datetime',
             'professions_synced_at' => 'datetime',
             'raids_synced_at' => 'datetime',
+            'stats_synced_at' => 'datetime',
             'last_searched_at' => 'datetime',
             'race_id' => 'integer',
             'class_id' => 'integer',
@@ -165,5 +169,11 @@ class Character extends Model
     {
         return ! $this->raids_synced_at
             || $this->raids_synced_at->diffInSeconds(now()) > config('blizzard.staleness.character.raids');
+    }
+
+    public function isStatsStale(): bool
+    {
+        return ! $this->stats_synced_at
+            || $this->stats_synced_at->diffInSeconds(now()) > config('blizzard.staleness.character.stats');
     }
 }
