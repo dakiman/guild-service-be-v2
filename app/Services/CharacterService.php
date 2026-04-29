@@ -31,7 +31,8 @@ class CharacterService
         $anySliceStale = $character->isMythicsStale()
             || $character->isPvpStale()
             || $character->isProfessionsStale()
-            || $character->isRaidsStale();
+            || $character->isRaidsStale()
+            || $character->isStatsStale();
 
         // TODO(Plan 3): $forceRefresh must also bypass SyncCharacterData::$uniqueFor
         //               (nonced uniqueId) or back-to-back dispatches get dedup'd.
