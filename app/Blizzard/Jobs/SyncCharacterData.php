@@ -14,6 +14,7 @@ use App\Blizzard\Mappers\CharacterProfessionMapper;
 use App\Blizzard\Mappers\CharacterProfileMapper;
 use App\Blizzard\Mappers\CharacterSpecializationMapper;
 use App\Blizzard\Mappers\CharacterStatsMapper;
+use App\Blizzard\Mappers\CharacterTitleMapper;
 use App\Blizzard\Mappers\MythicPlusMapper;
 use App\Blizzard\Mappers\MythicPlusRatingMapper;
 use App\Blizzard\Mappers\PvpBracketStatsMapper;
@@ -24,6 +25,7 @@ use App\Enums\SyncDepth;
 use App\Models\Character;
 use App\Models\CharacterProfession;
 use App\Models\CharacterPvpBracket;
+use App\Models\CharacterTitle;
 use App\Models\DungeonRun;
 use App\Models\Guild;
 use App\Models\RaidEncounterKill;
@@ -83,6 +85,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         CharacterProfessionMapper $professionMapper,
         RaidEncounterKillMapper $raidMapper,
         CharacterStatsMapper $statsMapper,
+        CharacterTitleMapper $titleMapper,
         BlizzardGameDataClient $gameDataClient,
     ): void {
         $client = new BlizzardProfileClient($tokenManager, $this->region);
@@ -211,6 +214,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $this->syncProfessions($client, $professionMapper, $character);
             $this->syncRaidEncounters($client, $raidMapper, $character);
             $this->syncStats($client, $statsMapper, $character);
+            $this->syncTitles($client, $titleMapper, $character);
         }
     }
 
@@ -460,6 +464,50 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             });
         } catch (Throwable $e) {
             Log::warning('Failed to sync character stats', [
+                'character' => "{$this->name}-{$this->realm}-{$this->region}",
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function syncTitles(
+        BlizzardProfileClient $client,
+        CharacterTitleMapper $mapper,
+        Character $character,
+    ): void {
+        if (! config('blizzard.sync.titles_enabled')) {
+            return;
+        }
+
+        try {
+            $data = $client->getCharacterTitles($this->realm, $this->name);
+            $dtos = $mapper->map($data);
+
+            DB::transaction(function () use ($character, $dtos) {
+                $keep = [];
+                foreach ($dtos as $dto) {
+                    CharacterTitle::updateOrCreate(
+                        [
+                            'character_id' => $character->id,
+                            'title_id' => $dto->titleId,
+                        ],
+                        [
+                            'name' => $dto->name,
+                            'display_string' => $dto->displayString,
+                            'is_selected' => $dto->isSelected,
+                        ],
+                    );
+                    $keep[] = $dto->titleId;
+                }
+
+                CharacterTitle::where('character_id', $character->id)
+                    ->when($keep !== [], fn ($q) => $q->whereNotIn('title_id', $keep))
+                    ->delete();
+
+                $character->update(['titles_synced_at' => now()]);
+            });
+        } catch (Throwable $e) {
+            Log::warning('Failed to sync titles for character', [
                 'character' => "{$this->name}-{$this->realm}-{$this->region}",
                 'error' => $e->getMessage(),
             ]);
