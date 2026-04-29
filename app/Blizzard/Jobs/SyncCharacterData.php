@@ -12,6 +12,7 @@ use App\Blizzard\Mappers\CharacterEquipmentMapper;
 use App\Blizzard\Mappers\CharacterMediaMapper;
 use App\Blizzard\Mappers\CharacterProfessionMapper;
 use App\Blizzard\Mappers\CharacterProfileMapper;
+use App\Blizzard\Mappers\CharacterReputationMapper;
 use App\Blizzard\Mappers\CharacterSpecializationMapper;
 use App\Blizzard\Mappers\CharacterStatsMapper;
 use App\Blizzard\Mappers\CharacterTitleMapper;
@@ -25,6 +26,7 @@ use App\Enums\SyncDepth;
 use App\Models\Character;
 use App\Models\CharacterProfession;
 use App\Models\CharacterPvpBracket;
+use App\Models\CharacterReputation;
 use App\Models\CharacterTitle;
 use App\Models\DungeonRun;
 use App\Models\Guild;
@@ -86,6 +88,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         RaidEncounterKillMapper $raidMapper,
         CharacterStatsMapper $statsMapper,
         CharacterTitleMapper $titleMapper,
+        CharacterReputationMapper $reputationMapper,
         BlizzardGameDataClient $gameDataClient,
     ): void {
         $client = new BlizzardProfileClient($tokenManager, $this->region);
@@ -215,6 +218,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $this->syncRaidEncounters($client, $raidMapper, $character);
             $this->syncStats($client, $statsMapper, $character);
             $this->syncTitles($client, $titleMapper, $character);
+            $this->syncReputations($client, $reputationMapper, $character);
         }
     }
 
@@ -508,6 +512,51 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             });
         } catch (Throwable $e) {
             Log::warning('Failed to sync titles for character', [
+                'character' => "{$this->name}-{$this->realm}-{$this->region}",
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function syncReputations(
+        BlizzardProfileClient $client,
+        CharacterReputationMapper $mapper,
+        Character $character,
+    ): void {
+        if (! config('blizzard.sync.reputations_enabled')) {
+            return;
+        }
+
+        try {
+            $data = $client->getCharacterReputations($this->realm, $this->name);
+            $dtos = $mapper->map($data);
+
+            DB::transaction(function () use ($character, $dtos) {
+                $keep = [];
+                foreach ($dtos as $dto) {
+                    CharacterReputation::updateOrCreate(
+                        [
+                            'character_id' => $character->id,
+                            'faction_id' => $dto->factionId,
+                        ],
+                        [
+                            'faction_name' => $dto->factionName,
+                            'standing' => $dto->standing,
+                            'value' => $dto->value,
+                            'max' => $dto->max,
+                        ],
+                    );
+                    $keep[] = $dto->factionId;
+                }
+
+                CharacterReputation::where('character_id', $character->id)
+                    ->when($keep !== [], fn ($q) => $q->whereNotIn('faction_id', $keep))
+                    ->delete();
+
+                $character->update(['reputations_synced_at' => now()]);
+            });
+        } catch (Throwable $e) {
+            Log::warning('Failed to sync reputations for character', [
                 'character' => "{$this->name}-{$this->realm}-{$this->region}",
                 'error' => $e->getMessage(),
             ]);
