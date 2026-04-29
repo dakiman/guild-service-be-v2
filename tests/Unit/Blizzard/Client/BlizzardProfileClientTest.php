@@ -88,4 +88,30 @@ class BlizzardProfileClientTest extends TestCase
             return str_contains($path, '/profile/wow/character/the-maelstrom/cirna');
         });
     }
+
+    public function test_get_character_reputations_returns_null_on_404(): void
+    {
+        Http::fake([
+            'eu.api.blizzard.com/profile/wow/character/*/reputations*' => Http::response(['code' => 404], 404),
+        ]);
+
+        $this->assertNull($this->makeClient('eu')->getCharacterReputations('the-maelstrom', 'cirna'));
+    }
+
+    public function test_get_character_reputations_returns_payload_on_200(): void
+    {
+        Http::fake([
+            'eu.api.blizzard.com/profile/wow/character/*/reputations*' => Http::response([
+                'reputations' => [
+                    ['faction' => ['id' => 2510, 'name' => 'Valdrakken Accord'],
+                        'standing' => ['raw' => 21000, 'max' => 21000, 'name' => 'Exalted']],
+                ],
+            ], 200),
+        ]);
+
+        $payload = $this->makeClient('eu')->getCharacterReputations('The Maelstrom', 'Cirna');
+
+        $this->assertIsArray($payload);
+        $this->assertSame(2510, $payload['reputations'][0]['faction']['id']);
+    }
 }
