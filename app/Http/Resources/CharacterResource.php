@@ -45,6 +45,7 @@ class CharacterResource extends JsonResource
             'professions' => ProfessionResource::collection($this->whenLoaded('professions')),
             'raid_progress' => RaidEncounterResource::collection($this->whenLoaded('raidEncounterKills')),
             'titles' => CharacterTitleResource::collection($this->whenLoaded('titles')),
+            'reputations' => ReputationResource::collection($this->whenLoaded('reputations')),
             'recruitment' => $this->recruitment,
             'guild' => new GuildSummaryResource($this->whenLoaded('guild')),
             'dungeon_runs' => DungeonRunResource::collection($this->whenLoaded('dungeonRuns')),
@@ -72,6 +73,7 @@ class CharacterResource extends JsonResource
                     'raids' => $this->freshnessFor('raids_synced_at', 'raids'),
                     'stats' => $this->freshnessFor('stats_synced_at', 'stats'),
                     'titles' => $this->freshnessFor('titles_synced_at', 'titles'),
+                    'reputations' => $this->freshnessFor('reputations_synced_at', 'reputations'),
                 ],
             ],
         ];
