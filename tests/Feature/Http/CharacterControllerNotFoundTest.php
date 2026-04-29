@@ -84,6 +84,7 @@ class CharacterControllerNotFoundTest extends TestCase
             'pvp_synced_at' => $now,
             'professions_synced_at' => $now,
             'raids_synced_at' => $now,
+            'stats_synced_at' => $now,
         ]);
 
         $this->getJson('/api/v1/characters/eu/the-maelstrom/Cirna')

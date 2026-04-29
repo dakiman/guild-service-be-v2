@@ -54,6 +54,7 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
                 'media' => ['avatar', 'inset', 'main'],
                 'talents' => ['class', 'spec', 'hero', 'pvp'],
                 'equipment',
+                'stats',
                 'mythic_plus_rating',
                 'pvp_brackets',
                 'professions',
@@ -62,7 +63,7 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
             'meta' => [
                 'game_version',
                 'forced_refresh',
-                'freshness' => ['profile', 'mythic_plus', 'pvp', 'professions', 'raids'],
+                'freshness' => ['profile', 'mythic_plus', 'pvp', 'professions', 'raids', 'stats'],
             ],
         ]);
 
@@ -87,6 +88,14 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
             $this->assertIsArray($item['gems'], "equipment[{$i}].gems not array");
             $this->assertIsArray($item['enchantments'], "equipment[{$i}].enchantments not array");
             $this->assertIsArray($item['stats'], "equipment[{$i}].stats not array");
+        }
+
+        $stats = $response->json('data.stats');
+        if ($stats !== null) {
+            $this->assertIsArray($stats, 'stats should be an associative array when present');
+            $this->assertArrayHasKey('health', $stats, 'stats payload missing health');
+            $this->assertArrayNotHasKey('_links', $stats, 'stats payload should have _links envelope stripped');
+            $this->assertArrayNotHasKey('character', $stats, 'stats payload should have character envelope stripped');
         }
 
         $talents = $response->json('data.talents');
