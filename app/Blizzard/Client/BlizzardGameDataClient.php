@@ -39,4 +39,37 @@ class BlizzardGameDataClient extends BlizzardClient
             return (int) $lastSeason['id'];
         });
     }
+
+    /**
+     * Fetch a class talent tree scoped to a specialization. The response includes
+     * class_talent_nodes, spec_talent_nodes, and hero_talent_trees — each node carries
+     * a ranks[] array (length = max rank) with per-rank spell tooltips. Endpoint lives
+     * in the static-{region} namespace, not dynamic-, so we bypass request() and call
+     * Http directly here.
+     *
+     * Returns null on 404. Cached aggressively because trees only change on patches.
+     */
+    public function getTalentTree(int $treeId, int $specId): ?array
+    {
+        $cacheKey = "blizzard:talent-tree:{$this->region}:{$treeId}:{$specId}";
+        $ttl = (int) config('blizzard.talent_tree_cache_ttl', 86400 * 7);
+
+        return Cache::remember($cacheKey, $ttl, function () use ($treeId, $specId): ?array {
+            $response = \Illuminate\Support\Facades\Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => "static-{$this->region}",
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl()}/data/wow/talent-tree/{$treeId}/playable-specialization/{$specId}");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
 }
