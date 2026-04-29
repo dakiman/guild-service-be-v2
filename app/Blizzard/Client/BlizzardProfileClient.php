@@ -236,6 +236,23 @@ class BlizzardProfileClient extends BlizzardClient
         return $response->json();
     }
 
+    public function getCharacterTitles(string $realm, string $name): ?array
+    {
+        $realm = BlizzardIdentity::realm($realm);
+        $name = BlizzardIdentity::name($name);
+
+        $response = $this->request()
+            ->get("/profile/wow/character/{$realm}/{$name}/titles");
+
+        if ($response->status() === 404) {
+            return null;
+        }
+
+        $response->throw();
+
+        return $response->json();
+    }
+
     public function getGuildData(string $realm, string $guild): array
     {
         $realm = BlizzardIdentity::realm($realm);
