@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Blizzard\Client;
 
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 
 class BlizzardGameDataClient extends BlizzardClient
 {
@@ -55,7 +56,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.talent_tree_cache_ttl', 86400 * 7);
 
         return Cache::remember($cacheKey, $ttl, function () use ($treeId, $specId): ?array {
-            $response = \Illuminate\Support\Facades\Http::withToken($this->tokenManager->getToken($this->region))
+            $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
                     'locale' => 'en_GB',

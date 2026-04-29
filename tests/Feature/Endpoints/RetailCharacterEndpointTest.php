@@ -108,7 +108,7 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
         $dungeonRuns = $response->json('data.dungeon_runs');
         $this->assertIsArray($dungeonRuns);
 
-        if (!empty($dungeonRuns)) {
+        if (! empty($dungeonRuns)) {
             foreach ($dungeonRuns as $i => $run) {
                 $this->assertArrayHasKey('members', $run, "dungeon_runs[{$i}] missing members — controller must eager-load dungeonRuns.members");
                 $this->assertIsArray($run['members'], "dungeon_runs[{$i}].members must be an array");
