@@ -59,11 +59,12 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
                 'pvp_brackets',
                 'professions',
                 'raid_progress',
+                'titles',
             ],
             'meta' => [
                 'game_version',
                 'forced_refresh',
-                'freshness' => ['profile', 'mythic_plus', 'pvp', 'professions', 'raids', 'stats'],
+                'freshness' => ['profile', 'mythic_plus', 'pvp', 'professions', 'raids', 'stats', 'titles'],
             ],
         ]);
 
@@ -140,6 +141,45 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
             'profession_rich' => $this->assertProfessionsShape($response),
             'raider' => $this->assertRaidProgressShape($response),
         };
+    }
+
+    /**
+     * Titles only populates when BLIZZARD_SYNC_TITLES_ENABLED=true.
+     * Skip cleanly when the flag is off so the test passes in default env.
+     */
+    #[DataProvider('retailCharacterProvider')]
+    public function test_retail_endpoint_includes_titles_when_flag_enabled(array $fixture, string $slot): void
+    {
+        $this->requireFixture($fixture, $slot);
+
+        if (! config('blizzard.sync.titles_enabled')) {
+            $this->markTestSkipped('BLIZZARD_SYNC_TITLES_ENABLED is false; populated-titles assertion is gated.');
+        }
+
+        $url = "/api/v1/characters/{$fixture['region']}/{$fixture['realm']}/{$fixture['name']}";
+        $this->warmCharacterOrSkip($url);
+
+        $response = $this->getJson($url);
+        $response->assertOk();
+
+        $titles = $response->json('data.titles');
+        $this->assertIsArray($titles);
+        foreach ($titles as $i => $title) {
+            $this->assertArrayHasKey('id', $title, "titles[{$i}] missing id");
+            $this->assertArrayHasKey('name', $title, "titles[{$i}] missing name");
+            $this->assertArrayHasKey('display_string', $title, "titles[{$i}] missing display_string");
+            $this->assertArrayHasKey('is_selected', $title, "titles[{$i}] missing is_selected");
+            $this->assertIsInt($title['id']);
+            $this->assertIsString($title['name']);
+            $this->assertIsString($title['display_string']);
+            $this->assertIsBool($title['is_selected']);
+        }
+
+        // At most one title should be selected at a time.
+        $selectedCount = count(array_filter($titles, fn ($t) => $t['is_selected'] === true));
+        $this->assertLessThanOrEqual(1, $selectedCount, 'At most one title can be is_selected=true');
+
+        $this->assertSame('fresh', $response->json('meta.freshness.titles'), 'titles freshness should be fresh after warm sync');
     }
 
     /**
