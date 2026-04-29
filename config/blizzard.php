@@ -37,6 +37,7 @@ return [
             'pvp' => (int) env('BLIZZARD_STALE_CHARACTER_PVP', 1800),
             'professions' => (int) env('BLIZZARD_STALE_CHARACTER_PROFESSIONS', 21600),
             'raids' => (int) env('BLIZZARD_STALE_CHARACTER_RAIDS', 3600),
+            'stats' => (int) env('BLIZZARD_STALE_CHARACTER_STATS', 900),
         ],
         'guild' => [
             'basic' => (int) env('BLIZZARD_STALE_GUILD_BASIC', 3600),
@@ -70,6 +71,7 @@ return [
         'pvp_enabled' => (bool) env('BLIZZARD_SYNC_PVP_ENABLED', true),
         'professions_enabled' => (bool) env('BLIZZARD_SYNC_PROFESSIONS_ENABLED', true),
         'raids_enabled' => (bool) env('BLIZZARD_SYNC_RAIDS_ENABLED', true),
+        'stats_enabled' => (bool) env('BLIZZARD_SYNC_STATS_ENABLED', false),
     ],
 
     /*
