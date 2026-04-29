@@ -170,7 +170,7 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
         if ($slot === 'rep_grinder') {
             $this->assertNotEmpty(
                 $reputations,
-                "rep_grinder fixture should expose at least one reputation entry; set BLIZZARD_SYNC_REPUTATIONS_ENABLED=true and re-run if empty.",
+                'rep_grinder fixture should expose at least one reputation entry; set BLIZZARD_SYNC_REPUTATIONS_ENABLED=true and re-run if empty.',
             );
         }
 
