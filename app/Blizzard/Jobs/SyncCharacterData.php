@@ -13,6 +13,7 @@ use App\Blizzard\Mappers\CharacterMediaMapper;
 use App\Blizzard\Mappers\CharacterProfessionMapper;
 use App\Blizzard\Mappers\CharacterProfileMapper;
 use App\Blizzard\Mappers\CharacterSpecializationMapper;
+use App\Blizzard\Mappers\CharacterStatsMapper;
 use App\Blizzard\Mappers\MythicPlusMapper;
 use App\Blizzard\Mappers\MythicPlusRatingMapper;
 use App\Blizzard\Mappers\PvpBracketStatsMapper;
@@ -81,6 +82,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         PvpBracketStatsMapper $pvpMapper,
         CharacterProfessionMapper $professionMapper,
         RaidEncounterKillMapper $raidMapper,
+        CharacterStatsMapper $statsMapper,
         BlizzardGameDataClient $gameDataClient,
     ): void {
         $client = new BlizzardProfileClient($tokenManager, $this->region);
@@ -208,6 +210,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $this->syncPvpData($client, $pvpMapper, $character);
             $this->syncProfessions($client, $professionMapper, $character);
             $this->syncRaidEncounters($client, $raidMapper, $character);
+            $this->syncStats($client, $statsMapper, $character);
         }
     }
 
@@ -431,6 +434,32 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             });
         } catch (Throwable $e) {
             Log::warning('Failed to sync raid encounters for character', [
+                'character' => "{$this->name}-{$this->realm}-{$this->region}",
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function syncStats(
+        BlizzardProfileClient $client,
+        CharacterStatsMapper $mapper,
+        Character $character,
+    ): void {
+        if (! config('blizzard.sync.stats_enabled')) {
+            return;
+        }
+
+        try {
+            $data = $client->getCharacterStats($this->realm, $this->name);
+
+            DB::transaction(function () use ($character, $mapper, $data) {
+                $character->update([
+                    'stats' => $data === null ? null : $mapper->map($data)->fields,
+                    'stats_synced_at' => now(),
+                ]);
+            });
+        } catch (Throwable $e) {
+            Log::warning('Failed to sync character stats', [
                 'character' => "{$this->name}-{$this->realm}-{$this->region}",
                 'error' => $e->getMessage(),
             ]);
