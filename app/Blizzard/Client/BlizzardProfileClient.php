@@ -272,6 +272,25 @@ class BlizzardProfileClient extends BlizzardClient
         return $response->json();
     }
 
+    public function getCharacterAchievements(string $realm, string $name): ?array
+    {
+        $realm = BlizzardIdentity::realm($realm);
+        $name = BlizzardIdentity::name($name);
+
+        try {
+            $response = $this->request()
+                ->get("/profile/wow/character/{$realm}/{$name}/achievements");
+        } catch (RequestException $e) {
+            if ($e->response->status() === 404) {
+                return null;
+            }
+
+            throw $e;
+        }
+
+        return $response->json();
+    }
+
     /**
      * Fetch the three collections endpoints in parallel.
      *
