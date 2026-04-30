@@ -272,6 +272,55 @@ class BlizzardProfileClient extends BlizzardClient
         return $response->json();
     }
 
+    /**
+     * Fetch the three collections endpoints in parallel.
+     *
+     * @return array{mounts: ?array, pets: ?array, toys: ?array}
+     */
+    public function getCharacterCollections(string $realm, string $name): array
+    {
+        $realm = BlizzardIdentity::realm($realm);
+        $name = BlizzardIdentity::name($name);
+
+        $basePath = "/profile/wow/character/{$realm}/{$name}/collections";
+        $token = $this->tokenManager->getToken($this->region);
+        $namespace = $this->namespace();
+        $baseUrl = $this->baseUrl();
+        $timeout = (int) config('blizzard.timeouts.character_pool', 20);
+
+        $responses = Http::pool(fn (Pool $pool) => [
+            $pool->as('mounts')
+                ->withToken($token)
+                ->baseUrl($baseUrl)
+                ->withQueryParameters(['namespace' => $namespace, 'locale' => 'en_GB'])
+                ->timeout($timeout)
+                ->connectTimeout(5)
+                ->get("{$basePath}/mounts"),
+
+            $pool->as('pets')
+                ->withToken($token)
+                ->baseUrl($baseUrl)
+                ->withQueryParameters(['namespace' => $namespace, 'locale' => 'en_GB'])
+                ->timeout($timeout)
+                ->connectTimeout(5)
+                ->get("{$basePath}/pets"),
+
+            $pool->as('toys')
+                ->withToken($token)
+                ->baseUrl($baseUrl)
+                ->withQueryParameters(['namespace' => $namespace, 'locale' => 'en_GB'])
+                ->timeout($timeout)
+                ->connectTimeout(5)
+                ->get("{$basePath}/toys"),
+        ]);
+
+        return [
+            'mounts' => $responses['mounts']->successful() ? $responses['mounts']->json() : null,
+            'pets' => $responses['pets']->successful() ? $responses['pets']->json() : null,
+            'toys' => $responses['toys']->successful() ? $responses['toys']->json() : null,
+        ];
+    }
+
     public function getGuildData(string $realm, string $guild): array
     {
         $realm = BlizzardIdentity::realm($realm);
