@@ -278,4 +278,131 @@ class BlizzardGameDataClientTest extends TestCase
 
         $this->assertNull($this->client()->getMount(99999));
     }
+
+    public function test_get_achievement_category_index_returns_response_in_static_namespace(): void
+    {
+        Cache::flush();
+
+        Http::fake([
+            'us.api.blizzard.com/data/wow/achievement-category/index?*' => Http::response([
+                'categories' => [
+                    ['id' => 1, 'name' => 'General'],
+                    ['id' => 81, 'name' => 'Quests'],
+                ],
+            ], 200),
+        ]);
+
+        $result = $this->client()->getAchievementCategoryIndex();
+
+        $this->assertSame(1, $result['categories'][0]['id']);
+
+        Http::assertSent(function ($request) {
+            return str_contains($request->url(), 'achievement-category/index')
+                && str_contains($request->url(), 'namespace=static-us')
+                && str_contains($request->url(), 'locale=en_GB');
+        });
+    }
+
+    public function test_get_achievement_category_returns_response_in_static_namespace(): void
+    {
+        Cache::flush();
+
+        Http::fake([
+            'us.api.blizzard.com/data/wow/achievement-category/81?*' => Http::response([
+                'id' => 81,
+                'name' => 'Quests',
+                'parent_category' => ['id' => 1, 'name' => 'General'],
+                'display_order' => 3,
+            ], 200),
+        ]);
+
+        $result = $this->client()->getAchievementCategory(81);
+
+        $this->assertSame(81, $result['id']);
+        $this->assertSame('Quests', $result['name']);
+
+        Http::assertSent(function ($request) {
+            return str_contains($request->url(), 'achievement-category/81')
+                && str_contains($request->url(), 'namespace=static-us');
+        });
+    }
+
+    public function test_get_achievement_category_returns_null_on_404(): void
+    {
+        Cache::flush();
+
+        Http::fake([
+            'us.api.blizzard.com/data/wow/achievement-category/99999?*' => Http::response(null, 404),
+        ]);
+
+        $this->assertNull($this->client()->getAchievementCategory(99999));
+    }
+
+    public function test_get_achievement_index_returns_response_in_static_namespace(): void
+    {
+        Cache::flush();
+
+        Http::fake([
+            'us.api.blizzard.com/data/wow/achievement/index?*' => Http::response([
+                'achievements' => [
+                    ['id' => 1, 'name' => 'A'],
+                    ['id' => 230, 'name' => 'Hatchling of the Talon'],
+                ],
+            ], 200),
+        ]);
+
+        $result = $this->client()->getAchievementIndex();
+
+        $this->assertSame(1, $result['achievements'][0]['id']);
+        $this->assertCount(2, $result['achievements']);
+    }
+
+    public function test_get_achievement_index_caches_within_ttl(): void
+    {
+        Cache::flush();
+        $callCount = 0;
+
+        Http::fake(function () use (&$callCount) {
+            $callCount++;
+
+            return Http::response(['achievements' => []], 200);
+        });
+
+        $client = $this->client();
+        $client->getAchievementIndex();
+        $client->getAchievementIndex();
+
+        $this->assertSame(1, $callCount, 'second call should be served from cache');
+    }
+
+    public function test_get_achievement_returns_response_in_static_namespace(): void
+    {
+        Cache::flush();
+
+        Http::fake([
+            'us.api.blizzard.com/data/wow/achievement/230?*' => Http::response([
+                'id' => 230,
+                'name' => 'Hatchling of the Talon',
+                'category' => ['id' => 15246],
+                'points' => 10,
+                'is_account_wide' => true,
+            ], 200),
+        ]);
+
+        $result = $this->client()->getAchievement(230);
+
+        $this->assertSame(230, $result['id']);
+        $this->assertTrue($result['is_account_wide']);
+    }
+
+    public function test_get_achievement_returns_null_on_404(): void
+    {
+        Cache::flush();
+
+        Http::fake([
+            'us.api.blizzard.com/data/wow/achievement/99999?*' => Http::response(null, 404),
+        ]);
+
+        $this->assertNull($this->client()->getAchievement(99999));
+    }
 }
