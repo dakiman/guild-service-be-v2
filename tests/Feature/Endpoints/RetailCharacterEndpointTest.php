@@ -398,4 +398,102 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
             );
         }
     }
+
+    public function test_reputation_response_includes_faction_block_with_expansion(): void
+    {
+        \App\Models\GameDataExpansion::firstOrCreate(['id' => 1], ['name' => 'The War Within', 'display_order' => 1]);
+        \App\Models\GameDataFaction::firstOrCreate(['id' => 2570], ['name' => 'Council of Dornogal', 'expansion_id' => 1]);
+
+        $now = now();
+        $character = \App\Models\Character::factory()->create([
+            'mythics_synced_at' => $now,
+            'pvp_synced_at' => $now,
+            'professions_synced_at' => $now,
+            'raids_synced_at' => $now,
+            'stats_synced_at' => $now,
+            'titles_synced_at' => $now,
+            'reputations_synced_at' => $now,
+            'collections_synced_at' => $now,
+            'achievements_synced_at' => $now,
+        ]);
+        \App\Models\CharacterReputation::create([
+            'character_id' => $character->id,
+            'faction_id' => 2570,
+            'faction_name' => 'Council of Dornogal',
+            'standing' => 'exalted',
+            'value' => 21000,
+            'max' => 0,
+        ]);
+
+        $url = "/api/v1/characters/{$character->region}/{$character->realm}/{$character->name}";
+        $response = $this->getJson($url)->assertOk();
+
+        $this->assertSame(2570, $response->json('data.reputations.0.faction.id'));
+        $this->assertSame('Council of Dornogal', $response->json('data.reputations.0.faction.name'));
+        $this->assertSame(1, $response->json('data.reputations.0.faction.expansion.id'));
+        $this->assertSame('The War Within', $response->json('data.reputations.0.faction.expansion.name'));
+        $this->assertSame(1, $response->json('data.reputations.0.faction.expansion.display_order'));
+    }
+
+    public function test_reputation_response_includes_null_expansion_when_unmapped(): void
+    {
+        \App\Models\GameDataFaction::firstOrCreate(['id' => 99999], ['name' => 'Future Faction', 'expansion_id' => null]);
+
+        $now = now();
+        $character = \App\Models\Character::factory()->create([
+            'mythics_synced_at' => $now,
+            'pvp_synced_at' => $now,
+            'professions_synced_at' => $now,
+            'raids_synced_at' => $now,
+            'stats_synced_at' => $now,
+            'titles_synced_at' => $now,
+            'reputations_synced_at' => $now,
+            'collections_synced_at' => $now,
+            'achievements_synced_at' => $now,
+        ]);
+        \App\Models\CharacterReputation::create([
+            'character_id' => $character->id,
+            'faction_id' => 99999,
+            'faction_name' => 'Future Faction',
+            'standing' => 'neutral',
+            'value' => 0,
+            'max' => 0,
+        ]);
+
+        $url = "/api/v1/characters/{$character->region}/{$character->realm}/{$character->name}";
+        $response = $this->getJson($url)->assertOk();
+
+        $this->assertSame(99999, $response->json('data.reputations.0.faction.id'));
+        $this->assertNull($response->json('data.reputations.0.faction.expansion'));
+    }
+
+    public function test_reputation_response_omits_faction_block_when_no_game_data_row(): void
+    {
+        $now = now();
+        $character = \App\Models\Character::factory()->create([
+            'mythics_synced_at' => $now,
+            'pvp_synced_at' => $now,
+            'professions_synced_at' => $now,
+            'raids_synced_at' => $now,
+            'stats_synced_at' => $now,
+            'titles_synced_at' => $now,
+            'reputations_synced_at' => $now,
+            'collections_synced_at' => $now,
+            'achievements_synced_at' => $now,
+        ]);
+        \App\Models\CharacterReputation::create([
+            'character_id' => $character->id,
+            'faction_id' => 88888,
+            'faction_name' => 'Unknown Faction',
+            'standing' => 'neutral',
+            'value' => 0,
+            'max' => 0,
+        ]);
+
+        $url = "/api/v1/characters/{$character->region}/{$character->realm}/{$character->name}";
+        $response = $this->getJson($url)->assertOk();
+
+        $this->assertSame(88888, $response->json('data.reputations.0.faction_id'));
+        $response->assertJsonMissingPath('data.reputations.0.faction');
+    }
 }
