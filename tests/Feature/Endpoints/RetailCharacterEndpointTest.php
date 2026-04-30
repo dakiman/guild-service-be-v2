@@ -61,11 +61,14 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
                 'raid_progress',
                 'titles',
                 'reputations',
+                'mounts',
+                'pets',
+                'toys',
             ],
             'meta' => [
                 'game_version',
                 'forced_refresh',
-                'freshness' => ['profile', 'mythic_plus', 'pvp', 'professions', 'raids', 'stats', 'titles', 'reputations'],
+                'freshness' => ['profile', 'mythic_plus', 'pvp', 'professions', 'raids', 'stats', 'titles', 'reputations', 'collections'],
             ],
         ]);
 
@@ -227,6 +230,55 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
         $this->assertLessThanOrEqual(1, $selectedCount, 'At most one title can be is_selected=true');
 
         $this->assertSame('fresh', $response->json('meta.freshness.titles'), 'titles freshness should be fresh after warm sync');
+    }
+
+    /**
+     * Collections only populates when BLIZZARD_SYNC_COLLECTIONS_ENABLED=true.
+     * Skip cleanly when the flag is off so the test passes in default env.
+     */
+    #[DataProvider('retailCharacterProvider')]
+    public function test_retail_endpoint_includes_collections_when_flag_enabled(array $fixture, string $slot): void
+    {
+        $this->requireFixture($fixture, $slot);
+
+        if (! config('blizzard.sync.collections_enabled')) {
+            $this->markTestSkipped('BLIZZARD_SYNC_COLLECTIONS_ENABLED is false; populated-collections assertion is gated.');
+        }
+
+        $url = "/api/v1/characters/{$fixture['region']}/{$fixture['realm']}/{$fixture['name']}";
+        $this->warmCharacterOrSkip($url);
+
+        $response = $this->getJson($url);
+        $response->assertOk();
+
+        $mounts = $response->json('data.mounts');
+        $pets = $response->json('data.pets');
+        $toys = $response->json('data.toys');
+
+        $this->assertIsArray($mounts);
+        $this->assertIsArray($pets);
+        $this->assertIsArray($toys);
+
+        foreach ($mounts as $i => $m) {
+            $this->assertArrayHasKey('mount_id', $m, "mounts[{$i}] missing mount_id");
+            $this->assertArrayHasKey('name', $m, "mounts[{$i}] missing name");
+            $this->assertArrayHasKey('is_useable', $m, "mounts[{$i}] missing is_useable");
+            $this->assertIsInt($m['mount_id']);
+            $this->assertIsBool($m['is_useable']);
+        }
+        foreach ($pets as $i => $p) {
+            foreach (['pet_id', 'species_id', 'name', 'level', 'is_favorite'] as $key) {
+                $this->assertArrayHasKey($key, $p, "pets[{$i}] missing {$key}");
+            }
+            $this->assertIsBool($p['is_favorite']);
+        }
+        foreach ($toys as $i => $t) {
+            $this->assertArrayHasKey('toy_id', $t, "toys[{$i}] missing toy_id");
+            $this->assertArrayHasKey('name', $t, "toys[{$i}] missing name");
+            $this->assertIsInt($t['toy_id']);
+        }
+
+        $this->assertSame('fresh', $response->json('meta.freshness.collections'), 'collections freshness should be fresh after warm sync');
     }
 
     /**
