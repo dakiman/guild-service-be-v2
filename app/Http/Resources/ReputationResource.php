@@ -20,6 +20,18 @@ class ReputationResource extends JsonResource
             'standing' => $this->standing,
             'value' => $this->value,
             'max' => $this->max,
+            'faction' => $this->whenLoaded('faction', fn () => [
+                'id' => $this->faction->id,
+                'name' => $this->faction->name,
+                'parent_faction_id' => $this->faction->parent_faction_id,
+                'expansion' => $this->faction->relationLoaded('expansion') && $this->faction->expansion
+                    ? [
+                        'id' => $this->faction->expansion->id,
+                        'name' => $this->faction->expansion->name,
+                        'display_order' => $this->faction->expansion->display_order,
+                    ]
+                    : null,
+            ]),
         ];
     }
 }
