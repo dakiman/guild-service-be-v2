@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\BlizzardController;
 use App\Http\Controllers\CharacterController;
+use App\Http\Controllers\GameDataController;
 use App\Http\Controllers\GuildController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
@@ -71,6 +72,14 @@ Route::patch('/characters/{character}/recruitment', [CharacterController::class,
 */
 Route::get('/guilds/popular', [GuildController::class, 'popular'])->name('guilds.popular');
 Route::get('/guilds/{region}/{realm}/{guild}', [GuildController::class, 'show'])->name('guilds.show');
+
+/*
+|--------------------------------------------------------------------------
+| Game Data Routes
+|--------------------------------------------------------------------------
+*/
+Route::get('/game-data/achievements', [GameDataController::class, 'achievements'])
+    ->name('game-data.achievements');
 
 /*
 |--------------------------------------------------------------------------
