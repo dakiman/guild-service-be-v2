@@ -196,4 +196,68 @@ class BlizzardGameDataClient extends BlizzardClient
             return $response->json();
         });
     }
+
+    /**
+     * Fetch the mount index from /data/wow/mount/index.
+     * Returns the raw response array; mapper extracts IDs.
+     *
+     * Lives in the static-{region} namespace (patch-pinned reference data),
+     * not dynamic-, so we bypass request() and call Http directly — same
+     * convention as getTalentTree() / getFactionIndex() above.
+     *
+     * Cached aggressively because the index only changes on patches.
+     */
+    public function getMountIndex(): ?array
+    {
+        $cacheKey = "blizzard:game-data:mount-index:{$this->region}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return Cache::remember($cacheKey, $ttl, function (): ?array {
+            $response = Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => "static-{$this->region}",
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl()}/data/wow/mount/index");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
+
+    /**
+     * Fetch a single mount by ID from /data/wow/mount/{id}.
+     * Returns the raw response array (description, source, summon_spell, item, etc.).
+     *
+     * Cached for the same TTL as the index.
+     */
+    public function getMount(int $id): ?array
+    {
+        $cacheKey = "blizzard:game-data:mount:{$this->region}:{$id}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+            $response = Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => "static-{$this->region}",
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl()}/data/wow/mount/{$id}");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
 }
