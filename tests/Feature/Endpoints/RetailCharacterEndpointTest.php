@@ -496,4 +496,68 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
         $this->assertSame(88888, $response->json('data.reputations.0.faction_id'));
         $response->assertJsonMissingPath('data.reputations.0.faction');
     }
+
+    public function test_titles_response_includes_game_data_block(): void
+    {
+        \App\Models\GameDataTitle::create([
+            'id' => 414,
+            'name_male' => '{name}, Lord of the Bears',
+            'name_female' => '{name}, Lady of the Bears',
+        ]);
+
+        $now = now();
+        $character = \App\Models\Character::factory()->create([
+            'mythics_synced_at' => $now,
+            'pvp_synced_at' => $now,
+            'professions_synced_at' => $now,
+            'raids_synced_at' => $now,
+            'stats_synced_at' => $now,
+            'titles_synced_at' => $now,
+            'reputations_synced_at' => $now,
+            'collections_synced_at' => $now,
+            'achievements_synced_at' => $now,
+        ]);
+        $character->titles()->create([
+            'title_id' => 414,
+            'name' => '{name}, the Bear',
+            'display_string' => '{name}, the Bear',
+            'is_selected' => true,
+        ]);
+
+        $url = "/api/v1/characters/{$character->region}/{$character->realm}/{$character->name}";
+        $response = $this->getJson($url)->assertOk();
+
+        $response->assertJsonPath('data.titles.0.id', 414);
+        $response->assertJsonPath('data.titles.0.display_string', '{name}, the Bear');
+        $response->assertJsonPath('data.titles.0.game_data.name_male', '{name}, Lord of the Bears');
+        $response->assertJsonPath('data.titles.0.game_data.name_female', '{name}, Lady of the Bears');
+    }
+
+    public function test_titles_response_omits_game_data_when_no_row(): void
+    {
+        $now = now();
+        $character = \App\Models\Character::factory()->create([
+            'mythics_synced_at' => $now,
+            'pvp_synced_at' => $now,
+            'professions_synced_at' => $now,
+            'raids_synced_at' => $now,
+            'stats_synced_at' => $now,
+            'titles_synced_at' => $now,
+            'reputations_synced_at' => $now,
+            'collections_synced_at' => $now,
+            'achievements_synced_at' => $now,
+        ]);
+        $character->titles()->create([
+            'title_id' => 88888,
+            'name' => 'Orphan Title',
+            'display_string' => 'Orphan Title',
+            'is_selected' => false,
+        ]);
+
+        $url = "/api/v1/characters/{$character->region}/{$character->realm}/{$character->name}";
+        $response = $this->getJson($url)->assertOk();
+
+        $response->assertJsonPath('data.titles.0.id', 88888);
+        $response->assertJsonMissingPath('data.titles.0.game_data');
+    }
 }
