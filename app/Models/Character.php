@@ -50,6 +50,7 @@ class Character extends Model
         'stats_synced_at',
         'titles_synced_at',
         'reputations_synced_at',
+        'collections_synced_at',
     ];
 
     protected function casts(): array
@@ -68,6 +69,7 @@ class Character extends Model
             'stats_synced_at' => 'datetime',
             'titles_synced_at' => 'datetime',
             'reputations_synced_at' => 'datetime',
+            'collections_synced_at' => 'datetime',
             'last_searched_at' => 'datetime',
             'race_id' => 'integer',
             'class_id' => 'integer',
@@ -117,6 +119,21 @@ class Character extends Model
     public function reputations(): HasMany
     {
         return $this->hasMany(CharacterReputation::class);
+    }
+
+    public function mounts(): HasMany
+    {
+        return $this->hasMany(CharacterMount::class);
+    }
+
+    public function pets(): HasMany
+    {
+        return $this->hasMany(CharacterPet::class);
+    }
+
+    public function toys(): HasMany
+    {
+        return $this->hasMany(CharacterToy::class);
     }
 
     public function guildMembership(): HasOne
@@ -201,5 +218,11 @@ class Character extends Model
     {
         return ! $this->reputations_synced_at
             || $this->reputations_synced_at->diffInSeconds(now()) > config('blizzard.staleness.character.reputations');
+    }
+
+    public function isCollectionsStale(): bool
+    {
+        return ! $this->collections_synced_at
+            || $this->collections_synced_at->diffInSeconds(now()) > config('blizzard.staleness.character.collections');
     }
 }
