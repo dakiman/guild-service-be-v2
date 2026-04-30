@@ -64,10 +64,12 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Per-Slice Sync Feature Flags
+    | Per-Slice Sync Feature Flags (Plan 2 only)
     |--------------------------------------------------------------------------
-    | Each retail Full-sync slice can be individually disabled via env so a
-    | misbehaving slice can be killed without a code revert.
+    | Plan 2 retail slices (mythic+, pvp, professions, raids) keep individual
+    | kill-switch env flags. The Plan 4 slices (stats, titles, reputations,
+    | collections, achievements) were removed in Plan 5 — they now run
+    | unconditionally. To disable one of those, revert the slice in code.
     */
 
     'sync' => [
@@ -75,11 +77,6 @@ return [
         'pvp_enabled' => (bool) env('BLIZZARD_SYNC_PVP_ENABLED', true),
         'professions_enabled' => (bool) env('BLIZZARD_SYNC_PROFESSIONS_ENABLED', true),
         'raids_enabled' => (bool) env('BLIZZARD_SYNC_RAIDS_ENABLED', true),
-        'stats_enabled' => (bool) env('BLIZZARD_SYNC_STATS_ENABLED', false),
-        'titles_enabled' => (bool) env('BLIZZARD_SYNC_TITLES_ENABLED', false),
-        'reputations_enabled' => (bool) env('BLIZZARD_SYNC_REPUTATIONS_ENABLED', false),
-        'collections_enabled' => (bool) env('BLIZZARD_SYNC_COLLECTIONS_ENABLED', false),
-        'achievements_enabled' => (bool) env('BLIZZARD_SYNC_ACHIEVEMENTS_ENABLED', false),
     ],
 
     /*
