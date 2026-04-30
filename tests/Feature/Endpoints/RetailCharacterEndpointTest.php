@@ -149,18 +149,10 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
         };
     }
 
-    /**
-     * Reputations only populates when BLIZZARD_SYNC_REPUTATIONS_ENABLED=true.
-     * Skip cleanly when the flag is off so the test passes in default env.
-     */
     #[DataProvider('retailCharacterProvider')]
-    public function test_retail_endpoint_includes_reputations_when_flag_enabled(array $fixture, string $slot): void
+    public function test_retail_endpoint_includes_reputations(array $fixture, string $slot): void
     {
         $this->requireFixture($fixture, $slot);
-
-        if (! config('blizzard.sync.reputations_enabled')) {
-            $this->markTestSkipped('BLIZZARD_SYNC_REPUTATIONS_ENABLED is false; populated-reputations assertion is gated.');
-        }
 
         $url = "/api/v1/characters/{$fixture['region']}/{$fixture['realm']}/{$fixture['name']}";
         $this->warmCharacterOrSkip($url);
@@ -174,7 +166,7 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
         if ($slot === 'rep_grinder') {
             $this->assertNotEmpty(
                 $reputations,
-                'rep_grinder fixture should expose at least one reputation entry; set BLIZZARD_SYNC_REPUTATIONS_ENABLED=true and re-run if empty.',
+                'rep_grinder fixture should expose at least one reputation entry.',
             );
         }
 
@@ -194,18 +186,10 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
         $this->assertSame('fresh', $response->json('meta.freshness.reputations'), 'reputations freshness should be fresh after warm sync');
     }
 
-    /**
-     * Titles only populates when BLIZZARD_SYNC_TITLES_ENABLED=true.
-     * Skip cleanly when the flag is off so the test passes in default env.
-     */
     #[DataProvider('retailCharacterProvider')]
-    public function test_retail_endpoint_includes_titles_when_flag_enabled(array $fixture, string $slot): void
+    public function test_retail_endpoint_includes_titles(array $fixture, string $slot): void
     {
         $this->requireFixture($fixture, $slot);
-
-        if (! config('blizzard.sync.titles_enabled')) {
-            $this->markTestSkipped('BLIZZARD_SYNC_TITLES_ENABLED is false; populated-titles assertion is gated.');
-        }
 
         $url = "/api/v1/characters/{$fixture['region']}/{$fixture['realm']}/{$fixture['name']}";
         $this->warmCharacterOrSkip($url);
@@ -233,18 +217,10 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
         $this->assertSame('fresh', $response->json('meta.freshness.titles'), 'titles freshness should be fresh after warm sync');
     }
 
-    /**
-     * Collections only populates when BLIZZARD_SYNC_COLLECTIONS_ENABLED=true.
-     * Skip cleanly when the flag is off so the test passes in default env.
-     */
     #[DataProvider('retailCharacterProvider')]
-    public function test_retail_endpoint_includes_collections_when_flag_enabled(array $fixture, string $slot): void
+    public function test_retail_endpoint_includes_collections(array $fixture, string $slot): void
     {
         $this->requireFixture($fixture, $slot);
-
-        if (! config('blizzard.sync.collections_enabled')) {
-            $this->markTestSkipped('BLIZZARD_SYNC_COLLECTIONS_ENABLED is false; populated-collections assertion is gated.');
-        }
 
         $url = "/api/v1/characters/{$fixture['region']}/{$fixture['realm']}/{$fixture['name']}";
         $this->warmCharacterOrSkip($url);
@@ -282,18 +258,10 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
         $this->assertSame('fresh', $response->json('meta.freshness.collections'), 'collections freshness should be fresh after warm sync');
     }
 
-    /**
-     * Achievements only populates when BLIZZARD_SYNC_ACHIEVEMENTS_ENABLED=true.
-     * Skip cleanly when the flag is off so the test passes in default env.
-     */
     #[DataProvider('retailCharacterProvider')]
-    public function test_retail_endpoint_includes_achievements_when_flag_enabled(array $fixture, string $slot): void
+    public function test_retail_endpoint_includes_achievements(array $fixture, string $slot): void
     {
         $this->requireFixture($fixture, $slot);
-
-        if (! config('blizzard.sync.achievements_enabled')) {
-            $this->markTestSkipped('BLIZZARD_SYNC_ACHIEVEMENTS_ENABLED is false; populated-achievements assertion is gated.');
-        }
 
         $url = "/api/v1/characters/{$fixture['region']}/{$fixture['realm']}/{$fixture['name']}";
         $this->warmCharacterOrSkip($url);
