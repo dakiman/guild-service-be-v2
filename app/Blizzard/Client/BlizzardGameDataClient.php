@@ -73,4 +73,68 @@ class BlizzardGameDataClient extends BlizzardClient
             return $response->json();
         });
     }
+
+    /**
+     * Fetch the reputation-faction index from /data/wow/reputation-faction/index.
+     * Returns the raw response array; mapper extracts IDs.
+     *
+     * Lives in the static-{region} namespace (patch-pinned reference data),
+     * not dynamic-, so we bypass request() and call Http directly — same
+     * convention as getTalentTree() above.
+     *
+     * Cached aggressively because the index only changes on patches.
+     */
+    public function getFactionIndex(): ?array
+    {
+        $cacheKey = "blizzard:game-data:faction-index:{$this->region}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return Cache::remember($cacheKey, $ttl, function (): ?array {
+            $response = Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => "static-{$this->region}",
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl()}/data/wow/reputation-faction/index");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
+
+    /**
+     * Fetch a single reputation-faction by ID from
+     * /data/wow/reputation-faction/{id}. Returns the raw response array.
+     *
+     * Cached for the same TTL as the index.
+     */
+    public function getFaction(int $id): ?array
+    {
+        $cacheKey = "blizzard:game-data:faction:{$this->region}:{$id}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+            $response = Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => "static-{$this->region}",
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl()}/data/wow/reputation-faction/{$id}");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
 }
