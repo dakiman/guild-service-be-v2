@@ -320,4 +320,61 @@ class BlizzardGameDataClient extends BlizzardClient
             return $response->json();
         });
     }
+
+    /**
+     * Fetch the achievement index from /data/wow/achievement/index.
+     * Returns the raw response array; mapper extracts IDs.
+     *
+     * Lives in the static-{region} namespace.
+     */
+    public function getAchievementIndex(): ?array
+    {
+        $cacheKey = "blizzard:game-data:achievement-index:{$this->region}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return Cache::remember($cacheKey, $ttl, function (): ?array {
+            $response = Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => "static-{$this->region}",
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl()}/data/wow/achievement/index");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
+
+    /**
+     * Fetch a single achievement by ID from /data/wow/achievement/{id}.
+     */
+    public function getAchievement(int $id): ?array
+    {
+        $cacheKey = "blizzard:game-data:achievement:{$this->region}:{$id}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+            $response = Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => "static-{$this->region}",
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl()}/data/wow/achievement/{$id}");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
 }
