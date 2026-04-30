@@ -6,8 +6,10 @@ namespace App\Console\Commands;
 
 use App\Blizzard\Client\BlizzardGameDataClient;
 use App\Blizzard\Mappers\GameDataFactionMapper;
+use App\Blizzard\Mappers\GameDataMountMapper;
 use App\Blizzard\Mappers\GameDataTitleMapper;
 use App\Models\GameDataFaction;
+use App\Models\GameDataMount;
 use App\Models\GameDataTitle;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -24,17 +26,19 @@ class SyncGameData extends Command
         BlizzardGameDataClient $client,
         GameDataFactionMapper $factionMapper,
         GameDataTitleMapper $titleMapper,
+        GameDataMountMapper $mountMapper,
     ): int {
         $resource = $this->argument('resource');
 
         $resources = $resource === null
-            ? ['factions', 'titles']
+            ? ['factions', 'titles', 'mounts']
             : [$resource];
 
         foreach ($resources as $r) {
             match ($r) {
                 'factions' => $this->syncFactions($client, $factionMapper),
                 'titles' => $this->syncTitles($client, $titleMapper),
+                'mounts' => $this->syncMounts($client, $mountMapper),
                 default => $this->error("Unknown resource: {$r}") || self::FAILURE,
             };
         }
@@ -165,5 +169,67 @@ class SyncGameData extends Command
         $bar->finish();
         $this->newLine();
         $this->info("Titles synced: {$upserted} upserted, {$skipped} skipped.");
+    }
+
+    private function syncMounts(
+        BlizzardGameDataClient $client,
+        GameDataMountMapper $mapper,
+    ): void {
+        $this->info('Syncing mounts...');
+
+        $index = $client->getMountIndex();
+        if ($index === null) {
+            $this->warn('Mount index returned null (404). Skipping.');
+
+            return;
+        }
+
+        $ids = $mapper->extractIndexIds($index);
+        $this->info('Index returned '.count($ids).' mount IDs.');
+
+        $bar = $this->output->createProgressBar(count($ids));
+        $bar->start();
+
+        $upserted = 0;
+        $skipped = 0;
+
+        DB::transaction(function () use ($client, $mapper, $ids, &$upserted, &$skipped, $bar) {
+            foreach ($ids as $id) {
+                try {
+                    $detail = $client->getMount($id);
+                } catch (Throwable $e) {
+                    Log::warning("Mount sync skipped id={$id}: ".$e->getMessage());
+                    $skipped++;
+                    $bar->advance();
+
+                    continue;
+                }
+
+                $dto = $mapper->mapDetail($detail);
+                if ($dto === null) {
+                    $skipped++;
+                    $bar->advance();
+
+                    continue;
+                }
+
+                GameDataMount::updateOrCreate(
+                    ['id' => $dto->id],
+                    [
+                        'name' => $dto->name,
+                        'description' => $dto->description,
+                        'source_text' => $dto->sourceText,
+                        'summon_spell_id' => $dto->summonSpellId,
+                        'item_id' => $dto->itemId,
+                    ],
+                );
+                $upserted++;
+                $bar->advance();
+            }
+        });
+
+        $bar->finish();
+        $this->newLine();
+        $this->info("Mounts synced: {$upserted} upserted, {$skipped} skipped.");
     }
 }
