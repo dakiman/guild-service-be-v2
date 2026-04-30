@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\Console;
 
 use App\Blizzard\Client\BlizzardGameDataClient;
+use App\Models\GameDataAchievement;
+use App\Models\GameDataAchievementCategory;
 use App\Models\GameDataFaction;
 use App\Models\GameDataMount;
 use App\Models\GameDataTitle;
@@ -285,5 +287,132 @@ class SyncGameDataTest extends TestCase
 
         $this->assertNull(GameDataMount::find(6));
         $this->assertNotNull(GameDataMount::find(219));
+    }
+
+    public function test_sync_achievements_upserts_categories_then_achievements_with_correct_fk(): void
+    {
+        $mock = $this->createMock(BlizzardGameDataClient::class);
+
+        $mock->method('getAchievementCategoryIndex')->willReturn([
+            'categories' => [
+                ['id' => 1, 'name' => 'General'],
+                ['id' => 81, 'name' => 'Quests'],
+            ],
+        ]);
+        $mock->method('getAchievementCategory')->willReturnCallback(function (int $id): array {
+            return match ($id) {
+                1 => ['id' => 1, 'name' => 'General', 'display_order' => 0],
+                81 => ['id' => 81, 'name' => 'Quests', 'parent_category' => ['id' => 1], 'display_order' => 3],
+            };
+        });
+
+        $mock->method('getAchievementIndex')->willReturn([
+            'achievements' => [
+                ['id' => 5, 'name' => 'A'],
+                ['id' => 6, 'name' => 'B'],
+            ],
+        ]);
+        $mock->method('getAchievement')->willReturnCallback(function (int $id): array {
+            return match ($id) {
+                5 => ['id' => 5, 'name' => 'First Quest', 'category' => ['id' => 81], 'points' => 10, 'is_account_wide' => false],
+                6 => ['id' => 6, 'name' => 'Account Quest', 'category' => ['id' => 81], 'points' => 20, 'is_account_wide' => true],
+            };
+        });
+
+        $this->app->instance(BlizzardGameDataClient::class, $mock);
+
+        $this->artisan('blizzard:sync-game-data', ['resource' => 'achievements'])
+            ->assertExitCode(0);
+
+        $this->assertSame(2, GameDataAchievementCategory::count());
+        $this->assertSame(2, GameDataAchievement::count());
+
+        $quests = GameDataAchievementCategory::find(81);
+        $this->assertSame(1, $quests->parent_id, 'sub-category links to parent');
+
+        $first = GameDataAchievement::find(5);
+        $this->assertSame(81, $first->category_id);
+        $this->assertSame(10, $first->points);
+        $this->assertFalse($first->is_account_wide);
+
+        $second = GameDataAchievement::find(6);
+        $this->assertTrue($second->is_account_wide);
+    }
+
+    public function test_sync_achievements_is_idempotent(): void
+    {
+        $mock = $this->createMock(BlizzardGameDataClient::class);
+        $mock->method('getAchievementCategoryIndex')->willReturn([
+            'categories' => [['id' => 1, 'name' => 'General']],
+        ]);
+        $mock->method('getAchievementCategory')->willReturn([
+            'id' => 1, 'name' => 'General',
+        ]);
+        $mock->method('getAchievementIndex')->willReturn([
+            'achievements' => [['id' => 5, 'name' => 'A']],
+        ]);
+        $mock->method('getAchievement')->willReturn([
+            'id' => 5, 'name' => 'First', 'category' => ['id' => 1], 'points' => 5,
+        ]);
+        $this->app->instance(BlizzardGameDataClient::class, $mock);
+
+        $this->artisan('blizzard:sync-game-data', ['resource' => 'achievements']);
+        $this->artisan('blizzard:sync-game-data', ['resource' => 'achievements']);
+
+        $this->assertSame(1, GameDataAchievementCategory::count());
+        $this->assertSame(1, GameDataAchievement::count());
+    }
+
+    public function test_sync_achievements_continues_on_individual_failure(): void
+    {
+        $mock = $this->createMock(BlizzardGameDataClient::class);
+        $mock->method('getAchievementCategoryIndex')->willReturn([
+            'categories' => [['id' => 1, 'name' => 'General']],
+        ]);
+        $mock->method('getAchievementCategory')->willReturn([
+            'id' => 1, 'name' => 'General',
+        ]);
+        $mock->method('getAchievementIndex')->willReturn([
+            'achievements' => [
+                ['id' => 5, 'name' => 'A'],
+                ['id' => 6, 'name' => 'B'],
+            ],
+        ]);
+        $mock->method('getAchievement')->willReturnCallback(function (int $id): array {
+            if ($id === 5) {
+                throw new \RuntimeException('simulated transient failure');
+            }
+
+            return ['id' => $id, 'name' => 'B', 'category' => ['id' => 1], 'points' => 1];
+        });
+        $this->app->instance(BlizzardGameDataClient::class, $mock);
+
+        $this->artisan('blizzard:sync-game-data', ['resource' => 'achievements'])
+            ->assertExitCode(0);
+
+        $this->assertNull(GameDataAchievement::find(5));
+        $this->assertNotNull(GameDataAchievement::find(6), 'second achievement still upserted');
+    }
+
+    public function test_sync_achievements_chunks_inserts_for_large_payloads(): void
+    {
+        $achievementRows = [];
+        for ($i = 1; $i <= 1200; $i++) {
+            $achievementRows[] = ['id' => $i, 'name' => "Achievement #{$i}"];
+        }
+
+        $mock = $this->createMock(BlizzardGameDataClient::class);
+        $mock->method('getAchievementCategoryIndex')->willReturn(['categories' => []]);
+        $mock->method('getAchievementIndex')->willReturn(['achievements' => $achievementRows]);
+        $mock->method('getAchievement')->willReturnCallback(function (int $id): array {
+            return ['id' => $id, 'name' => "Achievement #{$id}", 'points' => 0];
+        });
+
+        $this->app->instance(BlizzardGameDataClient::class, $mock);
+
+        $this->artisan('blizzard:sync-game-data', ['resource' => 'achievements'])
+            ->assertExitCode(0);
+
+        $this->assertSame(1200, GameDataAchievement::count());
     }
 }
