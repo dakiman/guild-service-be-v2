@@ -106,4 +106,96 @@ class BlizzardGameDataClientTest extends TestCase
 
         $this->assertNull($this->client()->getFaction(99999));
     }
+
+    public function test_get_title_index_returns_response_in_static_namespace(): void
+    {
+        Cache::flush();
+
+        Http::fake([
+            'us.api.blizzard.com/data/wow/title/index?*' => Http::response([
+                'titles' => [
+                    ['id' => 1, 'name' => 'Private'],
+                    ['id' => 414, 'name' => '{name}, the Bear'],
+                ],
+            ], 200),
+        ]);
+
+        $result = $this->client()->getTitleIndex();
+
+        $this->assertSame(1, $result['titles'][0]['id']);
+        $this->assertSame(414, $result['titles'][1]['id']);
+
+        Http::assertSent(function ($request) {
+            return str_contains($request->url(), '/data/wow/title/index')
+                && str_contains($request->url(), 'namespace=static-us')
+                && str_contains($request->url(), 'locale=en_GB');
+        });
+    }
+
+    public function test_get_title_index_caches_within_ttl(): void
+    {
+        Cache::flush();
+        $callCount = 0;
+
+        Http::fake(function () use (&$callCount) {
+            $callCount++;
+
+            return Http::response(['titles' => []], 200);
+        });
+
+        $client = $this->client();
+        $client->getTitleIndex();
+        $client->getTitleIndex();
+
+        $this->assertSame(1, $callCount, 'second call should be served from cache');
+    }
+
+    public function test_get_title_index_returns_null_on_404(): void
+    {
+        Cache::flush();
+
+        Http::fake([
+            'us.api.blizzard.com/data/wow/title/index?*' => Http::response(null, 404),
+        ]);
+
+        $this->assertNull($this->client()->getTitleIndex());
+    }
+
+    public function test_get_title_returns_gender_name_payload(): void
+    {
+        Cache::flush();
+
+        Http::fake([
+            'us.api.blizzard.com/data/wow/title/414?*' => Http::response([
+                'id' => 414,
+                'name' => '{name}, the Bear',
+                'gender_name' => [
+                    'male' => '{name}, Lord of the Bears',
+                    'female' => '{name}, Lady of the Bears',
+                ],
+            ], 200),
+        ]);
+
+        $result = $this->client()->getTitle(414);
+
+        $this->assertSame(414, $result['id']);
+        $this->assertSame('{name}, Lord of the Bears', $result['gender_name']['male']);
+
+        Http::assertSent(function ($request) {
+            return str_contains($request->url(), '/data/wow/title/414')
+                && str_contains($request->url(), 'namespace=static-us')
+                && str_contains($request->url(), 'locale=en_GB');
+        });
+    }
+
+    public function test_get_title_returns_null_on_404(): void
+    {
+        Cache::flush();
+
+        Http::fake([
+            'us.api.blizzard.com/data/wow/title/99999?*' => Http::response(null, 404),
+        ]);
+
+        $this->assertNull($this->client()->getTitle(99999));
+    }
 }
