@@ -467,10 +467,6 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         CharacterStatsMapper $mapper,
         Character $character,
     ): void {
-        if (! config('blizzard.sync.stats_enabled')) {
-            return;
-        }
-
         try {
             $data = $client->getCharacterStats($this->realm, $this->name);
 
@@ -493,10 +489,6 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         CharacterTitleMapper $mapper,
         Character $character,
     ): void {
-        if (! config('blizzard.sync.titles_enabled')) {
-            return;
-        }
-
         try {
             $data = $client->getCharacterTitles($this->realm, $this->name);
             $dtos = $mapper->map($data);
@@ -537,10 +529,6 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         CharacterReputationMapper $mapper,
         Character $character,
     ): void {
-        if (! config('blizzard.sync.reputations_enabled')) {
-            return;
-        }
-
         try {
             $data = $client->getCharacterReputations($this->realm, $this->name);
             $dtos = $mapper->map($data);
@@ -584,10 +572,6 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         CharacterToyMapper $toyMapper,
         Character $character,
     ): void {
-        if (! config('blizzard.sync.collections_enabled')) {
-            return;
-        }
-
         try {
             $bodies = $client->getCharacterCollections($this->realm, $this->name);
 
@@ -655,10 +639,6 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         CharacterAchievementMapper $mapper,
         Character $character,
     ): void {
-        if (! config('blizzard.sync.achievements_enabled')) {
-            return;
-        }
-
         try {
             $data = $client->getCharacterAchievements($this->realm, $this->name);
             $dtos = $mapper->map($data);
