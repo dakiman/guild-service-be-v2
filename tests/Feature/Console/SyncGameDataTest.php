@@ -6,6 +6,7 @@ namespace Tests\Feature\Console;
 
 use App\Blizzard\Client\BlizzardGameDataClient;
 use App\Models\GameDataFaction;
+use App\Models\GameDataMount;
 use App\Models\GameDataTitle;
 use Database\Seeders\GameDataExpansionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -193,5 +194,96 @@ class SyncGameDataTest extends TestCase
 
         $this->assertNull(GameDataTitle::find(414));
         $this->assertNotNull(GameDataTitle::find(100), 'second title still upserted');
+    }
+
+    public function test_sync_mounts_upserts_full_detail(): void
+    {
+        $mock = $this->createMock(BlizzardGameDataClient::class);
+        $mock->method('getMountIndex')->willReturn([
+            'mounts' => [
+                ['id' => 6, 'name' => 'Onyxian Drake'],
+                ['id' => 219, 'name' => 'Tawny Wind Rider'],
+            ],
+        ]);
+        $mock->method('getMount')->willReturnCallback(function (int $id): array {
+            return match ($id) {
+                6 => [
+                    'id' => 6,
+                    'name' => 'Onyxian Drake',
+                    'source' => ['type' => 'DROP', 'name' => 'Onyxia'],
+                    'summon_spell' => ['id' => 69395],
+                    'item' => ['id' => 49636],
+                ],
+                219 => [
+                    'id' => 219,
+                    'name' => 'Tawny Wind Rider',
+                    'source' => ['type' => 'VENDOR'],
+                    'summon_spell' => ['id' => 32243],
+                ],
+            };
+        });
+        $this->app->instance(BlizzardGameDataClient::class, $mock);
+
+        $this->artisan('blizzard:sync-game-data', ['resource' => 'mounts'])
+            ->assertExitCode(0);
+
+        $this->assertSame(2, GameDataMount::count());
+
+        $onyxia = GameDataMount::find(6);
+        $this->assertNotNull($onyxia);
+        $this->assertSame('Onyxian Drake', $onyxia->name);
+        $this->assertSame('Drop: Onyxia', $onyxia->source_text);
+        $this->assertSame(69395, $onyxia->summon_spell_id);
+        $this->assertSame(49636, $onyxia->item_id);
+
+        $tawny = GameDataMount::find(219);
+        $this->assertSame('Vendor', $tawny->source_text);
+        $this->assertSame(32243, $tawny->summon_spell_id);
+        $this->assertNull($tawny->item_id);
+    }
+
+    public function test_sync_mounts_is_idempotent(): void
+    {
+        $mock = $this->createMock(BlizzardGameDataClient::class);
+        $mock->method('getMountIndex')->willReturn([
+            'mounts' => [['id' => 6, 'name' => 'Onyxian Drake']],
+        ]);
+        $mock->method('getMount')->willReturn([
+            'id' => 6,
+            'name' => 'Onyxian Drake',
+            'source' => ['type' => 'DROP', 'name' => 'Onyxia'],
+            'summon_spell' => ['id' => 69395],
+        ]);
+        $this->app->instance(BlizzardGameDataClient::class, $mock);
+
+        $this->artisan('blizzard:sync-game-data', ['resource' => 'mounts']);
+        $this->artisan('blizzard:sync-game-data', ['resource' => 'mounts']);
+
+        $this->assertSame(1, GameDataMount::count(), 'rerun should not duplicate rows');
+    }
+
+    public function test_sync_mounts_continues_on_individual_id_failure(): void
+    {
+        $mock = $this->createMock(BlizzardGameDataClient::class);
+        $mock->method('getMountIndex')->willReturn([
+            'mounts' => [
+                ['id' => 6, 'name' => 'A'],
+                ['id' => 219, 'name' => 'B'],
+            ],
+        ]);
+        $mock->method('getMount')->willReturnCallback(function (int $id): ?array {
+            if ($id === 6) {
+                throw new \RuntimeException('simulated transient failure');
+            }
+
+            return ['id' => $id, 'name' => 'B'];
+        });
+        $this->app->instance(BlizzardGameDataClient::class, $mock);
+
+        $this->artisan('blizzard:sync-game-data', ['resource' => 'mounts'])
+            ->assertExitCode(0);
+
+        $this->assertNull(GameDataMount::find(6));
+        $this->assertNotNull(GameDataMount::find(219));
     }
 }
