@@ -34,7 +34,8 @@ class CharacterService
             || $character->isRaidsStale()
             || $character->isStatsStale()
             || $character->isTitlesStale()
-            || $character->isReputationsStale();
+            || $character->isReputationsStale()
+            || $character->isCollectionsStale();
 
         // TODO(Plan 3): $forceRefresh must also bypass SyncCharacterData::$uniqueFor
         //               (nonced uniqueId) or back-to-back dispatches get dedup'd.
