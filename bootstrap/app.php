@@ -25,6 +25,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->job(new ProactiveSyncGuilds)->dailyAt('04:00')->withoutOverlapping();
         $schedule->command('queue:prune-batches --hours=48')->daily();
         $schedule->command('queue:prune-failed --hours=168')->daily();
+        $schedule->command('blizzard:sync-game-data')
+            ->weeklyOn(0, '03:00') // Sunday 03:00 UTC
+            ->withoutOverlapping()
+            ->onOneServer();
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->api(prepend: [
