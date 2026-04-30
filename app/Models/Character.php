@@ -51,6 +51,7 @@ class Character extends Model
         'titles_synced_at',
         'reputations_synced_at',
         'collections_synced_at',
+        'achievements_synced_at',
     ];
 
     protected function casts(): array
@@ -70,6 +71,7 @@ class Character extends Model
             'titles_synced_at' => 'datetime',
             'reputations_synced_at' => 'datetime',
             'collections_synced_at' => 'datetime',
+            'achievements_synced_at' => 'datetime',
             'last_searched_at' => 'datetime',
             'race_id' => 'integer',
             'class_id' => 'integer',
@@ -134,6 +136,11 @@ class Character extends Model
     public function toys(): HasMany
     {
         return $this->hasMany(CharacterToy::class);
+    }
+
+    public function achievements(): HasMany
+    {
+        return $this->hasMany(CharacterAchievement::class);
     }
 
     public function guildMembership(): HasOne
@@ -224,5 +231,11 @@ class Character extends Model
     {
         return ! $this->collections_synced_at
             || $this->collections_synced_at->diffInSeconds(now()) > config('blizzard.staleness.character.collections');
+    }
+
+    public function isAchievementsStale(): bool
+    {
+        return ! $this->achievements_synced_at
+            || $this->achievements_synced_at->diffInSeconds(now()) > config('blizzard.staleness.character.achievements');
     }
 }

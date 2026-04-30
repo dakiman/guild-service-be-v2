@@ -41,6 +41,7 @@ return [
             'titles' => (int) env('BLIZZARD_STALE_CHARACTER_TITLES', 21600),
             'reputations' => (int) env('BLIZZARD_STALE_CHARACTER_REPUTATIONS', 21600),
             'collections' => (int) env('BLIZZARD_STALE_CHARACTER_COLLECTIONS', 86400),
+            'achievements' => (int) env('BLIZZARD_STALE_CHARACTER_ACHIEVEMENTS', 86400),
         ],
         'guild' => [
             'basic' => (int) env('BLIZZARD_STALE_GUILD_BASIC', 3600),
@@ -78,6 +79,7 @@ return [
         'titles_enabled' => (bool) env('BLIZZARD_SYNC_TITLES_ENABLED', false),
         'reputations_enabled' => (bool) env('BLIZZARD_SYNC_REPUTATIONS_ENABLED', false),
         'collections_enabled' => (bool) env('BLIZZARD_SYNC_COLLECTIONS_ENABLED', false),
+        'achievements_enabled' => (bool) env('BLIZZARD_SYNC_ACHIEVEMENTS_ENABLED', false),
     ],
 
     /*
