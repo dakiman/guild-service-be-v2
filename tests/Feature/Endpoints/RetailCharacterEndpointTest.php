@@ -64,11 +64,12 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
                 'mounts',
                 'pets',
                 'toys',
+                'achievements',
             ],
             'meta' => [
                 'game_version',
                 'forced_refresh',
-                'freshness' => ['profile', 'mythic_plus', 'pvp', 'professions', 'raids', 'stats', 'titles', 'reputations', 'collections'],
+                'freshness' => ['profile', 'mythic_plus', 'pvp', 'professions', 'raids', 'stats', 'titles', 'reputations', 'collections', 'achievements'],
             ],
         ]);
 
@@ -279,6 +280,41 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
         }
 
         $this->assertSame('fresh', $response->json('meta.freshness.collections'), 'collections freshness should be fresh after warm sync');
+    }
+
+    /**
+     * Achievements only populates when BLIZZARD_SYNC_ACHIEVEMENTS_ENABLED=true.
+     * Skip cleanly when the flag is off so the test passes in default env.
+     */
+    #[DataProvider('retailCharacterProvider')]
+    public function test_retail_endpoint_includes_achievements_when_flag_enabled(array $fixture, string $slot): void
+    {
+        $this->requireFixture($fixture, $slot);
+
+        if (! config('blizzard.sync.achievements_enabled')) {
+            $this->markTestSkipped('BLIZZARD_SYNC_ACHIEVEMENTS_ENABLED is false; populated-achievements assertion is gated.');
+        }
+
+        $url = "/api/v1/characters/{$fixture['region']}/{$fixture['realm']}/{$fixture['name']}";
+        $this->warmCharacterOrSkip($url);
+
+        $response = $this->getJson($url);
+        $response->assertOk();
+
+        $achievements = $response->json('data.achievements');
+        $this->assertIsArray($achievements);
+        $this->assertNotEmpty(
+            $achievements,
+            'achievements array should not be empty for a live character when the slice is enabled'
+        );
+
+        foreach ($achievements as $i => $row) {
+            $this->assertArrayHasKey('achievement_id', $row, "achievements[{$i}] missing achievement_id");
+            $this->assertArrayHasKey('completed_timestamp', $row, "achievements[{$i}] missing completed_timestamp");
+            $this->assertIsInt($row['achievement_id']);
+        }
+
+        $this->assertSame('fresh', $response->json('meta.freshness.achievements'), 'achievements freshness should be fresh after warm sync');
     }
 
     /**
