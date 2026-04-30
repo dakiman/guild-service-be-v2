@@ -31,4 +31,9 @@ class CharacterMount extends Model
     {
         return $this->belongsTo(Character::class);
     }
+
+    public function gameData(): BelongsTo
+    {
+        return $this->belongsTo(GameDataMount::class, 'mount_id');
+    }
 }
