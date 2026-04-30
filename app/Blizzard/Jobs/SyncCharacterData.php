@@ -14,6 +14,7 @@ use App\Blizzard\Mappers\CharacterMountMapper;
 use App\Blizzard\Mappers\CharacterPetMapper;
 use App\Blizzard\Mappers\CharacterProfessionMapper;
 use App\Blizzard\Mappers\CharacterProfileMapper;
+use App\Blizzard\Mappers\CharacterAchievementMapper;
 use App\Blizzard\Mappers\CharacterReputationMapper;
 use App\Blizzard\Mappers\CharacterSpecializationMapper;
 use App\Blizzard\Mappers\CharacterStatsMapper;
@@ -31,6 +32,7 @@ use App\Models\CharacterMount;
 use App\Models\CharacterPet;
 use App\Models\CharacterProfession;
 use App\Models\CharacterPvpBracket;
+use App\Models\CharacterAchievement;
 use App\Models\CharacterReputation;
 use App\Models\CharacterTitle;
 use App\Models\CharacterToy;
@@ -98,6 +100,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         CharacterMountMapper $mountMapper,
         CharacterPetMapper $petMapper,
         CharacterToyMapper $toyMapper,
+        CharacterAchievementMapper $achievementMapper,
         BlizzardGameDataClient $gameDataClient,
     ): void {
         $client = new BlizzardProfileClient($tokenManager, $this->region);
@@ -229,6 +232,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $this->syncTitles($client, $titleMapper, $character);
             $this->syncReputations($client, $reputationMapper, $character);
             $this->syncCollections($client, $mountMapper, $petMapper, $toyMapper, $character);
+            $this->syncAchievements($client, $achievementMapper, $character);
         }
     }
 
@@ -640,6 +644,52 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             });
         } catch (Throwable $e) {
             Log::warning('Failed to sync collections for character', [
+                'character' => "{$this->name}-{$this->realm}-{$this->region}",
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function syncAchievements(
+        BlizzardProfileClient $client,
+        CharacterAchievementMapper $mapper,
+        Character $character,
+    ): void {
+        if (! config('blizzard.sync.achievements_enabled')) {
+            return;
+        }
+
+        try {
+            $data = $client->getCharacterAchievements($this->realm, $this->name);
+            $dtos = $mapper->map($data);
+
+            DB::transaction(function () use ($character, $dtos) {
+                // DELETE-then-bulk-INSERT: cheaper than O(N) updateOrCreate + per-row delete
+                // for 30k+ row payloads. Achievements are append-only so per-row diff
+                // semantics buy nothing.
+                CharacterAchievement::where('character_id', $character->id)->delete();
+
+                if ($dtos !== []) {
+                    $now = now();
+                    $rows = array_map(fn ($dto) => [
+                        'character_id' => $character->id,
+                        'achievement_id' => $dto->achievementId,
+                        'completed_timestamp' => $dto->completedTimestamp,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ], $dtos);
+
+                    // PostgreSQL parameter ceiling is 65535; at 5 cols/row, 1000 rows = 5000
+                    // placeholders, well under the limit.
+                    foreach (array_chunk($rows, 1000) as $chunk) {
+                        CharacterAchievement::insert($chunk);
+                    }
+                }
+
+                $character->update(['achievements_synced_at' => now()]);
+            });
+        } catch (Throwable $e) {
+            Log::warning('Failed to sync achievements for character', [
                 'character' => "{$this->name}-{$this->realm}-{$this->region}",
                 'error' => $e->getMessage(),
             ]);
