@@ -52,6 +52,7 @@ class CharacterResource extends JsonResource
             'mounts' => MountResource::collection($this->whenLoaded('mounts')),
             'pets' => PetResource::collection($this->whenLoaded('pets')),
             'toys' => ToyResource::collection($this->whenLoaded('toys')),
+            'achievements' => CharacterAchievementResource::collection($this->whenLoaded('achievements')),
             'last_searched_at' => $this->last_searched_at?->toIso8601String(),
             'mythics_synced_at' => $this->mythics_synced_at?->toIso8601String(),
             'stats_synced_at' => $this->stats_synced_at?->toIso8601String(),
@@ -78,6 +79,7 @@ class CharacterResource extends JsonResource
                     'titles' => $this->freshnessFor('titles_synced_at', 'titles'),
                     'reputations' => $this->freshnessFor('reputations_synced_at', 'reputations'),
                     'collections' => $this->freshnessFor('collections_synced_at', 'collections'),
+                    'achievements' => $this->freshnessFor('achievements_synced_at', 'achievements'),
                 ],
             ],
         ];
