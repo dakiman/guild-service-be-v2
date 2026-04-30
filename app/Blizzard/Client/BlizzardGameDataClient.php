@@ -260,4 +260,64 @@ class BlizzardGameDataClient extends BlizzardClient
             return $response->json();
         });
     }
+
+    /**
+     * Fetch the achievement-category index from
+     * /data/wow/achievement-category/index. Returns the raw response array;
+     * mapper extracts IDs.
+     *
+     * Lives in the static-{region} namespace (patch-pinned reference data) —
+     * bypasses request() like getTalentTree()/getFactionIndex().
+     */
+    public function getAchievementCategoryIndex(): ?array
+    {
+        $cacheKey = "blizzard:game-data:achievement-category-index:{$this->region}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return Cache::remember($cacheKey, $ttl, function (): ?array {
+            $response = Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => "static-{$this->region}",
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl()}/data/wow/achievement-category/index");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
+
+    /**
+     * Fetch a single achievement category by ID from
+     * /data/wow/achievement-category/{id}.
+     */
+    public function getAchievementCategory(int $id): ?array
+    {
+        $cacheKey = "blizzard:game-data:achievement-category:{$this->region}:{$id}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+            $response = Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => "static-{$this->region}",
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl()}/data/wow/achievement-category/{$id}");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
 }
