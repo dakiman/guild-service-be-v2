@@ -560,4 +560,108 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
         $response->assertJsonPath('data.titles.0.id', 88888);
         $response->assertJsonMissingPath('data.titles.0.game_data');
     }
+
+    public function test_mount_response_includes_game_data_block(): void
+    {
+        \App\Models\GameDataMount::create([
+            'id' => 6,
+            'name' => 'Onyxian Drake',
+            'description' => 'A drake born of Onyxia\'s brood.',
+            'source_text' => 'Drop: Onyxia',
+            'summon_spell_id' => 69395,
+            'item_id' => 49636,
+        ]);
+
+        $now = now();
+        $character = \App\Models\Character::factory()->create([
+            'mythics_synced_at' => $now,
+            'pvp_synced_at' => $now,
+            'professions_synced_at' => $now,
+            'raids_synced_at' => $now,
+            'stats_synced_at' => $now,
+            'titles_synced_at' => $now,
+            'reputations_synced_at' => $now,
+            'collections_synced_at' => $now,
+            'achievements_synced_at' => $now,
+        ]);
+        $character->mounts()->create([
+            'mount_id' => 6,
+            'name' => 'Onyxian Drake',
+            'is_useable' => true,
+        ]);
+
+        $url = "/api/v1/characters/{$character->region}/{$character->realm}/{$character->name}";
+        $response = $this->getJson($url)->assertOk();
+
+        $response->assertJsonPath('data.mounts.0.mount_id', 6);
+        $response->assertJsonPath('data.mounts.0.game_data.description', "A drake born of Onyxia's brood.");
+        $response->assertJsonPath('data.mounts.0.game_data.source_text', 'Drop: Onyxia');
+        $response->assertJsonPath('data.mounts.0.game_data.summon_spell_id', 69395);
+        $response->assertJsonPath('data.mounts.0.game_data.item_id', 49636);
+    }
+
+    public function test_mount_response_omits_game_data_block_when_no_row(): void
+    {
+        $now = now();
+        $character = \App\Models\Character::factory()->create([
+            'mythics_synced_at' => $now,
+            'pvp_synced_at' => $now,
+            'professions_synced_at' => $now,
+            'raids_synced_at' => $now,
+            'stats_synced_at' => $now,
+            'titles_synced_at' => $now,
+            'reputations_synced_at' => $now,
+            'collections_synced_at' => $now,
+            'achievements_synced_at' => $now,
+        ]);
+        $character->mounts()->create([
+            'mount_id' => 99999,
+            'name' => 'Orphan Mount',
+            'is_useable' => true,
+        ]);
+
+        $url = "/api/v1/characters/{$character->region}/{$character->realm}/{$character->name}";
+        $response = $this->getJson($url)->assertOk();
+
+        $response->assertJsonPath('data.mounts.0.mount_id', 99999);
+        $response->assertJsonMissingPath('data.mounts.0.game_data');
+    }
+
+    public function test_mount_response_handles_partial_game_data(): void
+    {
+        \App\Models\GameDataMount::create([
+            'id' => 219,
+            'name' => 'Tawny Wind Rider',
+            'description' => null,
+            'source_text' => 'Vendor',
+            'summon_spell_id' => 32243,
+            'item_id' => null,
+        ]);
+
+        $now = now();
+        $character = \App\Models\Character::factory()->create([
+            'mythics_synced_at' => $now,
+            'pvp_synced_at' => $now,
+            'professions_synced_at' => $now,
+            'raids_synced_at' => $now,
+            'stats_synced_at' => $now,
+            'titles_synced_at' => $now,
+            'reputations_synced_at' => $now,
+            'collections_synced_at' => $now,
+            'achievements_synced_at' => $now,
+        ]);
+        $character->mounts()->create([
+            'mount_id' => 219,
+            'name' => 'Tawny Wind Rider',
+            'is_useable' => true,
+        ]);
+
+        $url = "/api/v1/characters/{$character->region}/{$character->realm}/{$character->name}";
+        $response = $this->getJson($url)->assertOk();
+
+        $response->assertJsonPath('data.mounts.0.game_data.description', null);
+        $response->assertJsonPath('data.mounts.0.game_data.source_text', 'Vendor');
+        $response->assertJsonPath('data.mounts.0.game_data.summon_spell_id', 32243);
+        $response->assertJsonPath('data.mounts.0.game_data.item_id', null);
+    }
 }
