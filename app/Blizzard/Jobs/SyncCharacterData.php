@@ -10,12 +10,15 @@ use App\Blizzard\Contracts\TokenManagerInterface;
 use App\Blizzard\Exceptions\BlizzardNotFoundException;
 use App\Blizzard\Mappers\CharacterEquipmentMapper;
 use App\Blizzard\Mappers\CharacterMediaMapper;
+use App\Blizzard\Mappers\CharacterMountMapper;
+use App\Blizzard\Mappers\CharacterPetMapper;
 use App\Blizzard\Mappers\CharacterProfessionMapper;
 use App\Blizzard\Mappers\CharacterProfileMapper;
 use App\Blizzard\Mappers\CharacterReputationMapper;
 use App\Blizzard\Mappers\CharacterSpecializationMapper;
 use App\Blizzard\Mappers\CharacterStatsMapper;
 use App\Blizzard\Mappers\CharacterTitleMapper;
+use App\Blizzard\Mappers\CharacterToyMapper;
 use App\Blizzard\Mappers\MythicPlusMapper;
 use App\Blizzard\Mappers\MythicPlusRatingMapper;
 use App\Blizzard\Mappers\PvpBracketStatsMapper;
@@ -24,10 +27,13 @@ use App\Blizzard\Middleware\BlizzardHealthCheck;
 use App\Blizzard\Middleware\BlizzardRateLimiter;
 use App\Enums\SyncDepth;
 use App\Models\Character;
+use App\Models\CharacterMount;
+use App\Models\CharacterPet;
 use App\Models\CharacterProfession;
 use App\Models\CharacterPvpBracket;
 use App\Models\CharacterReputation;
 use App\Models\CharacterTitle;
+use App\Models\CharacterToy;
 use App\Models\DungeonRun;
 use App\Models\Guild;
 use App\Models\RaidEncounterKill;
@@ -89,6 +95,9 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         CharacterStatsMapper $statsMapper,
         CharacterTitleMapper $titleMapper,
         CharacterReputationMapper $reputationMapper,
+        CharacterMountMapper $mountMapper,
+        CharacterPetMapper $petMapper,
+        CharacterToyMapper $toyMapper,
         BlizzardGameDataClient $gameDataClient,
     ): void {
         $client = new BlizzardProfileClient($tokenManager, $this->region);
@@ -219,6 +228,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $this->syncStats($client, $statsMapper, $character);
             $this->syncTitles($client, $titleMapper, $character);
             $this->syncReputations($client, $reputationMapper, $character);
+            $this->syncCollections($client, $mountMapper, $petMapper, $toyMapper, $character);
         }
     }
 
@@ -557,6 +567,79 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             });
         } catch (Throwable $e) {
             Log::warning('Failed to sync reputations for character', [
+                'character' => "{$this->name}-{$this->realm}-{$this->region}",
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function syncCollections(
+        BlizzardProfileClient $client,
+        CharacterMountMapper $mountMapper,
+        CharacterPetMapper $petMapper,
+        CharacterToyMapper $toyMapper,
+        Character $character,
+    ): void {
+        if (! config('blizzard.sync.collections_enabled')) {
+            return;
+        }
+
+        try {
+            $bodies = $client->getCharacterCollections($this->realm, $this->name);
+
+            $mountDtos = $mountMapper->map($bodies['mounts']);
+            $petDtos = $petMapper->map($bodies['pets']);
+            $toyDtos = $toyMapper->map($bodies['toys']);
+
+            DB::transaction(function () use ($character, $mountDtos, $petDtos, $toyDtos) {
+                $keepMounts = [];
+                foreach ($mountDtos as $dto) {
+                    CharacterMount::updateOrCreate(
+                        ['character_id' => $character->id, 'mount_id' => $dto->mountId],
+                        ['name' => $dto->name, 'is_useable' => $dto->isUseable],
+                    );
+                    $keepMounts[] = $dto->mountId;
+                }
+                CharacterMount::where('character_id', $character->id)
+                    ->when($keepMounts !== [], fn ($q) => $q->whereNotIn('mount_id', $keepMounts))
+                    ->delete();
+
+                $keepPets = [];
+                foreach ($petDtos as $dto) {
+                    CharacterPet::updateOrCreate(
+                        ['character_id' => $character->id, 'pet_id' => $dto->petId],
+                        [
+                            'species_id' => $dto->speciesId,
+                            'name' => $dto->name,
+                            'level' => $dto->level,
+                            'breed_id' => $dto->breedId,
+                            'quality' => $dto->quality,
+                            'is_favorite' => $dto->isFavorite,
+                            'creature_display_id' => $dto->creatureDisplayId,
+                        ],
+                    );
+                    $keepPets[] = $dto->petId;
+                }
+                CharacterPet::where('character_id', $character->id)
+                    ->when($keepPets !== [], fn ($q) => $q->whereNotIn('pet_id', $keepPets))
+                    ->delete();
+
+                $keepToys = [];
+                foreach ($toyDtos as $dto) {
+                    CharacterToy::updateOrCreate(
+                        ['character_id' => $character->id, 'toy_id' => $dto->toyId],
+                        ['name' => $dto->name],
+                    );
+                    $keepToys[] = $dto->toyId;
+                }
+                CharacterToy::where('character_id', $character->id)
+                    ->when($keepToys !== [], fn ($q) => $q->whereNotIn('toy_id', $keepToys))
+                    ->delete();
+
+                $character->update(['collections_synced_at' => now()]);
+            });
+        } catch (Throwable $e) {
+            Log::warning('Failed to sync collections for character', [
                 'character' => "{$this->name}-{$this->realm}-{$this->region}",
                 'error' => $e->getMessage(),
             ]);
