@@ -8,6 +8,7 @@ use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\BlizzardController;
 use App\Http\Controllers\CharacterAchievementsController;
 use App\Http\Controllers\CharacterController;
+use App\Http\Controllers\GameDataController;
 use App\Http\Controllers\GuildController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
@@ -74,6 +75,16 @@ Route::patch('/characters/{character}/recruitment', [CharacterController::class,
 */
 Route::get('/guilds/popular', [GuildController::class, 'popular'])->name('guilds.popular');
 Route::get('/guilds/{region}/{realm}/{guild}', [GuildController::class, 'show'])->name('guilds.show');
+
+/*
+|--------------------------------------------------------------------------
+| Game Data Routes (public, long-cacheable)
+|--------------------------------------------------------------------------
+*/
+Route::get('/game-data/raid-instances', [GameDataController::class, 'raidInstances'])
+    ->name('game-data.raid-instances');
+Route::get('/game-data/mythic-keystone-dungeons', [GameDataController::class, 'mythicKeystoneDungeons'])
+    ->name('game-data.mythic-keystone-dungeons');
 
 /*
 |--------------------------------------------------------------------------
