@@ -28,21 +28,21 @@ class GameDataRaidInstancesEndpointTest extends TestCase
         GameDataRaidInstance::create([
             'id' => 1296,
             'name' => 'Liberation of Undermine',
-            'expansion_id' => 1,
+            'expansion_id' => 12,
             'display_order' => 5,
             'media_url' => 'https://example/lou.jpg',
         ]);
         GameDataRaidInstance::create([
             'id' => 1273,
             'name' => 'Nerub-ar Palace',
-            'expansion_id' => 1,
+            'expansion_id' => 12,
             'display_order' => 1,
             'media_url' => 'https://example/nerub.jpg',
         ]);
         GameDataRaidInstance::create([
             'id' => 1207,
             'name' => 'Aberrus, the Shadowed Crucible',
-            'expansion_id' => 2, // Dragonflight (older)
+            'expansion_id' => 1, // The War Within (older — display_order=2)
             'display_order' => 5,
             'media_url' => 'https://example/aberrus.jpg',
         ]);
@@ -79,8 +79,8 @@ class GameDataRaidInstancesEndpointTest extends TestCase
         $response->assertJsonPath('instances.1.id', 1296);
         $response->assertJsonPath('instances.1.name', 'Liberation of Undermine');
         $response->assertJsonPath('instances.1.media_url', 'https://example/lou.jpg');
-        $response->assertJsonPath('instances.1.expansion.id', 1);
-        $response->assertJsonPath('instances.1.expansion.name', 'The War Within');
+        $response->assertJsonPath('instances.1.expansion.id', 12);
+        $response->assertJsonPath('instances.1.expansion.name', 'Midnight');
         $response->assertJsonCount(2, 'instances.1.encounters');
         $response->assertJsonPath('instances.1.encounters.0.id', 2902);
         $response->assertJsonPath('instances.1.encounters.0.name', 'Vexie');

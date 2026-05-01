@@ -20,6 +20,7 @@ class GameDataRaidInstanceMapper
      * accepts the null.
      */
     private const BLIZZARD_JOURNAL_EXPANSION_TO_OUR_ID = [
+        516 => 12, // Midnight (current as of patch 12.x; display_order=1)
         514 => 1,  // The War Within
         503 => 2,  // Dragonflight
         499 => 3,  // Shadowlands
