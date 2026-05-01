@@ -480,4 +480,95 @@ class BlizzardGameDataClientTest extends TestCase
         $result = $this->client()->getJournalEncounter(2902);
         $this->assertSame(109501, $result['creature_display']['id']);
     }
+
+    public function test_get_mythic_keystone_dungeon_index_uses_dynamic_namespace(): void
+    {
+        Http::fake([
+            'us.api.blizzard.com/data/wow/mythic-keystone/dungeon/index?*' => Http::response([
+                'dungeons' => [['id' => 503, 'name' => 'Ara-Kara']],
+            ], 200),
+        ]);
+
+        $result = $this->client()->getMythicKeystoneDungeonIndex();
+
+        $this->assertSame(503, $result['dungeons'][0]['id']);
+        Http::assertSent(fn ($req) => str_contains($req->url(), 'mythic-keystone/dungeon/index')
+            && str_contains($req->url(), 'namespace=dynamic-us'));
+    }
+
+    public function test_get_mythic_keystone_dungeon_returns_null_on_404(): void
+    {
+        Http::fake([
+            'us.api.blizzard.com/data/wow/mythic-keystone/dungeon/99999?*' => Http::response(null, 404),
+        ]);
+
+        $this->assertNull($this->client()->getMythicKeystoneDungeon(99999));
+    }
+
+    public function test_get_mythic_keystone_season_returns_dungeons_list(): void
+    {
+        Http::fake([
+            'us.api.blizzard.com/data/wow/mythic-keystone/season/14?*' => Http::response([
+                'id' => 14,
+                'dungeons' => [['id' => 503], ['id' => 504]],
+            ], 200),
+        ]);
+
+        $result = $this->client()->getMythicKeystoneSeason(14);
+        $this->assertSame(2, count($result['dungeons']));
+    }
+
+    public function test_get_keystone_affix_index_uses_static_namespace(): void
+    {
+        Http::fake([
+            'us.api.blizzard.com/data/wow/keystone-affix/index?*' => Http::response([
+                'affixes' => [['id' => 9, 'name' => 'Tyrannical']],
+            ], 200),
+        ]);
+
+        $result = $this->client()->getKeystoneAffixIndex();
+        $this->assertSame(9, $result['affixes'][0]['id']);
+        Http::assertSent(fn ($req) => str_contains($req->url(), 'keystone-affix/index')
+            && str_contains($req->url(), 'namespace=static-us'));
+    }
+
+    public function test_get_keystone_affix_caches_within_ttl(): void
+    {
+        $callCount = 0;
+        Http::fake(function () use (&$callCount) {
+            $callCount++;
+
+            return Http::response(['id' => 9, 'name' => 'Tyrannical'], 200);
+        });
+
+        $client = $this->client();
+        $client->getKeystoneAffix(9);
+        $client->getKeystoneAffix(9);
+
+        $this->assertSame(1, $callCount);
+    }
+
+    public function test_get_keystone_affix_media_returns_icon(): void
+    {
+        Http::fake([
+            'us.api.blizzard.com/data/wow/media/keystone-affix/9?*' => Http::response([
+                'assets' => [['key' => 'icon', 'value' => 'https://example/affix-9.jpg']],
+            ], 200),
+        ]);
+
+        $result = $this->client()->getKeystoneAffixMedia(9);
+        $this->assertSame('https://example/affix-9.jpg', $result['assets'][0]['value']);
+    }
+
+    public function test_get_creature_display_media_returns_zoom_url(): void
+    {
+        Http::fake([
+            'us.api.blizzard.com/data/wow/media/creature-display/109501?*' => Http::response([
+                'assets' => [['key' => 'zoom', 'value' => 'https://example/zoom.jpg']],
+            ], 200),
+        ]);
+
+        $result = $this->client()->getCreatureDisplayMedia(109501);
+        $this->assertSame('https://example/zoom.jpg', $result['assets'][0]['value']);
+    }
 }
