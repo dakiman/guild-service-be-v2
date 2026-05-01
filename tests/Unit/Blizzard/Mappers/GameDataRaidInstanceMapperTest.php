@@ -74,6 +74,29 @@ class GameDataRaidInstanceMapperTest extends TestCase
         $this->assertSame([], $dto->encounterIds);
     }
 
+    public function test_per_expansion_meta_entry_returns_null_dto(): void
+    {
+        // Blizzard exposes a meta journal-instance per expansion, named the
+        // same as the expansion itself (e.g. an instance literally named
+        // "Midnight" under the Midnight expansion). These bundle outdoor /
+        // world-boss content and aren't real raids — skip them.
+        $dto = $this->mapper->mapDetail(
+            detail: [
+                'id' => 1312,
+                'name' => 'Midnight',
+                'category' => ['type' => 'RAID'],
+                'expansion' => ['id' => 516, 'name' => 'Midnight'],
+                'order_index' => 0,
+                'encounters' => [
+                    ['id' => 2827, 'name' => 'Lu\'ashal'],
+                ],
+            ],
+            mediaUrl: null,
+        );
+
+        $this->assertNull($dto);
+    }
+
     public function test_dungeon_category_returns_null_dto(): void
     {
         // Blizzard's journal-instance/index returns RAIDs and DUNGEONs together;

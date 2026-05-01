@@ -61,6 +61,19 @@ class GameDataRaidInstanceMapper
             return null;
         }
 
+        // Blizzard also exposes a per-expansion meta entry named the same as
+        // the expansion itself (e.g. an instance literally named "Midnight"
+        // under the Midnight expansion) which bundles outdoor / world-boss
+        // encounters but isn't a real raid players can queue. Skip these so
+        // only actual raids land in the table.
+        $name = (string) ($detail['name'] ?? 'Unknown');
+        $expansionName = isset($detail['expansion']['name'])
+            ? (string) $detail['expansion']['name']
+            : null;
+        if ($expansionName !== null && $name === $expansionName) {
+            return null;
+        }
+
         $encounterIds = [];
         foreach ($detail['encounters'] ?? [] as $entry) {
             if (isset($entry['id'])) {
@@ -74,7 +87,7 @@ class GameDataRaidInstanceMapper
 
         return new GameDataRaidInstance(
             id: (int) $detail['id'],
-            name: (string) ($detail['name'] ?? 'Unknown'),
+            name: $name,
             expansionId: $blizzardExpansionId !== null
                 ? (self::BLIZZARD_JOURNAL_EXPANSION_TO_OUR_ID[$blizzardExpansionId] ?? null)
                 : null,
