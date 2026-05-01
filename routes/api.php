@@ -6,8 +6,8 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\ForgotPasswordController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\BlizzardController;
+use App\Http\Controllers\CharacterAchievementsController;
 use App\Http\Controllers\CharacterController;
-use App\Http\Controllers\GameDataController;
 use App\Http\Controllers\GuildController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
@@ -61,6 +61,8 @@ Route::get('/characters/popular', [CharacterController::class, 'popular'])->name
 Route::get('/characters/{region}/{realm}/{character}', [CharacterController::class, 'show'])
     ->middleware('throttle:10,1')
     ->name('characters.show');
+Route::get('/characters/{region}/{realm}/{character}/achievements', [CharacterAchievementsController::class, 'index'])
+    ->name('characters.achievements');
 Route::patch('/characters/{character}/recruitment', [CharacterController::class, 'toggleRecruitment'])
     ->middleware('auth:sanctum')
     ->name('characters.recruitment');
@@ -72,14 +74,6 @@ Route::patch('/characters/{character}/recruitment', [CharacterController::class,
 */
 Route::get('/guilds/popular', [GuildController::class, 'popular'])->name('guilds.popular');
 Route::get('/guilds/{region}/{realm}/{guild}', [GuildController::class, 'show'])->name('guilds.show');
-
-/*
-|--------------------------------------------------------------------------
-| Game Data Routes
-|--------------------------------------------------------------------------
-*/
-Route::get('/game-data/achievements', [GameDataController::class, 'achievements'])
-    ->name('game-data.achievements');
 
 /*
 |--------------------------------------------------------------------------

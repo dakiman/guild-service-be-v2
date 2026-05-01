@@ -225,7 +225,7 @@ class BlizzardProfileClient extends BlizzardClient
         $name = BlizzardIdentity::name($name);
 
         $response = $this->request()
-            ->get("/profile/wow/character/{$realm}/{$name}/character-stats");
+            ->get("/profile/wow/character/{$realm}/{$name}/statistics");
 
         if ($response->status() === 404) {
             return null;

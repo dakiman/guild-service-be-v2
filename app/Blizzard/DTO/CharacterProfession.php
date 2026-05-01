@@ -13,5 +13,6 @@ final readonly class CharacterProfession
         public int $skillPoints,
         public int $maxSkillPoints,
         public bool $isPrimary,
+        public ?int $expansionId = null,
     ) {}
 }

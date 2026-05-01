@@ -21,6 +21,17 @@ class ProfessionResource extends JsonResource
             'skill_points' => $this->skill_points,
             'max_skill_points' => $this->max_skill_points,
             'is_primary' => $this->is_primary,
+            // whenLoaded() returns plain null (not MissingValue) when the
+            // belongsTo is loaded-but-null, which would emit
+            // "expansion": null. We explicitly null-check so the FE's
+            // Legacy fallback (treats null as bucket order 99) works.
+            'expansion' => $this->relationLoaded('expansion') && $this->expansion
+                ? [
+                    'id' => $this->expansion->id,
+                    'name' => $this->expansion->name,
+                    'display_order' => $this->expansion->display_order,
+                ]
+                : null,
         ];
     }
 }

@@ -17,6 +17,7 @@ class CharacterProfession extends Model
         'profession_id',
         'profession_name',
         'tier_name',
+        'expansion_id',
         'skill_points',
         'max_skill_points',
         'is_primary',
@@ -26,6 +27,7 @@ class CharacterProfession extends Model
     {
         return [
             'profession_id' => 'integer',
+            'expansion_id' => 'integer',
             'skill_points' => 'integer',
             'max_skill_points' => 'integer',
             'is_primary' => 'boolean',
@@ -35,5 +37,10 @@ class CharacterProfession extends Model
     public function character(): BelongsTo
     {
         return $this->belongsTo(Character::class);
+    }
+
+    public function expansion(): BelongsTo
+    {
+        return $this->belongsTo(GameDataExpansion::class, 'expansion_id');
     }
 }

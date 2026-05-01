@@ -52,7 +52,6 @@ class CharacterResource extends JsonResource
             'mounts' => MountResource::collection($this->whenLoaded('mounts')),
             'pets' => PetResource::collection($this->whenLoaded('pets')),
             'toys' => ToyResource::collection($this->whenLoaded('toys')),
-            'achievements' => CharacterAchievementResource::collection($this->whenLoaded('achievements')),
             'last_searched_at' => $this->last_searched_at?->toIso8601String(),
             'mythics_synced_at' => $this->mythics_synced_at?->toIso8601String(),
             'stats_synced_at' => $this->stats_synced_at?->toIso8601String(),

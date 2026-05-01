@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Endpoints;
 
+use App\Models\Character;
+use App\Models\CharacterReputation;
+use App\Models\GameDataExpansion;
+use App\Models\GameDataFaction;
+use App\Models\GameDataMount;
+use App\Models\GameDataTitle;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\Group;
 
@@ -64,7 +70,6 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
                 'mounts',
                 'pets',
                 'toys',
-                'achievements',
             ],
             'meta' => [
                 'game_version',
@@ -259,30 +264,34 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
     }
 
     #[DataProvider('retailCharacterProvider')]
-    public function test_retail_endpoint_includes_achievements(array $fixture, string $slot): void
+    public function test_retail_endpoint_achievements_listed_via_paginated_endpoint(array $fixture, string $slot): void
     {
         $this->requireFixture($fixture, $slot);
 
-        $url = "/api/v1/characters/{$fixture['region']}/{$fixture['realm']}/{$fixture['name']}";
-        $this->warmCharacterOrSkip($url);
+        $characterUrl = "/api/v1/characters/{$fixture['region']}/{$fixture['realm']}/{$fixture['name']}";
+        $this->warmCharacterOrSkip($characterUrl);
 
-        $response = $this->getJson($url);
+        $response = $this->getJson($characterUrl);
         $response->assertOk();
+        $this->assertSame('fresh', $response->json('meta.freshness.achievements'), 'achievements freshness should be fresh after warm sync');
 
-        $achievements = $response->json('data.achievements');
-        $this->assertIsArray($achievements);
-        $this->assertNotEmpty(
-            $achievements,
-            'achievements array should not be empty for a live character when the slice is enabled'
+        $achievementsUrl = "/api/v1/characters/{$fixture['region']}/{$fixture['realm']}/{$fixture['name']}/achievements";
+        $list = $this->getJson($achievementsUrl);
+        $list->assertOk();
+        $list->assertJsonStructure([
+            'data' => [['achievement_id', 'completed_timestamp', 'name', 'category_name']],
+            'meta' => ['total', 'per_page', 'next_cursor'],
+        ]);
+
+        $this->assertGreaterThan(
+            0,
+            (int) $list->json('meta.total'),
+            'achievements total should be > 0 for a live character when the slice is enabled'
         );
 
-        foreach ($achievements as $i => $row) {
-            $this->assertArrayHasKey('achievement_id', $row, "achievements[{$i}] missing achievement_id");
-            $this->assertArrayHasKey('completed_timestamp', $row, "achievements[{$i}] missing completed_timestamp");
-            $this->assertIsInt($row['achievement_id']);
+        foreach ($list->json('data') as $i => $row) {
+            $this->assertIsInt($row['achievement_id'], "data[{$i}].achievement_id");
         }
-
-        $this->assertSame('fresh', $response->json('meta.freshness.achievements'), 'achievements freshness should be fresh after warm sync');
     }
 
     /**
@@ -369,11 +378,11 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
 
     public function test_reputation_response_includes_faction_block_with_expansion(): void
     {
-        \App\Models\GameDataExpansion::firstOrCreate(['id' => 1], ['name' => 'The War Within', 'display_order' => 1]);
-        \App\Models\GameDataFaction::firstOrCreate(['id' => 2570], ['name' => 'Council of Dornogal', 'expansion_id' => 1]);
+        GameDataExpansion::firstOrCreate(['id' => 1], ['name' => 'The War Within', 'display_order' => 1]);
+        GameDataFaction::firstOrCreate(['id' => 2570], ['name' => 'Council of Dornogal', 'expansion_id' => 1]);
 
         $now = now();
-        $character = \App\Models\Character::factory()->create([
+        $character = Character::factory()->create([
             'mythics_synced_at' => $now,
             'pvp_synced_at' => $now,
             'professions_synced_at' => $now,
@@ -384,7 +393,7 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
             'collections_synced_at' => $now,
             'achievements_synced_at' => $now,
         ]);
-        \App\Models\CharacterReputation::create([
+        CharacterReputation::create([
             'character_id' => $character->id,
             'faction_id' => 2570,
             'faction_name' => 'Council of Dornogal',
@@ -405,10 +414,10 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
 
     public function test_reputation_response_includes_null_expansion_when_unmapped(): void
     {
-        \App\Models\GameDataFaction::firstOrCreate(['id' => 99999], ['name' => 'Future Faction', 'expansion_id' => null]);
+        GameDataFaction::firstOrCreate(['id' => 99999], ['name' => 'Future Faction', 'expansion_id' => null]);
 
         $now = now();
-        $character = \App\Models\Character::factory()->create([
+        $character = Character::factory()->create([
             'mythics_synced_at' => $now,
             'pvp_synced_at' => $now,
             'professions_synced_at' => $now,
@@ -419,7 +428,7 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
             'collections_synced_at' => $now,
             'achievements_synced_at' => $now,
         ]);
-        \App\Models\CharacterReputation::create([
+        CharacterReputation::create([
             'character_id' => $character->id,
             'faction_id' => 99999,
             'faction_name' => 'Future Faction',
@@ -438,7 +447,7 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
     public function test_reputation_response_omits_faction_block_when_no_game_data_row(): void
     {
         $now = now();
-        $character = \App\Models\Character::factory()->create([
+        $character = Character::factory()->create([
             'mythics_synced_at' => $now,
             'pvp_synced_at' => $now,
             'professions_synced_at' => $now,
@@ -449,7 +458,7 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
             'collections_synced_at' => $now,
             'achievements_synced_at' => $now,
         ]);
-        \App\Models\CharacterReputation::create([
+        CharacterReputation::create([
             'character_id' => $character->id,
             'faction_id' => 88888,
             'faction_name' => 'Unknown Faction',
@@ -467,14 +476,14 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
 
     public function test_titles_response_includes_game_data_block(): void
     {
-        \App\Models\GameDataTitle::create([
+        GameDataTitle::create([
             'id' => 414,
             'name_male' => '{name}, Lord of the Bears',
             'name_female' => '{name}, Lady of the Bears',
         ]);
 
         $now = now();
-        $character = \App\Models\Character::factory()->create([
+        $character = Character::factory()->create([
             'mythics_synced_at' => $now,
             'pvp_synced_at' => $now,
             'professions_synced_at' => $now,
@@ -504,7 +513,7 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
     public function test_titles_response_omits_game_data_when_no_row(): void
     {
         $now = now();
-        $character = \App\Models\Character::factory()->create([
+        $character = Character::factory()->create([
             'mythics_synced_at' => $now,
             'pvp_synced_at' => $now,
             'professions_synced_at' => $now,
@@ -531,7 +540,7 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
 
     public function test_mount_response_includes_game_data_block(): void
     {
-        \App\Models\GameDataMount::create([
+        GameDataMount::create([
             'id' => 6,
             'name' => 'Onyxian Drake',
             'description' => 'A drake born of Onyxia\'s brood.',
@@ -541,7 +550,7 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
         ]);
 
         $now = now();
-        $character = \App\Models\Character::factory()->create([
+        $character = Character::factory()->create([
             'mythics_synced_at' => $now,
             'pvp_synced_at' => $now,
             'professions_synced_at' => $now,
@@ -571,7 +580,7 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
     public function test_mount_response_omits_game_data_block_when_no_row(): void
     {
         $now = now();
-        $character = \App\Models\Character::factory()->create([
+        $character = Character::factory()->create([
             'mythics_synced_at' => $now,
             'pvp_synced_at' => $now,
             'professions_synced_at' => $now,
@@ -597,7 +606,7 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
 
     public function test_mount_response_handles_partial_game_data(): void
     {
-        \App\Models\GameDataMount::create([
+        GameDataMount::create([
             'id' => 219,
             'name' => 'Tawny Wind Rider',
             'description' => null,
@@ -607,7 +616,7 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
         ]);
 
         $now = now();
-        $character = \App\Models\Character::factory()->create([
+        $character = Character::factory()->create([
             'mythics_synced_at' => $now,
             'pvp_synced_at' => $now,
             'professions_synced_at' => $now,

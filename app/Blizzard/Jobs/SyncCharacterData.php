@@ -39,6 +39,7 @@ use App\Models\CharacterToy;
 use App\Models\DungeonRun;
 use App\Models\Guild;
 use App\Models\RaidEncounterKill;
+use App\Support\BlizzardIdentity;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -201,11 +202,14 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $characterData,
         );
 
-        // Link guild if present
+        // Link guild if present.
+        // Canonicalize guildName the same way GuildController does
+        // (BlizzardIdentity::realm via Str::slug) so character-side and
+        // user-lookup-side writes converge on a single guild row.
         if ($profile->guildName && $profile->guildRealm) {
             $guild = Guild::firstOrCreate(
                 [
-                    'name' => $profile->guildName,
+                    'name' => BlizzardIdentity::realm($profile->guildName),
                     'realm' => $profile->guildRealm,
                     'region' => $this->region,
                 ],
@@ -393,6 +397,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                             'skill_points' => $dto->skillPoints,
                             'max_skill_points' => $dto->maxSkillPoints,
                             'is_primary' => $dto->isPrimary,
+                            'expansion_id' => $dto->expansionId,
                         ],
                     );
                     $keep[] = $dto->professionId.'|'.$dto->tierName;
