@@ -9,6 +9,31 @@ use App\Blizzard\DTO\GameDataRaidInstance;
 class GameDataRaidInstanceMapper
 {
     /**
+     * Translation table from Blizzard's journal-expansion ID (returned in
+     * /data/wow/journal-instance/{id}.expansion.id) to our `game_data_expansions.id`
+     * seeded by GameDataExpansionSeeder. Mirrors the Plan-5 FACTION_TO_EXPANSION
+     * precedent — Blizzard's ID space is quirky and not aligned with ours.
+     *
+     * Source of truth: GET /data/wow/journal-expansion/index (run once per patch
+     * to harvest new IDs). Unmapped IDs (e.g. 505 "Current Season", 516 "Midnight")
+     * fall through to null and the FK on `game_data_raid_instances.expansion_id`
+     * accepts the null.
+     */
+    private const BLIZZARD_JOURNAL_EXPANSION_TO_OUR_ID = [
+        514 => 1,  // The War Within
+        503 => 2,  // Dragonflight
+        499 => 3,  // Shadowlands
+        396 => 4,  // Battle for Azeroth
+        395 => 5,  // Legion
+        124 => 6,  // Warlords of Draenor
+        74 => 7,   // Mists of Pandaria
+        73 => 8,   // Cataclysm
+        72 => 9,   // Wrath of the Lich King
+        70 => 10,  // Burning Crusade
+        68 => 11,  // Classic
+    ];
+
+    /**
      * Map a Blizzard /data/wow/journal-instance/{id} response (plus the
      * companion media response) to a GameDataRaidInstance DTO.
      *
@@ -34,11 +59,15 @@ class GameDataRaidInstanceMapper
             }
         }
 
+        $blizzardExpansionId = isset($detail['expansion']['id'])
+            ? (int) $detail['expansion']['id']
+            : null;
+
         return new GameDataRaidInstance(
             id: (int) $detail['id'],
             name: (string) ($detail['name'] ?? 'Unknown'),
-            expansionId: isset($detail['expansion']['id'])
-                ? (int) $detail['expansion']['id']
+            expansionId: $blizzardExpansionId !== null
+                ? (self::BLIZZARD_JOURNAL_EXPANSION_TO_OUR_ID[$blizzardExpansionId] ?? null)
                 : null,
             displayOrder: isset($detail['order_index'])
                 ? (int) $detail['order_index']

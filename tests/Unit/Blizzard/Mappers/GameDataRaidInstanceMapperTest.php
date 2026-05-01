@@ -23,7 +23,7 @@ class GameDataRaidInstanceMapperTest extends TestCase
             detail: [
                 'id' => 1296,
                 'name' => 'Liberation of Undermine',
-                'expansion' => ['id' => 1],
+                'expansion' => ['id' => 514], // Blizzard's journal-expansion id for TWW → maps to our id 1
                 'order_index' => 5,
                 'encounters' => [
                     ['id' => 2902, 'name' => 'Vexie'],
@@ -39,6 +39,23 @@ class GameDataRaidInstanceMapperTest extends TestCase
         $this->assertSame(5, $dto->displayOrder);
         $this->assertSame('https://render.worldofwarcraft.com/eu/icons/lou.jpg', $dto->mediaUrl);
         $this->assertSame([2902, 2917], $dto->encounterIds);
+    }
+
+    public function test_unmapped_blizzard_expansion_id_falls_back_to_null(): void
+    {
+        // Blizzard IDs like 505 ("Current Season") and 516 ("Midnight") have no
+        // entry in our seeded game_data_expansions table; the FK accepts null.
+        $dto = $this->mapper->mapDetail(
+            detail: [
+                'id' => 9999,
+                'name' => 'Unknown Tier',
+                'expansion' => ['id' => 505],
+            ],
+            mediaUrl: null,
+        );
+
+        $this->assertNotNull($dto);
+        $this->assertNull($dto->expansionId);
     }
 
     public function test_handles_missing_optional_fields(): void
