@@ -8,7 +8,11 @@ use App\Blizzard\Client\BlizzardGameDataClient;
 use App\Models\GameDataAchievement;
 use App\Models\GameDataAchievementCategory;
 use App\Models\GameDataFaction;
+use App\Models\GameDataKeystoneAffix;
 use App\Models\GameDataMount;
+use App\Models\GameDataMythicKeystoneDungeon;
+use App\Models\GameDataRaidEncounter;
+use App\Models\GameDataRaidInstance;
 use App\Models\GameDataTitle;
 use Database\Seeders\GameDataExpansionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -414,5 +418,220 @@ class SyncGameDataTest extends TestCase
             ->assertExitCode(0);
 
         $this->assertSame(1200, GameDataAchievement::count());
+    }
+
+    public function test_sync_pve_upserts_raid_instance_with_encounters_and_media(): void
+    {
+        $mock = $this->createMock(BlizzardGameDataClient::class);
+
+        $mock->method('getJournalInstanceIndex')->willReturn([
+            'instances' => [['id' => 1296, 'name' => 'Liberation of Undermine']],
+        ]);
+
+        $mock->method('getJournalInstance')->willReturn([
+            'id' => 1296,
+            'name' => 'Liberation of Undermine',
+            'expansion' => ['id' => 1],
+            'order_index' => 5,
+            'encounters' => [
+                ['id' => 2902, 'name' => 'Vexie'],
+                ['id' => 2917, 'name' => 'Cauldron of Carnage'],
+            ],
+        ]);
+
+        $mock->method('getJournalInstanceMedia')->willReturn([
+            'assets' => [['key' => 'tile', 'value' => 'https://example/lou.jpg']],
+        ]);
+
+        $mock->method('getJournalEncounter')->willReturnCallback(function (int $id): array {
+            return match ($id) {
+                2902 => ['id' => 2902, 'name' => 'Vexie', 'creature_display' => ['id' => 109501], 'instance' => ['id' => 1296], 'order_index' => 0],
+                2917 => ['id' => 2917, 'name' => 'Cauldron of Carnage', 'creature_display' => ['id' => 109502], 'instance' => ['id' => 1296], 'order_index' => 1],
+            };
+        });
+
+        $mock->method('getCreatureDisplayMedia')->willReturnCallback(function (int $id): array {
+            return ['assets' => [['key' => 'zoom', 'value' => "https://example/cd-{$id}.jpg"]]];
+        });
+
+        // Mythic-keystone branch — minimal, returns no dungeons (covered separately below).
+        $mock->method('getCurrentMythicPlusSeason')->willReturn(14);
+        $mock->method('getMythicKeystoneSeason')->willReturn(['id' => 14, 'dungeons' => []]);
+        $mock->method('getMythicKeystoneDungeonIndex')->willReturn(['dungeons' => []]);
+
+        // Affix branch — minimal, no affixes.
+        $mock->method('getKeystoneAffixIndex')->willReturn(['affixes' => []]);
+
+        $this->app->instance(BlizzardGameDataClient::class, $mock);
+
+        $this->artisan('blizzard:sync-game-data', ['resource' => 'pve'])
+            ->assertExitCode(0);
+
+        $instance = GameDataRaidInstance::find(1296);
+        $this->assertNotNull($instance);
+        $this->assertSame('Liberation of Undermine', $instance->name);
+        $this->assertSame(1, $instance->expansion_id);
+        $this->assertSame(5, $instance->display_order);
+        $this->assertSame('https://example/lou.jpg', $instance->media_url);
+
+        $this->assertSame(2, GameDataRaidEncounter::where('raid_instance_id', 1296)->count());
+
+        $vexie = GameDataRaidEncounter::find(2902);
+        $this->assertSame('Vexie', $vexie->name);
+        $this->assertSame(0, $vexie->display_order);
+        $this->assertSame(109501, $vexie->creature_display_id);
+        $this->assertSame('https://example/cd-109501.jpg', $vexie->portrait_url);
+    }
+
+    public function test_sync_pve_upserts_mythic_keystone_dungeons_from_current_season(): void
+    {
+        $mock = $this->createMock(BlizzardGameDataClient::class);
+
+        $mock->method('getJournalInstanceIndex')->willReturn(['instances' => []]);
+
+        $mock->method('getCurrentMythicPlusSeason')->willReturn(14);
+        $mock->method('getMythicKeystoneSeason')->willReturn([
+            'id' => 14,
+            'dungeons' => [
+                ['id' => 503, 'name' => 'Ara-Kara'],
+                ['id' => 504, 'name' => 'City of Threads'],
+            ],
+        ]);
+        $mock->method('getMythicKeystoneDungeon')->willReturnCallback(function (int $id): array {
+            return match ($id) {
+                503 => ['id' => 503, 'name' => 'Ara-Kara, City of Echoes'],
+                504 => ['id' => 504, 'name' => 'City of Threads'],
+            };
+        });
+
+        $mock->method('getKeystoneAffixIndex')->willReturn(['affixes' => []]);
+
+        $this->app->instance(BlizzardGameDataClient::class, $mock);
+
+        $this->artisan('blizzard:sync-game-data', ['resource' => 'pve'])
+            ->assertExitCode(0);
+
+        $this->assertSame(2, GameDataMythicKeystoneDungeon::count());
+        $this->assertSame('Ara-Kara, City of Echoes', GameDataMythicKeystoneDungeon::find(503)->name);
+        $this->assertSame('City of Threads', GameDataMythicKeystoneDungeon::find(504)->name);
+    }
+
+    public function test_sync_pve_upserts_keystone_affixes_with_icons(): void
+    {
+        $mock = $this->createMock(BlizzardGameDataClient::class);
+        $mock->method('getJournalInstanceIndex')->willReturn(['instances' => []]);
+        $mock->method('getCurrentMythicPlusSeason')->willReturn(14);
+        $mock->method('getMythicKeystoneSeason')->willReturn(['id' => 14, 'dungeons' => []]);
+        $mock->method('getMythicKeystoneDungeonIndex')->willReturn(['dungeons' => []]);
+
+        $mock->method('getKeystoneAffixIndex')->willReturn([
+            'affixes' => [
+                ['id' => 9, 'name' => 'Tyrannical'],
+                ['id' => 10, 'name' => 'Fortified'],
+            ],
+        ]);
+        $mock->method('getKeystoneAffix')->willReturnCallback(function (int $id): array {
+            return match ($id) {
+                9 => ['id' => 9, 'name' => 'Tyrannical'],
+                10 => ['id' => 10, 'name' => 'Fortified'],
+            };
+        });
+        $mock->method('getKeystoneAffixMedia')->willReturnCallback(function (int $id): array {
+            return ['assets' => [['key' => 'icon', 'value' => "https://example/affix-{$id}.jpg"]]];
+        });
+
+        $this->app->instance(BlizzardGameDataClient::class, $mock);
+
+        $this->artisan('blizzard:sync-game-data', ['resource' => 'pve'])
+            ->assertExitCode(0);
+
+        $this->assertSame(2, GameDataKeystoneAffix::count());
+        $tyr = GameDataKeystoneAffix::find(9);
+        $this->assertSame('Tyrannical', $tyr->name);
+        $this->assertSame('https://example/affix-9.jpg', $tyr->icon_url);
+    }
+
+    public function test_sync_pve_is_idempotent(): void
+    {
+        $mock = $this->createMock(BlizzardGameDataClient::class);
+        $mock->method('getJournalInstanceIndex')->willReturn([
+            'instances' => [['id' => 1296, 'name' => 'LoU']],
+        ]);
+        $mock->method('getJournalInstance')->willReturn([
+            'id' => 1296,
+            'name' => 'Liberation of Undermine',
+            'expansion' => ['id' => 1],
+            'order_index' => 5,
+            'encounters' => [['id' => 2902, 'name' => 'Vexie']],
+        ]);
+        $mock->method('getJournalInstanceMedia')->willReturn([
+            'assets' => [['key' => 'tile', 'value' => 'https://example/lou.jpg']],
+        ]);
+        $mock->method('getJournalEncounter')->willReturn([
+            'id' => 2902, 'name' => 'Vexie', 'instance' => ['id' => 1296], 'order_index' => 0,
+        ]);
+        $mock->method('getCreatureDisplayMedia')->willReturn(null);
+
+        $mock->method('getCurrentMythicPlusSeason')->willReturn(14);
+        $mock->method('getMythicKeystoneSeason')->willReturn([
+            'id' => 14,
+            'dungeons' => [['id' => 503]],
+        ]);
+        $mock->method('getMythicKeystoneDungeon')->willReturn([
+            'id' => 503, 'name' => 'Ara-Kara',
+        ]);
+        $mock->method('getKeystoneAffixIndex')->willReturn([
+            'affixes' => [['id' => 9, 'name' => 'Tyrannical']],
+        ]);
+        $mock->method('getKeystoneAffix')->willReturn(['id' => 9, 'name' => 'Tyrannical']);
+        $mock->method('getKeystoneAffixMedia')->willReturn(null);
+
+        $this->app->instance(BlizzardGameDataClient::class, $mock);
+
+        $this->artisan('blizzard:sync-game-data', ['resource' => 'pve']);
+        $this->artisan('blizzard:sync-game-data', ['resource' => 'pve']);
+
+        $this->assertSame(1, GameDataRaidInstance::count(), 'rerun should not duplicate raid rows');
+        $this->assertSame(1, GameDataRaidEncounter::count(), 'rerun should not duplicate encounter rows');
+        $this->assertSame(1, GameDataMythicKeystoneDungeon::count(), 'rerun should not duplicate dungeon rows');
+        $this->assertSame(1, GameDataKeystoneAffix::count(), 'rerun should not duplicate affix rows');
+    }
+
+    public function test_sync_pve_continues_when_individual_id_throws(): void
+    {
+        $mock = $this->createMock(BlizzardGameDataClient::class);
+        $mock->method('getJournalInstanceIndex')->willReturn([
+            'instances' => [
+                ['id' => 1296],
+                ['id' => 1273],
+            ],
+        ]);
+        $mock->method('getJournalInstance')->willReturnCallback(function (int $id): array {
+            if ($id === 1296) {
+                throw new \RuntimeException('simulated transient failure');
+            }
+
+            return [
+                'id' => $id,
+                'name' => 'Other raid',
+                'expansion' => ['id' => 1],
+                'order_index' => 0,
+                'encounters' => [],
+            ];
+        });
+        $mock->method('getJournalInstanceMedia')->willReturn(null);
+
+        $mock->method('getCurrentMythicPlusSeason')->willReturn(14);
+        $mock->method('getMythicKeystoneSeason')->willReturn(['id' => 14, 'dungeons' => []]);
+        $mock->method('getMythicKeystoneDungeonIndex')->willReturn(['dungeons' => []]);
+        $mock->method('getKeystoneAffixIndex')->willReturn(['affixes' => []]);
+
+        $this->app->instance(BlizzardGameDataClient::class, $mock);
+
+        $this->artisan('blizzard:sync-game-data', ['resource' => 'pve'])
+            ->assertExitCode(0);
+
+        $this->assertNull(GameDataRaidInstance::find(1296));
+        $this->assertNotNull(GameDataRaidInstance::find(1273), 'second instance still upserted');
     }
 }
