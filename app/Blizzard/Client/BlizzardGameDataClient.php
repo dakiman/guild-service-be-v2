@@ -377,4 +377,121 @@ class BlizzardGameDataClient extends BlizzardClient
             return $response->json();
         });
     }
+
+    /**
+     * Fetch the journal-instance index from /data/wow/journal-instance/index.
+     * Returns the raw response array; mapper extracts IDs.
+     *
+     * static-{region} namespace, 7-day cache — same precedent as
+     * getFactionIndex() / getTalentTree().
+     */
+    public function getJournalInstanceIndex(): ?array
+    {
+        $cacheKey = "blizzard:game-data:journal-instance-index:{$this->region}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return Cache::remember($cacheKey, $ttl, function (): ?array {
+            $response = Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => "static-{$this->region}",
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl()}/data/wow/journal-instance/index");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
+
+    /**
+     * Fetch a single journal-instance by ID. Carries `expansion`, `order_index`
+     * and `encounters: [{id, name}, ...]` — the encounter list is the boss
+     * roster for the raid.
+     */
+    public function getJournalInstance(int $id): ?array
+    {
+        $cacheKey = "blizzard:game-data:journal-instance:{$this->region}:{$id}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+            $response = Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => "static-{$this->region}",
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl()}/data/wow/journal-instance/{$id}");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
+
+    /**
+     * Fetch /data/wow/media/journal-instance/{id} — carries the raid
+     * background image URL inside `assets[].value`.
+     */
+    public function getJournalInstanceMedia(int $id): ?array
+    {
+        $cacheKey = "blizzard:game-data:journal-instance-media:{$this->region}:{$id}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+            $response = Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => "static-{$this->region}",
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl()}/data/wow/media/journal-instance/{$id}");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
+
+    /**
+     * Fetch a single journal-encounter by ID. Carries `creature_display.id`
+     * (sometimes nested under `creature_displays[]`) — the FE uses this for
+     * the boss portrait via the media/creature-display endpoint.
+     */
+    public function getJournalEncounter(int $id): ?array
+    {
+        $cacheKey = "blizzard:game-data:journal-encounter:{$this->region}:{$id}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+            $response = Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => "static-{$this->region}",
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl()}/data/wow/journal-encounter/{$id}");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
 }
