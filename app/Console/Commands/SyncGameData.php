@@ -8,12 +8,20 @@ use App\Blizzard\Client\BlizzardGameDataClient;
 use App\Blizzard\Mappers\GameDataAchievementCategoryMapper;
 use App\Blizzard\Mappers\GameDataAchievementMapper;
 use App\Blizzard\Mappers\GameDataFactionMapper;
+use App\Blizzard\Mappers\GameDataKeystoneAffixMapper;
 use App\Blizzard\Mappers\GameDataMountMapper;
+use App\Blizzard\Mappers\GameDataMythicKeystoneDungeonMapper;
+use App\Blizzard\Mappers\GameDataRaidEncounterMapper;
+use App\Blizzard\Mappers\GameDataRaidInstanceMapper;
 use App\Blizzard\Mappers\GameDataTitleMapper;
 use App\Models\GameDataAchievement;
 use App\Models\GameDataAchievementCategory;
 use App\Models\GameDataFaction;
+use App\Models\GameDataKeystoneAffix;
 use App\Models\GameDataMount;
+use App\Models\GameDataMythicKeystoneDungeon;
+use App\Models\GameDataRaidEncounter;
+use App\Models\GameDataRaidInstance;
 use App\Models\GameDataTitle;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -22,9 +30,9 @@ use Throwable;
 
 class SyncGameData extends Command
 {
-    protected $signature = 'blizzard:sync-game-data {resource? : factions|titles|mounts|achievements; omit for all}';
+    protected $signature = 'blizzard:sync-game-data {resource? : factions|titles|mounts|achievements|pve; omit for all}';
 
-    protected $description = 'Sync static reference data (factions/titles/mounts/achievements) from Blizzard Game Data API into game_data_* tables';
+    protected $description = 'Sync static reference data (factions/titles/mounts/achievements/pve) from Blizzard Game Data API into game_data_* tables';
 
     private const ACHIEVEMENT_CHUNK_SIZE = 500;
 
@@ -35,11 +43,15 @@ class SyncGameData extends Command
         GameDataMountMapper $mountMapper,
         GameDataAchievementCategoryMapper $achievementCategoryMapper,
         GameDataAchievementMapper $achievementMapper,
+        GameDataRaidInstanceMapper $raidInstanceMapper,
+        GameDataRaidEncounterMapper $raidEncounterMapper,
+        GameDataMythicKeystoneDungeonMapper $dungeonMapper,
+        GameDataKeystoneAffixMapper $affixMapper,
     ): int {
         $resource = $this->argument('resource');
 
         $resources = $resource === null
-            ? ['factions', 'titles', 'mounts', 'achievements']
+            ? ['factions', 'titles', 'mounts', 'achievements', 'pve']
             : [$resource];
 
         foreach ($resources as $r) {
@@ -48,6 +60,7 @@ class SyncGameData extends Command
                 'titles' => $this->syncTitles($client, $titleMapper),
                 'mounts' => $this->syncMounts($client, $mountMapper),
                 'achievements' => $this->syncAchievements($client, $achievementCategoryMapper, $achievementMapper),
+                'pve' => $this->syncPve($client, $raidInstanceMapper, $raidEncounterMapper, $dungeonMapper, $affixMapper),
                 default => $this->error("Unknown resource: {$r}") || self::FAILURE,
             };
         }
@@ -370,5 +383,296 @@ class SyncGameData extends Command
         $bar->finish();
         $this->newLine();
         $this->info("Achievements synced: {$achUpserted} upserted, {$achSkipped} skipped.");
+    }
+
+    /**
+     * Sync the four PvE game-data tables. Sequence:
+     *  1. Raid instances + their encounter rosters from the journal-instance
+     *     family of endpoints. Encounters are fanned out per-instance with
+     *     the instance id passed as the encounter's parent (the encounter
+     *     detail response sometimes omits `instance.id`).
+     *  2. Mythic-keystone dungeons (current season scope) — uses the season's
+     *     `dungeons` list to know which IDs to sync, plus the dungeon-index
+     *     for fields the season payload doesn't carry.
+     *  3. Keystone affixes (full universe; ~12-16 rows) with their icons.
+     */
+    private function syncPve(
+        BlizzardGameDataClient $client,
+        GameDataRaidInstanceMapper $raidInstanceMapper,
+        GameDataRaidEncounterMapper $raidEncounterMapper,
+        GameDataMythicKeystoneDungeonMapper $dungeonMapper,
+        GameDataKeystoneAffixMapper $affixMapper,
+    ): void {
+        $this->syncRaids($client, $raidInstanceMapper, $raidEncounterMapper);
+        $this->syncMythicKeystoneDungeons($client, $dungeonMapper);
+        $this->syncKeystoneAffixes($client, $affixMapper);
+    }
+
+    private function syncRaids(
+        BlizzardGameDataClient $client,
+        GameDataRaidInstanceMapper $instanceMapper,
+        GameDataRaidEncounterMapper $encounterMapper,
+    ): void {
+        $this->info('Syncing raid instances + encounters...');
+
+        $index = $client->getJournalInstanceIndex();
+        if ($index === null) {
+            $this->warn('Journal-instance index returned null (404). Skipping raids.');
+
+            return;
+        }
+
+        $ids = $instanceMapper->extractIndexIds($index);
+        $this->info('Index returned '.count($ids).' raid instance IDs.');
+
+        $bar = $this->output->createProgressBar(count($ids));
+        $bar->start();
+
+        $instUpserted = 0;
+        $instSkipped = 0;
+        $encUpserted = 0;
+        $encSkipped = 0;
+
+        foreach ($ids as $instanceId) {
+            try {
+                $detail = $client->getJournalInstance($instanceId);
+                $media = $client->getJournalInstanceMedia($instanceId);
+            } catch (Throwable $e) {
+                Log::warning("Raid instance sync skipped id={$instanceId}: ".$e->getMessage());
+                $instSkipped++;
+                $bar->advance();
+
+                continue;
+            }
+
+            $mediaUrl = $instanceMapper->extractMediaUrl($media);
+            $instanceDto = $instanceMapper->mapDetail($detail, $mediaUrl);
+            if ($instanceDto === null) {
+                $instSkipped++;
+                $bar->advance();
+
+                continue;
+            }
+
+            DB::transaction(function () use (
+                $client,
+                $encounterMapper,
+                $instanceDto,
+                &$instUpserted,
+                &$encUpserted,
+                &$encSkipped,
+            ) {
+                GameDataRaidInstance::updateOrCreate(
+                    ['id' => $instanceDto->id],
+                    [
+                        'name' => $instanceDto->name,
+                        'expansion_id' => $instanceDto->expansionId,
+                        'display_order' => $instanceDto->displayOrder,
+                        'media_url' => $instanceDto->mediaUrl,
+                    ],
+                );
+                $instUpserted++;
+
+                foreach ($instanceDto->encounterIds as $i => $encounterId) {
+                    try {
+                        $encDetail = $client->getJournalEncounter($encounterId);
+                    } catch (Throwable $e) {
+                        Log::warning("Encounter sync skipped id={$encounterId}: ".$e->getMessage());
+                        $encSkipped++;
+
+                        continue;
+                    }
+
+                    $creatureDisplayId = isset($encDetail['creature_display']['id'])
+                        ? (int) $encDetail['creature_display']['id']
+                        : (isset($encDetail['creature_displays'][0]['id'])
+                            ? (int) $encDetail['creature_displays'][0]['id']
+                            : null);
+
+                    $portraitUrl = null;
+                    if ($creatureDisplayId !== null) {
+                        try {
+                            $cdMedia = $client->getCreatureDisplayMedia($creatureDisplayId);
+                            $portraitUrl = $encounterMapper->extractMediaUrl($cdMedia);
+                        } catch (Throwable $e) {
+                            Log::warning("Creature-display media skipped id={$creatureDisplayId}: ".$e->getMessage());
+                        }
+                    }
+
+                    $encDto = $encounterMapper->mapDetail(
+                        detail: $encDetail,
+                        portraitUrl: $portraitUrl,
+                        fallbackInstanceId: $instanceDto->id,
+                        fallbackOrder: $i,
+                    );
+                    if ($encDto === null) {
+                        $encSkipped++;
+
+                        continue;
+                    }
+
+                    GameDataRaidEncounter::updateOrCreate(
+                        ['id' => $encDto->id],
+                        [
+                            'raid_instance_id' => $encDto->raidInstanceId,
+                            'name' => $encDto->name,
+                            'display_order' => $encDto->displayOrder,
+                            'creature_display_id' => $encDto->creatureDisplayId,
+                            'portrait_url' => $encDto->portraitUrl,
+                        ],
+                    );
+                    $encUpserted++;
+                }
+            });
+
+            $bar->advance();
+        }
+
+        $bar->finish();
+        $this->newLine();
+        $this->info("Raid instances synced: {$instUpserted} upserted, {$instSkipped} skipped.");
+        $this->info("Raid encounters synced: {$encUpserted} upserted, {$encSkipped} skipped.");
+    }
+
+    private function syncMythicKeystoneDungeons(
+        BlizzardGameDataClient $client,
+        GameDataMythicKeystoneDungeonMapper $mapper,
+    ): void {
+        $this->info('Syncing mythic-keystone dungeons (current season)...');
+
+        $seasonId = $client->getCurrentMythicPlusSeason();
+        $season = $client->getMythicKeystoneSeason($seasonId);
+        if ($season === null) {
+            $this->warn("Season {$seasonId} payload returned null (404). Falling back to dungeon-index sync.");
+            $dungeonIds = [];
+        } else {
+            $dungeonIds = [];
+            foreach ($season['dungeons'] ?? [] as $entry) {
+                if (isset($entry['id'])) {
+                    $dungeonIds[] = (int) $entry['id'];
+                }
+            }
+        }
+
+        if ($dungeonIds === []) {
+            // Fall back: index-driven sync (older expansions where season
+            // payload is sparse).
+            $index = $client->getMythicKeystoneDungeonIndex();
+            if ($index === null) {
+                $this->warn('Dungeon index also null. Skipping dungeons.');
+
+                return;
+            }
+            $dungeonIds = $mapper->extractIndexIds($index);
+        }
+
+        $this->info('Will sync '.count($dungeonIds).' dungeons.');
+
+        $bar = $this->output->createProgressBar(count($dungeonIds));
+        $bar->start();
+
+        $upserted = 0;
+        $skipped = 0;
+
+        DB::transaction(function () use ($client, $mapper, $dungeonIds, &$upserted, &$skipped, $bar) {
+            foreach ($dungeonIds as $id) {
+                try {
+                    $detail = $client->getMythicKeystoneDungeon($id);
+                } catch (Throwable $e) {
+                    Log::warning("Dungeon sync skipped id={$id}: ".$e->getMessage());
+                    $skipped++;
+                    $bar->advance();
+
+                    continue;
+                }
+
+                // Mythic-keystone dungeon details do not currently expose a
+                // `media` block, but the Blizzard API may add one — the mapper
+                // already supports it via extractMediaUrl(). Pass null today.
+                $dto = $mapper->mapDetail($detail, mediaUrl: null, journalInstanceId: null);
+                if ($dto === null) {
+                    $skipped++;
+                    $bar->advance();
+
+                    continue;
+                }
+
+                GameDataMythicKeystoneDungeon::updateOrCreate(
+                    ['id' => $dto->id],
+                    [
+                        'name' => $dto->name,
+                        'media_url' => $dto->mediaUrl,
+                        'journal_instance_id' => $dto->journalInstanceId,
+                    ],
+                );
+                $upserted++;
+                $bar->advance();
+            }
+        });
+
+        $bar->finish();
+        $this->newLine();
+        $this->info("Mythic-keystone dungeons synced: {$upserted} upserted, {$skipped} skipped.");
+    }
+
+    private function syncKeystoneAffixes(
+        BlizzardGameDataClient $client,
+        GameDataKeystoneAffixMapper $mapper,
+    ): void {
+        $this->info('Syncing keystone affixes...');
+
+        $index = $client->getKeystoneAffixIndex();
+        if ($index === null) {
+            $this->warn('Keystone-affix index returned null (404). Skipping.');
+
+            return;
+        }
+
+        $ids = $mapper->extractIndexIds($index);
+        $this->info('Index returned '.count($ids).' affix IDs.');
+
+        $bar = $this->output->createProgressBar(count($ids));
+        $bar->start();
+
+        $upserted = 0;
+        $skipped = 0;
+
+        DB::transaction(function () use ($client, $mapper, $ids, &$upserted, &$skipped, $bar) {
+            foreach ($ids as $id) {
+                try {
+                    $detail = $client->getKeystoneAffix($id);
+                    $media = $client->getKeystoneAffixMedia($id);
+                } catch (Throwable $e) {
+                    Log::warning("Affix sync skipped id={$id}: ".$e->getMessage());
+                    $skipped++;
+                    $bar->advance();
+
+                    continue;
+                }
+
+                $iconUrl = $mapper->extractIconUrl($media);
+                $dto = $mapper->mapDetail($detail, $iconUrl);
+                if ($dto === null) {
+                    $skipped++;
+                    $bar->advance();
+
+                    continue;
+                }
+
+                GameDataKeystoneAffix::updateOrCreate(
+                    ['id' => $dto->id],
+                    [
+                        'name' => $dto->name,
+                        'icon_url' => $dto->iconUrl,
+                    ],
+                );
+                $upserted++;
+                $bar->advance();
+            }
+        });
+
+        $bar->finish();
+        $this->newLine();
+        $this->info("Keystone affixes synced: {$upserted} upserted, {$skipped} skipped.");
     }
 }
