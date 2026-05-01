@@ -405,4 +405,79 @@ class BlizzardGameDataClientTest extends TestCase
 
         $this->assertNull($this->client()->getAchievement(99999));
     }
+
+    public function test_get_journal_instance_index_uses_static_namespace(): void
+    {
+        Http::fake([
+            'us.api.blizzard.com/data/wow/journal-instance/index?*' => Http::response([
+                'instances' => [
+                    ['id' => 1296, 'name' => 'Liberation of Undermine'],
+                ],
+            ], 200),
+        ]);
+
+        $result = $this->client()->getJournalInstanceIndex();
+
+        $this->assertSame(1296, $result['instances'][0]['id']);
+
+        Http::assertSent(function ($request) {
+            return str_contains($request->url(), 'journal-instance/index')
+                && str_contains($request->url(), 'namespace=static-us')
+                && str_contains($request->url(), 'locale=en_GB');
+        });
+    }
+
+    public function test_get_journal_instance_returns_null_on_404(): void
+    {
+        Http::fake([
+            'us.api.blizzard.com/data/wow/journal-instance/99999?*' => Http::response(null, 404),
+        ]);
+
+        $this->assertNull($this->client()->getJournalInstance(99999));
+    }
+
+    public function test_get_journal_instance_caches_within_ttl(): void
+    {
+        $callCount = 0;
+        Http::fake(function () use (&$callCount) {
+            $callCount++;
+
+            return Http::response(['id' => 1296, 'name' => 'X'], 200);
+        });
+
+        $client = $this->client();
+        $client->getJournalInstance(1296);
+        $client->getJournalInstance(1296);
+
+        $this->assertSame(1, $callCount);
+    }
+
+    public function test_get_journal_instance_media_returns_assets(): void
+    {
+        Http::fake([
+            'us.api.blizzard.com/data/wow/media/journal-instance/1296?*' => Http::response([
+                'assets' => [['key' => 'tile', 'value' => 'https://example/r.jpg']],
+            ], 200),
+        ]);
+
+        $result = $this->client()->getJournalInstanceMedia(1296);
+        $this->assertSame('https://example/r.jpg', $result['assets'][0]['value']);
+
+        Http::assertSent(fn ($req) => str_contains($req->url(), 'media/journal-instance/1296')
+            && str_contains($req->url(), 'namespace=static-us'));
+    }
+
+    public function test_get_journal_encounter_returns_creature_display(): void
+    {
+        Http::fake([
+            'us.api.blizzard.com/data/wow/journal-encounter/2902?*' => Http::response([
+                'id' => 2902,
+                'name' => 'Vexie',
+                'creature_display' => ['id' => 109501],
+            ], 200),
+        ]);
+
+        $result = $this->client()->getJournalEncounter(2902);
+        $this->assertSame(109501, $result['creature_display']['id']);
+    }
 }
