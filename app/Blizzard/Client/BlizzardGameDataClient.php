@@ -494,4 +494,119 @@ class BlizzardGameDataClient extends BlizzardClient
             return $response->json();
         });
     }
+
+    /**
+     * Fetch /data/wow/media/creature-display/{id} — boss portrait URL.
+     */
+    public function getCreatureDisplayMedia(int $id): ?array
+    {
+        $cacheKey = "blizzard:game-data:creature-display-media:{$this->region}:{$id}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+            $response = Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => "static-{$this->region}",
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl()}/data/wow/media/creature-display/{$id}");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
+
+    /**
+     * Fetch /data/wow/mythic-keystone/dungeon/index — list of all
+     * mythic-keystone dungeons (current expansion's pool only; older
+     * expansions' dungeons drop out of the index when their seasons retire).
+     */
+    public function getMythicKeystoneDungeonIndex(): ?array
+    {
+        $cacheKey = "blizzard:game-data:mk-dungeon-index:{$this->region}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return Cache::remember($cacheKey, $ttl, function (): ?array {
+            $response = Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => "dynamic-{$this->region}",
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl()}/data/wow/mythic-keystone/dungeon/index");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
+
+    /**
+     * Fetch /data/wow/mythic-keystone/dungeon/{id} — name, map id,
+     * keystone-upgrades. Note: this endpoint is in the **dynamic** namespace,
+     * unlike the journal-instance endpoints, because mythic-keystone dungeons
+     * rotate per season.
+     */
+    public function getMythicKeystoneDungeon(int $id): ?array
+    {
+        $cacheKey = "blizzard:game-data:mk-dungeon:{$this->region}:{$id}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+            $response = Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => "dynamic-{$this->region}",
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl()}/data/wow/mythic-keystone/dungeon/{$id}");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
+
+    /**
+     * Fetch /data/wow/mythic-keystone/season/{id} — gives the season's
+     * `dungeons: [{id, ...}]` list, used by the sync command to know which
+     * dungeons belong to the current season.
+     */
+    public function getMythicKeystoneSeason(int $id): ?array
+    {
+        $cacheKey = "blizzard:game-data:mk-season:{$this->region}:{$id}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+            $response = Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => "dynamic-{$this->region}",
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl()}/data/wow/mythic-keystone/season/{$id}");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
 }
