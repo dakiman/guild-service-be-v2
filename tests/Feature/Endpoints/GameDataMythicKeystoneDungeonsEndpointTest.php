@@ -47,23 +47,27 @@ class GameDataMythicKeystoneDungeonsEndpointTest extends TestCase
         $response = $this->getJson('/api/v1/game-data/mythic-keystone-dungeons?season=current');
 
         $response->assertOk();
-        $response->assertJsonCount(2, 'data.dungeons');
-        $response->assertJsonCount(2, 'data.affixes');
+        $response->assertJsonCount(2, 'dungeons');
 
         // Dungeons sorted by name ascending.
-        $response->assertJsonPath('data.dungeons.0.id', 503);
-        $response->assertJsonPath('data.dungeons.0.name', 'Ara-Kara, City of Echoes');
-        $response->assertJsonPath('data.dungeons.0.media_url', 'https://example/arak.jpg');
-        $response->assertJsonPath('data.dungeons.0.journal_instance_id', 1271);
+        $response->assertJsonPath('dungeons.0.id', 503);
+        $response->assertJsonPath('dungeons.0.name', 'Ara-Kara, City of Echoes');
+        $response->assertJsonPath('dungeons.0.media_url', 'https://example/arak.jpg');
+        $response->assertJsonPath('dungeons.0.journal_instance_id', 1271);
 
-        $response->assertJsonPath('data.dungeons.1.id', 504);
-        $response->assertJsonPath('data.dungeons.1.media_url', null);
-        $response->assertJsonPath('data.dungeons.1.journal_instance_id', null);
+        $response->assertJsonPath('dungeons.1.id', 504);
+        $response->assertJsonPath('dungeons.1.media_url', null);
+        $response->assertJsonPath('dungeons.1.journal_instance_id', null);
 
-        // Affixes sorted by id ascending.
-        $response->assertJsonPath('data.affixes.0.id', 9);
-        $response->assertJsonPath('data.affixes.0.name', 'Tyrannical');
-        $response->assertJsonPath('data.affixes.0.icon_url', 'https://example/affix-9.jpg');
+        // Affixes is a dictionary keyed by id (FE does O(1) lookup via affixes[id]).
+        $response->assertJsonPath('affixes.9.id', 9);
+        $response->assertJsonPath('affixes.9.name', 'Tyrannical');
+        $response->assertJsonPath('affixes.9.icon_url', 'https://example/affix-9.jpg');
+        $response->assertJsonPath('affixes.10.id', 10);
+        $response->assertJsonPath('affixes.10.name', 'Fortified');
+
+        // Season metadata: null today (deferred — see controller).
+        $response->assertJsonPath('season', null);
     }
 
     public function test_default_no_query_string_works(): void
@@ -73,7 +77,7 @@ class GameDataMythicKeystoneDungeonsEndpointTest extends TestCase
         $response = $this->getJson('/api/v1/game-data/mythic-keystone-dungeons');
 
         $response->assertOk();
-        $response->assertJsonCount(2, 'data.dungeons');
+        $response->assertJsonCount(2, 'dungeons');
     }
 
     public function test_response_carries_cache_control_header(): void
@@ -91,12 +95,17 @@ class GameDataMythicKeystoneDungeonsEndpointTest extends TestCase
         $response = $this->getJson('/api/v1/game-data/mythic-keystone-dungeons?season=current');
 
         $response->assertOk();
-        $response->assertExactJson([
-            'data' => [
-                'dungeons' => [],
-                'affixes' => [],
-            ],
-        ]);
+        // Top-level keys present with empty containers + null season. We don't
+        // use assertExactJson here because PHP json_decode normalizes the
+        // empty `{}` affixes dict to `[]`, hiding the JSON-level distinction.
+        $response->assertJsonStructure(['dungeons', 'affixes', 'season']);
+        $response->assertJsonCount(0, 'dungeons');
+        $response->assertJsonCount(0, 'affixes');
+        $response->assertJsonPath('season', null);
+
+        // Confirm affixes is encoded as a JSON object, not an array, even
+        // when empty — so the FE's `Record<number, ...>` typing is correct.
+        $this->assertStringContainsString('"affixes":{}', $response->getContent());
     }
 
     public function test_endpoint_is_public_no_auth(): void

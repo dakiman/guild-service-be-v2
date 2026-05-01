@@ -23,8 +23,9 @@ class GameDataController extends Controller
      * latest expansion (the row with the smallest `display_order` in
      * `game_data_expansions`). `expansion=all` returns every instance.
      *
-     * Response shape:
-     *   { data: [ { id, name, display_order, media_url, expansion: {...}, encounters: [...] }, ... ] }
+     * Response shape (no `data` envelope — matches the project convention
+     * documented in frontend/CLAUDE.md):
+     *   { instances: [ { id, name, display_order, media_url, expansion: {...}, encounters: [...] }, ... ] }
      *
      * Cache header per spec §2.6: `Cache-Control: public, max-age=3600`.
      */
@@ -45,7 +46,7 @@ class GameDataController extends Controller
             if ($current === null) {
                 // No expansion data yet — return an empty payload rather than
                 // an error so the FE can render an empty state cleanly.
-                return response()->json(['data' => []])
+                return response()->json(['instances' => []])
                     ->header('Cache-Control', 'public, max-age=3600');
             }
 
@@ -56,7 +57,7 @@ class GameDataController extends Controller
         $instances = $query->get();
 
         return response()->json([
-            'data' => RaidInstanceResource::collection($instances),
+            'instances' => RaidInstanceResource::collection($instances)->resolve(),
         ])->header('Cache-Control', 'public, max-age=3600');
     }
 
@@ -64,12 +65,17 @@ class GameDataController extends Controller
      * GET /api/v1/game-data/mythic-keystone-dungeons?season=current
      *
      * Returns the dungeons in the current season plus the season's affixes
-     * keyed by id. Season scoping today only supports `season=current` (per
-     * spec §2.3 — older seasons are deferred to a future season-selector slice);
-     * any other value is treated the same as `current`.
+     * as a dictionary keyed by id. Season scoping today only supports
+     * `season=current` (per spec §2.3 — older seasons are deferred to a future
+     * season-selector slice); any other value is treated the same as current.
      *
-     * Response shape:
-     *   { data: { dungeons: [...], affixes: [{ id, name, icon_url }, ...] } }
+     * Response shape (no `data` envelope; affixes is a dict keyed by id so the
+     * FE's `<AffixIcon :affixes="data.affixes" :affixId="..." />` can do an O(1)
+     * lookup without scanning):
+     *   { dungeons: [...], affixes: { "<id>": { id, name, icon_url }, ... }, season: null }
+     *
+     * `season` is null today — Blizzard's mythic-keystone/season endpoint exposes
+     * an id but no display name; populating this is deferred to a follow-up.
      *
      * Cache header per spec §2.6: `Cache-Control: public, max-age=3600`.
      */
@@ -86,11 +92,15 @@ class GameDataController extends Controller
             ->orderBy('id')
             ->get();
 
+        $affixDict = [];
+        foreach ($affixes as $affix) {
+            $affixDict[(int) $affix->id] = (new KeystoneAffixResource($affix))->resolve();
+        }
+
         return response()->json([
-            'data' => [
-                'dungeons' => MythicKeystoneDungeonResource::collection($dungeons),
-                'affixes' => KeystoneAffixResource::collection($affixes),
-            ],
+            'dungeons' => MythicKeystoneDungeonResource::collection($dungeons)->resolve(),
+            'affixes' => (object) $affixDict,
+            'season' => null,
         ])->header('Cache-Control', 'public, max-age=3600');
     }
 }

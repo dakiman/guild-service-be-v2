@@ -73,19 +73,19 @@ class GameDataRaidInstancesEndpointTest extends TestCase
         $response = $this->getJson('/api/v1/game-data/raid-instances');
 
         $response->assertOk();
-        $response->assertJsonCount(2, 'data'); // only the two TWW raids
+        $response->assertJsonCount(2, 'instances'); // only the two TWW raids
         // Ordered by display_order asc → Nerub-ar Palace (1) before Liberation of Undermine (5).
-        $response->assertJsonPath('data.0.id', 1273);
-        $response->assertJsonPath('data.1.id', 1296);
-        $response->assertJsonPath('data.1.name', 'Liberation of Undermine');
-        $response->assertJsonPath('data.1.media_url', 'https://example/lou.jpg');
-        $response->assertJsonPath('data.1.expansion.id', 1);
-        $response->assertJsonPath('data.1.expansion.name', 'The War Within');
-        $response->assertJsonCount(2, 'data.1.encounters');
-        $response->assertJsonPath('data.1.encounters.0.id', 2902);
-        $response->assertJsonPath('data.1.encounters.0.name', 'Vexie');
-        $response->assertJsonPath('data.1.encounters.0.creature_display_id', 109501);
-        $response->assertJsonPath('data.1.encounters.0.portrait_url', 'https://example/cd-109501.jpg');
+        $response->assertJsonPath('instances.0.id', 1273);
+        $response->assertJsonPath('instances.1.id', 1296);
+        $response->assertJsonPath('instances.1.name', 'Liberation of Undermine');
+        $response->assertJsonPath('instances.1.media_url', 'https://example/lou.jpg');
+        $response->assertJsonPath('instances.1.expansion.id', 1);
+        $response->assertJsonPath('instances.1.expansion.name', 'The War Within');
+        $response->assertJsonCount(2, 'instances.1.encounters');
+        $response->assertJsonPath('instances.1.encounters.0.id', 2902);
+        $response->assertJsonPath('instances.1.encounters.0.name', 'Vexie');
+        $response->assertJsonPath('instances.1.encounters.0.creature_display_id', 109501);
+        $response->assertJsonPath('instances.1.encounters.0.portrait_url', 'https://example/cd-109501.jpg');
     }
 
     public function test_expansion_current_explicit_matches_default(): void
@@ -95,8 +95,8 @@ class GameDataRaidInstancesEndpointTest extends TestCase
         $response = $this->getJson('/api/v1/game-data/raid-instances?expansion=current');
 
         $response->assertOk();
-        $response->assertJsonCount(2, 'data');
-        $response->assertJsonPath('data.0.id', 1273);
+        $response->assertJsonCount(2, 'instances');
+        $response->assertJsonPath('instances.0.id', 1273);
     }
 
     public function test_expansion_all_returns_every_expansion(): void
@@ -106,8 +106,8 @@ class GameDataRaidInstancesEndpointTest extends TestCase
         $response = $this->getJson('/api/v1/game-data/raid-instances?expansion=all');
 
         $response->assertOk();
-        $response->assertJsonCount(3, 'data');
-        $ids = collect($response->json('data'))->pluck('id')->all();
+        $response->assertJsonCount(3, 'instances');
+        $ids = collect($response->json('instances'))->pluck('id')->all();
         $this->assertContains(1207, $ids); // older Aberrus instance present
         $this->assertContains(1273, $ids);
         $this->assertContains(1296, $ids);
@@ -130,7 +130,7 @@ class GameDataRaidInstancesEndpointTest extends TestCase
         $response = $this->getJson('/api/v1/game-data/raid-instances');
 
         $response->assertOk();
-        $response->assertExactJson(['data' => []]);
+        $response->assertExactJson(['instances' => []]);
     }
 
     public function test_endpoint_is_public_no_auth(): void
@@ -151,7 +151,7 @@ class GameDataRaidInstancesEndpointTest extends TestCase
         $response = $this->getJson('/api/v1/game-data/raid-instances');
 
         $response->assertOk();
-        $response->assertExactJson(['data' => []]);
+        $response->assertExactJson(['instances' => []]);
         // Symfony normalizes Cache-Control directives alphabetically.
         $response->assertHeader('Cache-Control', 'max-age=3600, public');
     }
