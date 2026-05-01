@@ -121,7 +121,7 @@ class GameDataRaidInstancesEndpointTest extends TestCase
 
         $response->assertOk();
         // Symfony normalizes Cache-Control directives alphabetically.
-$response->assertHeader('Cache-Control', 'max-age=3600, public');
+        $response->assertHeader('Cache-Control', 'max-age=3600, public');
     }
 
     public function test_returns_empty_data_when_no_instances_seeded(): void
@@ -153,6 +153,6 @@ $response->assertHeader('Cache-Control', 'max-age=3600, public');
         $response->assertOk();
         $response->assertExactJson(['data' => []]);
         // Symfony normalizes Cache-Control directives alphabetically.
-$response->assertHeader('Cache-Control', 'max-age=3600, public');
+        $response->assertHeader('Cache-Control', 'max-age=3600, public');
     }
 }
