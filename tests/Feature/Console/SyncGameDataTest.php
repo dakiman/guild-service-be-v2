@@ -431,7 +431,8 @@ class SyncGameDataTest extends TestCase
         $mock->method('getJournalInstance')->willReturn([
             'id' => 1296,
             'name' => 'Liberation of Undermine',
-            'expansion' => ['id' => 1],
+            'category' => ['type' => 'RAID'],
+            'expansion' => ['id' => 514],
             'order_index' => 5,
             'encounters' => [
                 ['id' => 2902, 'name' => 'Vexie'],
@@ -560,7 +561,8 @@ class SyncGameDataTest extends TestCase
         $mock->method('getJournalInstance')->willReturn([
             'id' => 1296,
             'name' => 'Liberation of Undermine',
-            'expansion' => ['id' => 1],
+            'category' => ['type' => 'RAID'],
+            'expansion' => ['id' => 514],
             'order_index' => 5,
             'encounters' => [['id' => 2902, 'name' => 'Vexie']],
         ]);
@@ -614,7 +616,8 @@ class SyncGameDataTest extends TestCase
             return [
                 'id' => $id,
                 'name' => 'Other raid',
-                'expansion' => ['id' => 1],
+                'category' => ['type' => 'RAID'],
+                'expansion' => ['id' => 514],
                 'order_index' => 0,
                 'encounters' => [],
             ];

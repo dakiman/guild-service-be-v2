@@ -23,6 +23,7 @@ class GameDataRaidInstanceMapperTest extends TestCase
             detail: [
                 'id' => 1296,
                 'name' => 'Liberation of Undermine',
+                'category' => ['type' => 'RAID'],
                 'expansion' => ['id' => 514], // Blizzard's journal-expansion id for TWW → maps to our id 1
                 'order_index' => 5,
                 'encounters' => [
@@ -49,6 +50,7 @@ class GameDataRaidInstanceMapperTest extends TestCase
             detail: [
                 'id' => 9999,
                 'name' => 'Unknown Tier',
+                'category' => ['type' => 'RAID'],
                 'expansion' => ['id' => 505],
             ],
             mediaUrl: null,
@@ -61,7 +63,7 @@ class GameDataRaidInstanceMapperTest extends TestCase
     public function test_handles_missing_optional_fields(): void
     {
         $dto = $this->mapper->mapDetail(
-            detail: ['id' => 9, 'name' => 'Bare Raid'],
+            detail: ['id' => 9, 'name' => 'Bare Raid', 'category' => ['type' => 'RAID']],
             mediaUrl: null,
         );
 
@@ -70,6 +72,34 @@ class GameDataRaidInstanceMapperTest extends TestCase
         $this->assertSame(0, $dto->displayOrder);
         $this->assertNull($dto->mediaUrl);
         $this->assertSame([], $dto->encounterIds);
+    }
+
+    public function test_dungeon_category_returns_null_dto(): void
+    {
+        // Blizzard's journal-instance/index returns RAIDs and DUNGEONs together;
+        // dungeons are persisted via GameDataMythicKeystoneDungeonMapper instead.
+        $dto = $this->mapper->mapDetail(
+            detail: [
+                'id' => 1184,
+                'name' => 'Mists of Tirna Scithe',
+                'category' => ['type' => 'DUNGEON'],
+                'expansion' => ['id' => 499],
+            ],
+            mediaUrl: null,
+        );
+
+        $this->assertNull($dto);
+    }
+
+    public function test_missing_category_returns_null_dto(): void
+    {
+        // Defensive: malformed Blizzard response without a category should not crash.
+        $dto = $this->mapper->mapDetail(
+            detail: ['id' => 1, 'name' => 'No Category'],
+            mediaUrl: null,
+        );
+
+        $this->assertNull($dto);
     }
 
     public function test_null_input_returns_null_dto(): void

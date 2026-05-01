@@ -52,6 +52,14 @@ class GameDataRaidInstanceMapper
             return null;
         }
 
+        // Blizzard's /data/wow/journal-instance/index returns RAIDs *and* DUNGEONs
+        // under the same endpoint. We only persist RAIDs here; dungeons are
+        // handled by GameDataMythicKeystoneDungeonMapper from the
+        // /data/wow/mythic-keystone/dungeon endpoints.
+        if (($detail['category']['type'] ?? null) !== 'RAID') {
+            return null;
+        }
+
         $encounterIds = [];
         foreach ($detail['encounters'] ?? [] as $entry) {
             if (isset($entry['id'])) {
