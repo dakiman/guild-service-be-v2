@@ -721,12 +721,18 @@ class SyncGameData extends Command
         foreach ($specIds as $specId) {
             try {
                 $specDetail = $client->getPlayableSpecialization($specId);
-                $treeId = isset($specDetail['talent_tree']['id'])
-                    ? (int) $specDetail['talent_tree']['id']
+                // Spec detail carries `spec_talent_tree.key.href` like
+                //   /data/wow/talent-tree/852/playable-specialization/261
+                // — there is no top-level `talent_tree.id`. Parse the tree id
+                // out of the href, mirroring CharacterSpecializationMapper's
+                // pattern.
+                $href = $specDetail['spec_talent_tree']['key']['href'] ?? null;
+                $treeId = (is_string($href) && preg_match('#/talent-tree/(\d+)#', $href, $m) === 1)
+                    ? (int) $m[1]
                     : null;
 
                 if ($treeId === null) {
-                    Log::warning("Talent-tree sync skipped specId={$specId}: no talent_tree on spec detail");
+                    Log::warning("Talent-tree sync skipped specId={$specId}: no spec_talent_tree href on spec detail");
                     $skipped++;
                     $bar->advance();
 
