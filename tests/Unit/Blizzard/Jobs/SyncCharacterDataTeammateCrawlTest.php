@@ -98,23 +98,26 @@ final class SyncCharacterDataTeammateCrawlTest extends TestCase
         $reflection->invoke($job, $gameDataClient, $seed);
     }
 
-    public function test_crawl_disabled_dispatches_only_seed(): void
+    public function test_crawl_disabled_short_circuits_dispatch(): void
     {
         Config::set('blizzard.sync.teammate_crawl_enabled', false);
+        $seed = $this->makeSeedWithRun();
         Bus::fake();
 
-        SyncCharacterData::dispatch('eu', 'the-maelstrom', 'seedy', SyncDepth::Full);
+        $this->invokeCrawl(new SyncCharacterData('eu', 'the-maelstrom', 'seedy', SyncDepth::Full), $seed);
 
-        Bus::assertDispatchedTimes(SyncCharacterData::class, 1);
+        Bus::assertNotDispatched(SyncCharacterData::class);
     }
 
     public function test_seed_at_max_depth_does_not_fan_out(): void
     {
+        Config::set('blizzard.crawl.max_depth', 1);
+        $seed = $this->makeSeedWithRun();
         Bus::fake();
 
-        SyncCharacterData::dispatch('eu', 'the-maelstrom', 'seedy', SyncDepth::Full, null, 1);
+        $this->invokeCrawl(new SyncCharacterData('eu', 'the-maelstrom', 'seedy', SyncDepth::Full, null, 1), $seed);
 
-        Bus::assertDispatchedTimes(SyncCharacterData::class, 1);
+        Bus::assertNotDispatched(SyncCharacterData::class);
     }
 
     public function test_recently_synced_teammate_is_skipped(): void

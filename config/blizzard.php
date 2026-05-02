@@ -88,8 +88,8 @@ return [
     | teammates. `max_depth` = 0 disables fan-out (only the seed syncs).
     | `max_depth` = 1 dispatches one sync per direct teammate. Higher values
     | are clamped to 2 in the dispatch path; production should not exceed 1.
-    | `recent_threshold` (seconds) skips teammates whose `synced_at` is fresher
-    | than this window — same scale as the longer slice staleness thresholds.
+    | `recent_threshold` (seconds) skips teammates whose `updated_at` is fresher
+    | than this window (same column `Character::isStale()` consults).
     */
 
     'crawl' => [
