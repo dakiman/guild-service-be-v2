@@ -611,6 +611,39 @@ class BlizzardGameDataClient extends BlizzardClient
     }
 
     /**
+     * Fetch /data/wow/realm/index — per-region realm list (the same names a
+     * player sees in WoW's character-select). Lives in the dynamic-{region}
+     * namespace because realm population/status is dynamic data.
+     *
+     * Index entries carry only `{key, name, id, slug}` — no is_tournament /
+     * type / category. Filtering tournament/PTR realms would require per-realm
+     * fan-out (~250 calls/region); not worth it for the autocomplete use case.
+     */
+    public function getRealmIndex(): ?array
+    {
+        $cacheKey = "blizzard:game-data:realm-index:{$this->region}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return Cache::remember($cacheKey, $ttl, function (): ?array {
+            $response = Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => "dynamic-{$this->region}",
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl()}/data/wow/realm/index");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
+
+    /**
      * Fetch /data/wow/keystone-affix/index — the universe of keystone affixes.
      */
     public function getKeystoneAffixIndex(): ?array

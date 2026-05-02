@@ -11,6 +11,7 @@ use App\Models\GameDataExpansion;
 use App\Models\GameDataKeystoneAffix;
 use App\Models\GameDataMythicKeystoneDungeon;
 use App\Models\GameDataRaidInstance;
+use App\Services\RealmIndexService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -101,6 +102,25 @@ class GameDataController extends Controller
             'dungeons' => MythicKeystoneDungeonResource::collection($dungeons)->resolve(),
             'affixes' => (object) $affixDict,
             'season' => null,
+        ])->header('Cache-Control', 'public, max-age=3600');
+    }
+
+    /**
+     * GET /api/v1/game-data/realms
+     *
+     * Aggregated realm list across all configured regions for the homepage
+     * realm autocomplete. Each entry: {slug, name, region}; display name is
+     * slug-derived (no per-region locale handling).
+     *
+     * Long-cacheable (`Cache-Control: public, max-age=3600`); per-region
+     * Blizzard responses are themselves cached inside BlizzardGameDataClient
+     * for 7 days, so a cold call hits Blizzard 4× then warm calls are pure
+     * cache reads.
+     */
+    public function realms(RealmIndexService $service): JsonResponse
+    {
+        return response()->json([
+            'realms' => $service->aggregate(),
         ])->header('Cache-Control', 'public, max-age=3600');
     }
 }
