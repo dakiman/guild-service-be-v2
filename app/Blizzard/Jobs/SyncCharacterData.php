@@ -67,8 +67,12 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         public readonly string $name,
         public readonly SyncDepth $depth = SyncDepth::Standard,
         public readonly ?int $userId = null,
+        public readonly int $crawlDepth = 0,
     ) {
-        $this->onQueue('blizzard-user-sync');
+        // Crawled teammate jobs (crawlDepth > 0) land on the lowest-priority queue
+        // so they cannot starve user-initiated lookups. Seed (crawlDepth=0) keeps
+        // the existing user-sync queue assignment.
+        $this->onQueue($crawlDepth > 0 ? 'blizzard-background' : 'blizzard-user-sync');
     }
 
     public function uniqueId(): string
@@ -237,6 +241,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $this->syncReputations($client, $reputationMapper, $character);
             $this->syncCollections($client, $mountMapper, $petMapper, $toyMapper, $character);
             $this->syncAchievements($client, $achievementMapper, $character);
+            $this->dispatchTeammateCrawl($gameDataClient, $character);
         }
     }
 
@@ -729,6 +734,115 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         } catch (Throwable $e) {
             Log::warning('Failed to sync achievements for character', [
                 'character' => "{$this->name}-{$this->realm}-{$this->region}",
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Recursive fan-out: dispatch a Standard-depth sync for each Mythic+
+     * teammate of the seed we just synced. Gated on
+     * BLIZZARD_SYNC_TEAMMATE_CRAWL_ENABLED, capped by BLIZZARD_CRAWL_MAX_DEPTH
+     * (hard-clamped to 2), and skips teammates whose updated_at is within
+     * BLIZZARD_CRAWL_RECENT_THRESHOLD seconds.
+     *
+     * Runs at the end of handle() — after every slice has committed — so
+     * a dispatch failure here never rolls back persisted seed data.
+     */
+    private function dispatchTeammateCrawl(
+        BlizzardGameDataClient $gameDataClient,
+        Character $character,
+    ): void {
+        if (! config('blizzard.sync.teammate_crawl_enabled')) {
+            return;
+        }
+
+        $maxDepth = (int) config('blizzard.crawl.max_depth', 1);
+        // Hard ceiling: never honor max_depth > 2 even if env says so.
+        $maxDepth = min($maxDepth, 2);
+
+        if ($this->crawlDepth >= $maxDepth) {
+            return;
+        }
+
+        try {
+            $season = $gameDataClient->getCurrentMythicPlusSeason();
+
+            $rows = DB::table('dungeon_run_members')
+                ->join('dungeon_runs', 'dungeon_runs.id', '=', 'dungeon_run_members.dungeon_run_id')
+                ->where('dungeon_runs.season', $season)
+                ->whereIn('dungeon_runs.id', function ($q) use ($character, $season) {
+                    $q->select('dungeon_run_id')
+                        ->from('dungeon_run_members')
+                        ->where('character_id', $character->id)
+                        ->whereIn('dungeon_run_id', function ($q2) use ($season) {
+                            $q2->select('id')->from('dungeon_runs')->where('season', $season);
+                        });
+                })
+                ->select(
+                    'dungeon_run_members.character_name',
+                    'dungeon_run_members.character_realm',
+                    'dungeon_run_members.character_region',
+                )
+                ->get();
+
+            $threshold = (int) config('blizzard.crawl.recent_threshold', 21600);
+            $cutoff = now()->subSeconds($threshold);
+            $seen = [];
+            $dispatched = 0;
+
+            foreach ($rows as $row) {
+                $name = strtolower((string) $row->character_name);
+                $realm = (string) $row->character_realm;
+                $region = (string) $row->character_region;
+                $key = "{$region}:{$realm}:{$name}";
+
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+
+                // Skip the seed itself.
+                if ($name === strtolower($this->name)
+                    && $realm === $this->realm
+                    && $region === $this->region) {
+                    continue;
+                }
+
+                // Defensive — pivot is NOT NULL on all three identity cols.
+                if ($name === '' || $realm === '' || $region === '') {
+                    continue;
+                }
+
+                // Skip if a Character row exists and is fresher than the threshold.
+                // Character has no synced_at column; isStale() consults updated_at,
+                // so we use updated_at as the freshness signal here too.
+                $existing = Character::byIdentity($name, $realm, $region)->first();
+                if ($existing && $existing->updated_at && $existing->updated_at->greaterThan($cutoff)) {
+                    continue;
+                }
+
+                self::dispatch(
+                    $region,
+                    $realm,
+                    $name,
+                    SyncDepth::Standard,
+                    null,
+                    $this->crawlDepth + 1,
+                );
+                $dispatched++;
+            }
+
+            Log::info('Teammate crawl dispatched', [
+                'seed' => "{$this->name}-{$this->realm}-{$this->region}",
+                'seed_crawl_depth' => $this->crawlDepth,
+                'teammates_dispatched' => $dispatched,
+                'teammates_skipped_fresh' => count($seen) - $dispatched,
+            ]);
+        } catch (Throwable $e) {
+            Log::warning('Failed to dispatch teammate crawl', [
+                'seed' => "{$this->name}-{$this->realm}-{$this->region}",
+                'crawl_depth' => $this->crawlDepth,
                 'error' => $e->getMessage(),
             ]);
         }
