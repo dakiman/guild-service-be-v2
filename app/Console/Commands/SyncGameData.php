@@ -13,6 +13,7 @@ use App\Blizzard\Mappers\GameDataMountMapper;
 use App\Blizzard\Mappers\GameDataMythicKeystoneDungeonMapper;
 use App\Blizzard\Mappers\GameDataRaidEncounterMapper;
 use App\Blizzard\Mappers\GameDataRaidInstanceMapper;
+use App\Blizzard\Mappers\GameDataTalentTreeMapper;
 use App\Blizzard\Mappers\GameDataTitleMapper;
 use App\Models\GameDataAchievement;
 use App\Models\GameDataAchievementCategory;
@@ -22,6 +23,7 @@ use App\Models\GameDataMount;
 use App\Models\GameDataMythicKeystoneDungeon;
 use App\Models\GameDataRaidEncounter;
 use App\Models\GameDataRaidInstance;
+use App\Models\GameDataTalentTree;
 use App\Models\GameDataTitle;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -30,9 +32,9 @@ use Throwable;
 
 class SyncGameData extends Command
 {
-    protected $signature = 'blizzard:sync-game-data {resource? : factions|titles|mounts|achievements|pve; omit for all}';
+    protected $signature = 'blizzard:sync-game-data {resource? : factions|titles|mounts|achievements|pve|talent-trees; omit for all}';
 
-    protected $description = 'Sync static reference data (factions/titles/mounts/achievements/pve) from Blizzard Game Data API into game_data_* tables';
+    protected $description = 'Sync static reference data (factions/titles/mounts/achievements/pve/talent-trees) from Blizzard Game Data API into game_data_* tables';
 
     private const ACHIEVEMENT_CHUNK_SIZE = 500;
 
@@ -47,11 +49,12 @@ class SyncGameData extends Command
         GameDataRaidEncounterMapper $raidEncounterMapper,
         GameDataMythicKeystoneDungeonMapper $dungeonMapper,
         GameDataKeystoneAffixMapper $affixMapper,
+        GameDataTalentTreeMapper $talentTreeMapper,
     ): int {
         $resource = $this->argument('resource');
 
         $resources = $resource === null
-            ? ['factions', 'titles', 'mounts', 'achievements', 'pve']
+            ? ['factions', 'titles', 'mounts', 'achievements', 'pve', 'talent-trees']
             : [$resource];
 
         foreach ($resources as $r) {
@@ -61,6 +64,7 @@ class SyncGameData extends Command
                 'mounts' => $this->syncMounts($client, $mountMapper),
                 'achievements' => $this->syncAchievements($client, $achievementCategoryMapper, $achievementMapper),
                 'pve' => $this->syncPve($client, $raidInstanceMapper, $raidEncounterMapper, $dungeonMapper, $affixMapper),
+                'talent-trees' => $this->syncTalentTrees($client, $talentTreeMapper),
                 default => $this->error("Unknown resource: {$r}") || self::FAILURE,
             };
         }
@@ -674,5 +678,91 @@ class SyncGameData extends Command
         $bar->finish();
         $this->newLine();
         $this->info("Keystone affixes synced: {$upserted} upserted, {$skipped} skipped.");
+    }
+
+    /**
+     * Sync the talent-tree topology table. For each character spec id, read the
+     * spec's detail to find its talent_tree id, then fetch /data/wow/talent-tree/
+     * {treeId}/playable-specialization/{specId}, run it through the mapper, and
+     * upsert one row keyed by (tree_id, spec_id).
+     *
+     * Per-pair failure tolerance: log + skip on 404 / thrown error; do not
+     * abort the rest of the sync.
+     */
+    private function syncTalentTrees(
+        BlizzardGameDataClient $client,
+        GameDataTalentTreeMapper $mapper,
+    ): void {
+        $this->info('Syncing talent trees...');
+
+        $index = $client->getPlayableSpecializationIndex();
+        if ($index === null) {
+            $this->warn('Playable-specialization index returned null (404). Skipping talent trees.');
+
+            return;
+        }
+
+        $specs = $index['character_specializations'] ?? [];
+        $specIds = [];
+        foreach ($specs as $entry) {
+            if (isset($entry['id'])) {
+                $specIds[] = (int) $entry['id'];
+            }
+        }
+
+        $this->info('Index returned '.count($specIds).' character spec IDs.');
+
+        $bar = $this->output->createProgressBar(count($specIds));
+        $bar->start();
+
+        $upserted = 0;
+        $skipped = 0;
+
+        foreach ($specIds as $specId) {
+            try {
+                $specDetail = $client->getPlayableSpecialization($specId);
+                $treeId = isset($specDetail['talent_tree']['id'])
+                    ? (int) $specDetail['talent_tree']['id']
+                    : null;
+
+                if ($treeId === null) {
+                    Log::warning("Talent-tree sync skipped specId={$specId}: no talent_tree on spec detail");
+                    $skipped++;
+                    $bar->advance();
+
+                    continue;
+                }
+
+                $treeRaw = $client->getTalentTree($treeId, $specId);
+                $dto = $mapper->mapDetail($treeRaw);
+                if ($dto === null) {
+                    Log::warning("Talent-tree sync skipped specId={$specId} treeId={$treeId}: mapper returned null");
+                    $skipped++;
+                    $bar->advance();
+
+                    continue;
+                }
+
+                DB::transaction(function () use ($dto, &$upserted) {
+                    GameDataTalentTree::updateOrCreate(
+                        ['tree_id' => $dto->treeId, 'spec_id' => $dto->specId],
+                        [
+                            'name' => $dto->name,
+                            'tree' => $dto->tree,
+                            'synced_at' => now(),
+                        ],
+                    );
+                    $upserted++;
+                });
+            } catch (Throwable $e) {
+                Log::warning("Talent-tree sync skipped specId={$specId}: ".$e->getMessage());
+                $skipped++;
+            }
+            $bar->advance();
+        }
+
+        $bar->finish();
+        $this->newLine();
+        $this->info("Talent trees synced: {$upserted} upserted, {$skipped} skipped.");
     }
 }

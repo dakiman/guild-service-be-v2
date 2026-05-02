@@ -723,4 +723,62 @@ class BlizzardGameDataClient extends BlizzardClient
             return $response->json();
         });
     }
+
+    /**
+     * Fetch /data/wow/playable-specialization/index in the static-{region}
+     * namespace. Returns {character_specializations: [{id, key:{href}, name}], ...}.
+     * Cached aggressively because the index only changes on patches.
+     */
+    public function getPlayableSpecializationIndex(): ?array
+    {
+        $cacheKey = "blizzard:game-data:playable-specialization-index:{$this->region}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return Cache::remember($cacheKey, $ttl, function (): ?array {
+            $response = Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => "static-{$this->region}",
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl()}/data/wow/playable-specialization/index");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
+
+    /**
+     * Fetch /data/wow/playable-specialization/{specId}. Returns the spec detail,
+     * which includes `talent_tree.id` — the value we feed back into getTalentTree().
+     * Lives in static-{region} namespace.
+     */
+    public function getPlayableSpecialization(int $specId): ?array
+    {
+        $cacheKey = "blizzard:game-data:playable-specialization:{$this->region}:{$specId}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return Cache::remember($cacheKey, $ttl, function () use ($specId): ?array {
+            $response = Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => "static-{$this->region}",
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->get("{$this->baseUrl()}/data/wow/playable-specialization/{$specId}");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
 }
