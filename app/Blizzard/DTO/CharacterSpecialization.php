@@ -14,6 +14,8 @@ final readonly class CharacterSpecialization
      */
     public function __construct(
         public string $activeSpecialization,
+        public ?int $activeSpecializationId = null,
+        public ?int $talentTreeId = null,
         public array $classTalents = [],
         public array $specTalents = [],
         public array $heroTalents = [],

@@ -29,6 +29,8 @@ class CharacterResource extends JsonResource
             'average_item_level' => $this->average_item_level,
             'equipped_item_level' => $this->equipped_item_level,
             'active_specialization' => $this->active_specialization,
+            'active_specialization_id' => $this->active_specialization_id,
+            'talent_tree_id' => $this->talent_tree_id,
             'talent_loadout_code' => $this->talent_loadout_code,
             'mythic_plus_rating' => $this->mythic_plus_rating !== null
                 ? [

@@ -56,6 +56,8 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
                 'average_item_level',
                 'equipped_item_level',
                 'active_specialization',
+                'active_specialization_id',
+                'talent_tree_id',
                 'talent_loadout_code',
                 'media' => ['avatar', 'inset', 'main'],
                 'talents' => ['class', 'spec', 'hero', 'pvp'],

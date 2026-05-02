@@ -183,6 +183,8 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 $regionGameData = new BlizzardGameDataClient($tokenManager, $this->region);
                 $spec = $specMapper->map($response['specializations'], $regionGameData);
                 $characterData['active_specialization'] = $spec->activeSpecialization;
+                $characterData['active_specialization_id'] = $spec->activeSpecializationId;
+                $characterData['talent_tree_id'] = $spec->talentTreeId;
                 $characterData['talent_loadout_code'] = $spec->talentLoadoutCode;
                 $characterData['talents'] = [
                     'class' => $spec->classTalents,

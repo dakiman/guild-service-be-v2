@@ -28,6 +28,7 @@ class CharacterSpecializationMapper
         $heroTalents = [];
         $pvpTalents = [];
         $loadoutCode = null;
+        $treeId = null;
 
         foreach ($specs as $spec) {
             $specId = isset($spec['specialization']['id']) ? (int) $spec['specialization']['id'] : null;
@@ -62,6 +63,8 @@ class CharacterSpecializationMapper
 
         return new CharacterSpecialization(
             activeSpecialization: $activeSpec,
+            activeSpecializationId: $activeSpecId,
+            talentTreeId: $treeId,
             classTalents: $classTalents,
             specTalents: $specTalents,
             heroTalents: $heroTalents,

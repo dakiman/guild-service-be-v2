@@ -35,6 +35,8 @@ class Character extends Model
         'mythic_plus_rating_by_spec',
         'mythic_plus_rating_color',
         'active_specialization',
+        'active_specialization_id',
+        'talent_tree_id',
         'talent_loadout_code',
         'media',
         'talents',
@@ -78,6 +80,8 @@ class Character extends Model
             'level' => 'integer',
             'mythic_plus_rating' => 'integer',
             'num_of_searches' => 'integer',
+            'active_specialization_id' => 'integer',
+            'talent_tree_id' => 'integer',
         ];
     }
 
