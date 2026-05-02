@@ -24,16 +24,16 @@ class DungeonRunResource extends JsonResource
             'completed_timestamp' => $this->completed_timestamp,
             'is_completed_on_time' => $this->is_completed_on_time,
             'affixes' => $this->affixes,
-            'members' => $this->whenLoaded('members', function () {
-                return $this->members->map(function ($member) {
+            'members' => $this->whenLoaded('memberEntries', function () {
+                return $this->memberEntries->map(function ($member) {
                     return [
-                        'character_id' => $member->pivot->character_id,
-                        'character_name' => $member->pivot->character_name,
-                        'character_realm' => $member->pivot->character_realm,
-                        'character_region' => $member->pivot->character_region,
-                        'spec_id' => $member->pivot->spec_id,
-                        'spec_name' => $member->pivot->spec_name,
-                        'equipped_item_level' => $member->pivot->equipped_item_level,
+                        'character_id' => $member->character_id,
+                        'character_name' => $member->character_name,
+                        'character_realm' => $member->character_realm,
+                        'character_region' => $member->character_region,
+                        'spec_id' => $member->spec_id,
+                        'spec_name' => $member->spec_name,
+                        'equipped_item_level' => $member->equipped_item_level,
                     ];
                 });
             }),
