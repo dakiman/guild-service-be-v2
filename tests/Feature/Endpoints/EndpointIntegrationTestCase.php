@@ -26,6 +26,30 @@ abstract class EndpointIntegrationTestCase extends TestCase
     ];
 
     /**
+     * One character per WoW retail class, sourced from the EU Mythic+ Season MN-1
+     * leaderboard rosters (raider.io /api/v1/mythic-plus/runs?season=season-mn-1&region=eu).
+     * ASCII-only names; all are top-tier players with rich data (gear, raids, M+, talents).
+     * Fingerprint regenerated 2026-05-01 — see backend/docs/test-characters.md.
+     *
+     * @var array<string, array{region: string, realm: string, name: string}>
+     */
+    public const RETAIL_CHARACTERS_BY_CLASS = [
+        'death_knight' => ['region' => 'eu', 'realm' => 'draenor', 'name' => 'Shuhdkk'],
+        'demon_hunter' => ['region' => 'eu', 'realm' => 'tarren-mill', 'name' => 'Speculation'],
+        'druid' => ['region' => 'eu', 'realm' => 'archimonde', 'name' => 'Turbogronil'],
+        'evoker' => ['region' => 'eu', 'realm' => 'kazzak', 'name' => 'Nqhover'],
+        'hunter' => ['region' => 'eu', 'realm' => 'blackhand', 'name' => 'Dpxhunt'],
+        'mage' => ['region' => 'eu', 'realm' => 'sylvanas', 'name' => 'Khaelt'],
+        'monk' => ['region' => 'eu', 'realm' => 'kazzak', 'name' => 'Maitaimonk'],
+        'paladin' => ['region' => 'eu', 'realm' => 'draenor', 'name' => 'Poznasme'],
+        'priest' => ['region' => 'eu', 'realm' => 'kazzak', 'name' => 'Boreasxo'],
+        'rogue' => ['region' => 'eu', 'realm' => 'draenor', 'name' => 'Tomelvis'],
+        'shaman' => ['region' => 'eu', 'realm' => 'stormreaver', 'name' => 'Fauni'],
+        'warlock' => ['region' => 'eu', 'realm' => 'kazzak', 'name' => 'Dendeeb'],
+        'warrior' => ['region' => 'eu', 'realm' => 'ravencrest', 'name' => 'Farover'],
+    ];
+
+    /**
      * @var array<string, array{region: string, realm: string, name: string}>
      */
     public const CLASSIC_CHARACTERS = [
