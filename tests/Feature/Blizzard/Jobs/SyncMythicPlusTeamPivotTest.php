@@ -164,7 +164,7 @@ class SyncMythicPlusTeamPivotTest extends TestCase
         $this->assertSame($known->id, (int) $row->character_id);
     }
 
-    public function test_persistRunTeam_replaces_within_run_via_delete_missing(): void
+    public function test_persist_run_team_replaces_within_run_via_delete_missing(): void
     {
         Character::factory()->create([
             'name' => 'syncedchar',
