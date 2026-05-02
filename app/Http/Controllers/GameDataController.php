@@ -11,6 +11,7 @@ use App\Models\GameDataExpansion;
 use App\Models\GameDataKeystoneAffix;
 use App\Models\GameDataMythicKeystoneDungeon;
 use App\Models\GameDataRaidInstance;
+use App\Models\GameDataTalentTree;
 use App\Services\RealmIndexService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -102,6 +103,35 @@ class GameDataController extends Controller
             'dungeons' => MythicKeystoneDungeonResource::collection($dungeons)->resolve(),
             'affixes' => (object) $affixDict,
             'season' => null,
+        ])->header('Cache-Control', 'public, max-age=3600');
+    }
+
+    /**
+     * GET /api/v1/game-data/talent-trees/{treeId}/{specId}
+     *
+     * Public, long-cacheable. Returns the topology JSONB blob for a single
+     * (tree_id, spec_id) pair. 404 when the row doesn't exist — FE treats
+     * that as "not yet synced for this spec" and falls back to the
+     * picked-only flat-list rendering.
+     *
+     * Cache header per game-data convention: `Cache-Control: public, max-age=3600`.
+     */
+    public function talentTree(int $treeId, int $specId): JsonResponse
+    {
+        $row = GameDataTalentTree::query()
+            ->where('tree_id', $treeId)
+            ->where('spec_id', $specId)
+            ->first();
+
+        if ($row === null) {
+            return response()->json(['message' => 'Talent tree not synced for this spec yet.'], 404);
+        }
+
+        return response()->json([
+            'tree_id' => (int) $row->tree_id,
+            'spec_id' => (int) $row->spec_id,
+            'name' => (string) $row->name,
+            'tree' => $row->tree,
         ])->header('Cache-Control', 'public, max-age=3600');
     }
 

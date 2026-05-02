@@ -85,6 +85,9 @@ Route::get('/game-data/raid-instances', [GameDataController::class, 'raidInstanc
     ->name('game-data.raid-instances');
 Route::get('/game-data/mythic-keystone-dungeons', [GameDataController::class, 'mythicKeystoneDungeons'])
     ->name('game-data.mythic-keystone-dungeons');
+Route::get('/game-data/talent-trees/{treeId}/{specId}', [GameDataController::class, 'talentTree'])
+    ->whereNumber(['treeId', 'specId'])
+    ->name('game-data.talent-tree');
 Route::get('/game-data/realms', [GameDataController::class, 'realms'])
     ->name('game-data.realms');
 
