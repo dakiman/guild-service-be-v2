@@ -77,6 +77,24 @@ return [
         'pvp_enabled' => (bool) env('BLIZZARD_SYNC_PVP_ENABLED', true),
         'professions_enabled' => (bool) env('BLIZZARD_SYNC_PROFESSIONS_ENABLED', true),
         'raids_enabled' => (bool) env('BLIZZARD_SYNC_RAIDS_ENABLED', true),
+        'teammate_crawl_enabled' => (bool) env('BLIZZARD_SYNC_TEAMMATE_CRAWL_ENABLED', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Teammate Crawl
+    |--------------------------------------------------------------------------
+    | Recursive fan-out from a Full-sync seed character to its Mythic+
+    | teammates. `max_depth` = 0 disables fan-out (only the seed syncs).
+    | `max_depth` = 1 dispatches one sync per direct teammate. Higher values
+    | are clamped to 2 in the dispatch path; production should not exceed 1.
+    | `recent_threshold` (seconds) skips teammates whose `synced_at` is fresher
+    | than this window — same scale as the longer slice staleness thresholds.
+    */
+
+    'crawl' => [
+        'max_depth' => (int) env('BLIZZARD_CRAWL_MAX_DEPTH', 1),
+        'recent_threshold' => (int) env('BLIZZARD_CRAWL_RECENT_THRESHOLD', 21600),
     ],
 
     /*
