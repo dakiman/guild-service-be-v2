@@ -211,9 +211,10 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         // (BlizzardIdentity::realm via Str::slug) so character-side and
         // user-lookup-side writes converge on a single guild row.
         if ($profile->guildName && $profile->guildRealm) {
+            $guildName = BlizzardIdentity::realm($profile->guildName);
             $guild = Guild::firstOrCreate(
                 [
-                    'name' => BlizzardIdentity::realm($profile->guildName),
+                    'name' => $guildName,
                     'realm' => $profile->guildRealm,
                     'region' => $this->region,
                 ],
@@ -223,6 +224,16 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             );
 
             $character->update(['guild_id' => $guild->id]);
+
+            // Newly-discovered guild gets a SyncGuildData dispatch so the
+            // shell row populates profile + roster instead of waiting for the
+            // user's first click. ShouldBeUnique on SyncGuildData dedupes
+            // bursts when many characters in the same guild are synced
+            // concurrently. Only fires on first creation; later visits go
+            // through the normal stale-and-refresh path.
+            if ($guild->wasRecentlyCreated) {
+                SyncGuildData::dispatch($this->region, $profile->guildRealm, $guildName);
+            }
         }
 
         // Set user_id if provided
@@ -826,7 +837,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                     $region,
                     $realm,
                     $name,
-                    SyncDepth::Standard,
+                    SyncDepth::Full,
                     null,
                     $this->crawlDepth + 1,
                 );

@@ -146,7 +146,7 @@ final class SyncCharacterDataTeammateCrawlTest extends TestCase
         );
     }
 
-    public function test_stale_teammate_is_dispatched_at_standard_and_depth_plus_one(): void
+    public function test_stale_teammate_is_dispatched_at_full_and_depth_plus_one(): void
     {
         $seed = $this->makeSeedWithRun();
 
@@ -169,7 +169,7 @@ final class SyncCharacterDataTeammateCrawlTest extends TestCase
         Bus::assertDispatched(
             SyncCharacterData::class,
             fn ($d) => $d->crawlDepth === 1
-                && $d->depth === SyncDepth::Standard
+                && $d->depth === SyncDepth::Full
                 && $d->queue === 'blizzard-background',
         );
     }
