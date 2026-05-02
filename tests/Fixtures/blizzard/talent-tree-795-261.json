@@ -1,0 +1,91 @@
+{
+  "id": 795,
+  "name": "Subtlety Talents",
+  "playable_specialization": { "id": 261, "name": "Subtlety" },
+  "class_talent_nodes": [
+    {
+      "id": 100001,
+      "node_type": { "type": "SINGLE" },
+      "display_row": 0,
+      "display_col": 4,
+      "unlocks": [100002],
+      "ranks": [
+        { "tooltip": { "talent": { "id": 1, "name": "Stealth" }, "spell_tooltip": { "spell": { "id": 1784, "name": "Stealth" }}}}
+      ]
+    },
+    {
+      "id": 100002,
+      "node_type": { "type": "CHOICE" },
+      "display_row": 1,
+      "display_col": 4,
+      "unlocks": [],
+      "ranks": [
+        { "choice_of_tooltips": [
+          { "talent": { "id": 11, "name": "Shadowstep" }, "spell_tooltip": { "spell": { "id": 36554, "name": "Shadowstep" }}},
+          { "talent": { "id": 12, "name": "Grappling Hook" }, "spell_tooltip": { "spell": { "id": 195457, "name": "Grappling Hook" }}}
+        ]}
+      ]
+    }
+  ],
+  "spec_talent_nodes": [
+    {
+      "id": 200001,
+      "node_type": { "type": "SINGLE" },
+      "display_row": 0,
+      "display_col": 2,
+      "unlocks": [200002, 200003],
+      "ranks": [
+        { "tooltip": { "talent": { "id": 21, "name": "Shadow Dance" }, "spell_tooltip": { "spell": { "id": 51713, "name": "Shadow Dance" }}}},
+        { "tooltip": { "talent": { "id": 21, "name": "Shadow Dance" }, "spell_tooltip": { "spell": { "id": 51713, "name": "Shadow Dance" }}}}
+      ]
+    },
+    {
+      "id": 200002,
+      "node_type": { "type": "SINGLE" },
+      "display_row": 1,
+      "display_col": 2,
+      "unlocks": [],
+      "ranks": [
+        { "tooltip": { "talent": { "id": 22, "name": "Premeditation" }, "spell_tooltip": { "spell": { "id": 343160, "name": "Premeditation" }}}}
+      ]
+    },
+    {
+      "id": 200003,
+      "node_type": { "type": "SINGLE" },
+      "display_row": 1,
+      "display_col": 3,
+      "unlocks": [],
+      "ranks": [
+        { "tooltip": { "talent": { "id": 23, "name": "Shadow Focus" }, "spell_tooltip": { "spell": { "id": 108209, "name": "Shadow Focus" }}}}
+      ]
+    }
+  ],
+  "hero_talent_trees": [
+    {
+      "id": 31,
+      "name": "Deathstalker",
+      "hero_talent_nodes": [
+        {
+          "id": 300001,
+          "node_type": { "type": "SINGLE" },
+          "display_row": 0,
+          "display_col": 1,
+          "unlocks": [300002],
+          "ranks": [
+            { "tooltip": { "talent": { "id": 31, "name": "Deathstalker's Mark" }, "spell_tooltip": { "spell": { "id": 457925, "name": "Deathstalker's Mark" }}}}
+          ]
+        },
+        {
+          "id": 300002,
+          "node_type": { "type": "SINGLE" },
+          "display_row": 1,
+          "display_col": 1,
+          "unlocks": [],
+          "ranks": [
+            { "tooltip": { "talent": { "id": 32, "name": "Ethereal Cloak" }, "spell_tooltip": { "spell": { "id": 457911, "name": "Ethereal Cloak" }}}}
+          ]
+        }
+      ]
+    }
+  ]
+}
