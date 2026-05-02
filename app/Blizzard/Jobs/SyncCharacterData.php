@@ -257,54 +257,107 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 $this->realm, $this->name, $season
             );
             $runs = $mapper->map($seasonData ?? [], $season);
-
-            foreach ($runs as $run) {
-                $dungeonRun = DungeonRun::updateOrCreate(
-                    [
-                        'season' => $run->season,
-                        'dungeon_id' => $run->dungeonId,
-                        'completed_timestamp' => $run->completedTimestamp,
-                    ],
-                    [
-                        'dungeon_name' => $run->dungeonName,
-                        'keystone_level' => $run->keystoneLevel,
-                        'duration' => $run->duration,
-                        'is_completed_on_time' => $run->isCompletedOnTime,
-                        'affixes' => $run->affixes,
-                    ],
-                );
-
-                // Sync team members to dungeon run
-                foreach ($run->team as $member) {
-                    $memberCharacter = Character::where('name', strtolower($member['name']))
-                        ->where('realm', $member['realm'])
-                        ->where('region', $this->region)
-                        ->first();
-
-                    $dungeonRun->members()->syncWithoutDetaching([
-                        $memberCharacter?->id ?? $character->id => [
-                            'character_name' => $member['name'],
-                            'character_realm' => $member['realm'],
-                            'character_region' => $this->region,
-                            'spec_name' => $member['specialization'],
-                            'equipped_item_level' => $member['equipped_item_level'],
-                        ],
-                    ]);
-                }
-            }
-
             $rating = $ratingMapper->map($base, $seasonData, $this->name, $this->realm);
-            $character->update([
-                'mythic_plus_rating' => $rating->rating,
-                'mythic_plus_rating_color' => $rating->color,
-                'mythic_plus_rating_by_spec' => $rating->perSpec ?: null,
-                'mythics_synced_at' => now(),
-            ]);
+
+            DB::transaction(function () use ($runs, $rating, $character) {
+                foreach ($runs as $run) {
+                    $dungeonRun = DungeonRun::updateOrCreate(
+                        [
+                            'season' => $run->season,
+                            'dungeon_id' => $run->dungeonId,
+                            'completed_timestamp' => $run->completedTimestamp,
+                        ],
+                        [
+                            'dungeon_name' => $run->dungeonName,
+                            'keystone_level' => $run->keystoneLevel,
+                            'duration' => $run->duration,
+                            'is_completed_on_time' => $run->isCompletedOnTime,
+                            'affixes' => $run->affixes,
+                        ],
+                    );
+
+                    $this->persistRunTeam($dungeonRun, $run->team);
+                }
+
+                $character->update([
+                    'mythic_plus_rating' => $rating->rating,
+                    'mythic_plus_rating_color' => $rating->color,
+                    'mythic_plus_rating_by_spec' => $rating->perSpec ?: null,
+                    'mythics_synced_at' => now(),
+                ]);
+            });
         } catch (Throwable $e) {
             Log::warning('Failed to sync mythic+ data for character', [
                 'character' => "{$this->name}-{$this->realm}-{$this->region}",
                 'error' => $e->getMessage(),
             ]);
+        }
+    }
+
+    /**
+     * Persist a dungeon run's team via the query builder, bypassing
+     * BelongsToMany::syncWithoutDetaching because the pivot's unique key is
+     * (dungeon_run_id, character_name, character_realm, character_region) — not
+     * character_id. Eloquent's pivot upsert is character_id-keyed, which silently
+     * collapses unknown teammates onto a single row and trips SQLSTATE[23505]
+     * when two synced characters share a run with an unknown member.
+     *
+     * Public so the regression tests in SyncMythicPlusTeamPivotTest can drive it.
+     *
+     * @param  array<int, array{name: string, realm: string, specialization: ?string, equipped_item_level: ?int}>  $team
+     */
+    public function persistRunTeam(DungeonRun $run, array $team): void
+    {
+        $now = now();
+        $keep = [];
+
+        foreach ($team as $member) {
+            $resolvedId = Character::query()
+                ->where('name', strtolower($member['name']))
+                ->where('realm', $member['realm'])
+                ->where('region', $this->region)
+                ->where('game_version', 'retail')
+                ->value('id');
+
+            DB::table('dungeon_run_members')->updateOrInsert(
+                [
+                    'dungeon_run_id' => $run->id,
+                    'character_name' => $member['name'],
+                    'character_realm' => $member['realm'],
+                    'character_region' => $this->region,
+                ],
+                [
+                    'character_id' => $resolvedId,
+                    'spec_name' => $member['specialization'],
+                    'equipped_item_level' => $member['equipped_item_level'],
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ],
+            );
+
+            $keep[] = [
+                'name' => $member['name'],
+                'realm' => $member['realm'],
+                'region' => $this->region,
+            ];
+        }
+
+        $existing = DB::table('dungeon_run_members')
+            ->where('dungeon_run_id', $run->id)
+            ->get(['id', 'character_name', 'character_realm', 'character_region']);
+
+        $keepKey = fn (string $n, string $r, string $reg) => "{$n}|{$r}|{$reg}";
+        $keepSet = collect($keep)
+            ->mapWithKeys(fn ($k) => [$keepKey($k['name'], $k['realm'], $k['region']) => true])
+            ->all();
+
+        $toDelete = $existing
+            ->reject(fn ($row) => isset($keepSet[$keepKey($row->character_name, $row->character_realm, $row->character_region)]))
+            ->pluck('id')
+            ->all();
+
+        if ($toDelete !== []) {
+            DB::table('dungeon_run_members')->whereIn('id', $toDelete)->delete();
         }
     }
 
