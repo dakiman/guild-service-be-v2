@@ -174,6 +174,30 @@ class Character extends Model
             ->limit($limit);
     }
 
+    public function scopeNameSearch(Builder $query, string $q, int $limit = 8): Builder
+    {
+        $needle = strtolower(trim($q));
+
+        if (strlen($needle) < 2) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        // Names are stored canonical-lowercase (see BlizzardIdentity::name); plain LIKE is case-correct on Postgres.
+        $prefix = $needle . '%';
+        $substring = '%' . $needle . '%';
+
+        return $query
+            ->where('game_version', 'retail')
+            ->where(function ($q) use ($prefix, $substring) {
+                $q->where('name', 'LIKE', $prefix)
+                    ->orWhere('name', 'LIKE', $substring);
+            })
+            ->orderByRaw('CASE WHEN name LIKE ? THEN 1 ELSE 2 END', [$prefix])
+            ->orderByRaw('num_of_searches DESC NULLS LAST')
+            ->orderBy('name')
+            ->limit($limit);
+    }
+
     public function scopeRecruiting(Builder $query): Builder
     {
         return $query->where('recruitment', true);
