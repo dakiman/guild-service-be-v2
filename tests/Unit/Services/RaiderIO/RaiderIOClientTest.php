@@ -16,7 +16,7 @@ class RaiderIOClientTest extends TestCase
     {
         $fixture = json_decode(file_get_contents(base_path('tests/fixtures/raiderio/top-guilds-eu.json')), true);
         Http::fake([
-            'raider.io/api/v1/guilds/static-raid-rankings*' => Http::response($fixture, 200),
+            'raider.io/api/v1/raiding/raid-rankings*' => Http::response($fixture, 200),
         ]);
 
         $client = app(RaiderIOClient::class);
