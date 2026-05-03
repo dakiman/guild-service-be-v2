@@ -109,6 +109,7 @@ class RaiderIOClient
                     sleep($retryAfter);
                 }
                 $attempt429++;
+
                 continue;
             }
 
@@ -118,6 +119,7 @@ class RaiderIOClient
                     sleep($sleep);
                 }
                 $attempt5xx++;
+
                 continue;
             }
 

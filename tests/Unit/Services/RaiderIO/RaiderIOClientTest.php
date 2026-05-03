@@ -41,10 +41,11 @@ class RaiderIOClientTest extends TestCase
             // raider.io page param starts at 0
             parse_str(parse_url((string) $request->url(), PHP_URL_QUERY) ?? '', $q);
             $page = (int) ($q['page'] ?? 0);
+
             return Http::response($page === 0 ? $page0 : $page1, 200);
         });
 
-        $client = app(\App\Services\RaiderIO\RaiderIOClient::class);
+        $client = app(RaiderIOClient::class);
 
         $refs = iterator_to_array($client->topGuilds('eu', 23), preserve_keys: false);
 
@@ -62,10 +63,11 @@ class RaiderIOClientTest extends TestCase
             if ($calls === 1) {
                 return Http::response('', 429, ['Retry-After' => '0']);
             }
+
             return Http::response($fixture, 200);
         });
 
-        $client = app(\App\Services\RaiderIO\RaiderIOClient::class);
+        $client = app(RaiderIOClient::class);
 
         $refs = iterator_to_array($client->topGuilds('eu', 3), preserve_keys: false);
 
@@ -77,9 +79,9 @@ class RaiderIOClientTest extends TestCase
     {
         Http::fake(fn () => Http::response('', 429, ['Retry-After' => '0']));
 
-        $client = app(\App\Services\RaiderIO\RaiderIOClient::class);
+        $client = app(RaiderIOClient::class);
 
-        $this->expectException(\App\Services\RaiderIO\Exceptions\RaiderIOException::class);
+        $this->expectException(RaiderIOException::class);
         iterator_to_array($client->topGuilds('eu', 3), preserve_keys: false);
     }
 
@@ -90,12 +92,13 @@ class RaiderIOClientTest extends TestCase
         $calls = 0;
         Http::fake(function () use ($fixture, &$calls) {
             $calls++;
+
             return $calls < 3
                 ? Http::response('', 502)
                 : Http::response($fixture, 200);
         });
 
-        $client = app(\App\Services\RaiderIO\RaiderIOClient::class);
+        $client = app(RaiderIOClient::class);
 
         $refs = iterator_to_array($client->topGuilds('eu', 3), preserve_keys: false);
 
@@ -107,9 +110,9 @@ class RaiderIOClientTest extends TestCase
     {
         Http::fake(fn () => Http::response('', 502));
 
-        $client = app(\App\Services\RaiderIO\RaiderIOClient::class);
+        $client = app(RaiderIOClient::class);
 
-        $this->expectException(\App\Services\RaiderIO\Exceptions\RaiderIOException::class);
+        $this->expectException(RaiderIOException::class);
         iterator_to_array($client->topGuilds('eu', 3), preserve_keys: false);
     }
 }
