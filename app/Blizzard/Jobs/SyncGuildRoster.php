@@ -7,6 +7,7 @@ namespace App\Blizzard\Jobs;
 use App\Blizzard\Middleware\BlizzardHealthCheck;
 use App\Blizzard\Middleware\BlizzardRateLimiter;
 use App\Enums\SyncDepth;
+use App\Models\Character;
 use App\Models\Guild;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -14,6 +15,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -51,9 +53,11 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
     {
         $minLevel = (int) config('blizzard.min_level_for_character_lookup', 70);
 
-        $jobs = $this->guild->members()
+        $members = $this->guild->members()
             ->where('level', '>=', $minLevel)
-            ->get()
+            ->get();
+
+        $shallowJobs = $members
             ->map(fn ($member) => new SyncCharacterData(
                 region: $this->guild->region,
                 realm: $member->realm,
@@ -62,12 +66,36 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
             ))
             ->all();
 
-        if (! empty($jobs)) {
-            Bus::batch($jobs)
+        if (! empty($shallowJobs)) {
+            Bus::batch($shallowJobs)
                 ->allowFailures()
                 ->name("guild-roster-sync:{$this->guild->id}")
                 ->onQueue('blizzard-roster-sync')
                 ->dispatch();
+        }
+
+        if (config('raiderio.dispatch_roster_character_syncs', false)) {
+            $this->dispatchFullSyncsForMembers($members);
+        }
+    }
+
+    protected function dispatchFullSyncsForMembers(Collection $members): void
+    {
+        $ttl = (int) config('raiderio.character_resync_ttl', 12 * 3600);
+        $cutoff = now()->subSeconds($ttl);
+
+        foreach ($members as $member) {
+            $existing = Character::byIdentity($member->name, $member->realm, $this->guild->region)->first();
+            if ($existing !== null && $existing->updated_at !== null && $existing->updated_at->isAfter($cutoff)) {
+                continue;
+            }
+
+            SyncCharacterData::dispatch(
+                region: $this->guild->region,
+                realm: $member->realm,
+                name: $member->name,
+                depth: SyncDepth::Full,
+            );
         }
     }
 
