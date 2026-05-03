@@ -129,6 +129,23 @@ class RaiderIOClient
         }
     }
 
+    /**
+     * Fetch raider.io's mythic-plus static-data for a given expansion.
+     * Returns the raw decoded JSON. Used for icon backfill — Blizzard does
+     * not expose dungeon media URLs, but raider.io does at
+     * `seasons[].dungeons[].icon_url` keyed by `challenge_mode_id`.
+     *
+     * @return array<string, mixed>
+     */
+    public function mythicPlusStaticData(int $expansionId): array
+    {
+        $response = $this->get('/mythic-plus/static-data', [
+            'expansion_id' => $expansionId,
+        ]);
+
+        return $response->json() ?? [];
+    }
+
     protected function currentRaidSlug(): string
     {
         // raider.io's raid-rankings endpoint keys raids by tier slug (e.g. "tier-mn-1"
