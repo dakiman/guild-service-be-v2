@@ -1,19 +1,43 @@
 {
-  "raidSlug": "the-voidspire",
-  "rankings": {
-    "rankedGuilds": [
-      {
-        "rank": 1,
-        "guild": { "name": "Echo", "realm": { "name": "Tarren Mill", "slug": "tarren-mill" }, "region": { "slug": "eu" } }
-      },
-      {
-        "rank": 2,
-        "guild": { "name": "Method", "realm": { "name": "Twisting Nether", "slug": "twisting-nether" }, "region": { "slug": "eu" } }
-      },
-      {
-        "rank": 3,
-        "guild": { "name": "Pieces", "realm": { "name": "Stormscale", "slug": "stormscale" }, "region": { "slug": "eu" } }
+  "raidRankings": [
+    {
+      "rank": 1,
+      "guild": {
+        "name": "Echo",
+        "realm": {
+          "name": "Tarren Mill",
+          "slug": "tarren-mill"
+        },
+        "region": {
+          "slug": "eu"
+        }
       }
-    ]
-  }
+    },
+    {
+      "rank": 2,
+      "guild": {
+        "name": "Method",
+        "realm": {
+          "name": "Twisting Nether",
+          "slug": "twisting-nether"
+        },
+        "region": {
+          "slug": "eu"
+        }
+      }
+    },
+    {
+      "rank": 3,
+      "guild": {
+        "name": "FatSharkYes",
+        "realm": {
+          "name": "Kazzak",
+          "slug": "kazzak"
+        },
+        "region": {
+          "slug": "eu"
+        }
+      }
+    }
+  ]
 }

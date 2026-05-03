@@ -16,6 +16,8 @@ return [
 
     'season' => env('RAIDERIO_SEED_SEASON', 'season-mn-1'),
 
+    'current_raid_tier' => env('RAIDERIO_CURRENT_RAID_TIER', 'tier-mn-1'),
+
     'phase' => [
         'guilds_per_region' => (int) env('RAIDERIO_SEED_GUILDS_PER_REGION', 10),
     ],

@@ -29,7 +29,7 @@ class RaiderIOClientTest extends TestCase
         $this->assertSame('tarren-mill', $refs[0]->realmSlug);
         $this->assertSame('Echo', $refs[0]->name);
         $this->assertSame('Method', $refs[1]->name);
-        $this->assertSame('Pieces', $refs[2]->name);
+        $this->assertSame('FatSharkYes', $refs[2]->name);
     }
 
     public function test_top_guilds_paginates_when_limit_exceeds_page_size(): void

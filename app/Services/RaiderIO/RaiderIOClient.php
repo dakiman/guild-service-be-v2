@@ -27,7 +27,7 @@ class RaiderIOClient
         $yielded = 0;
 
         for ($page = 0; $page < $pagesNeeded && $yielded < $limit; $page++) {
-            $response = $this->get('/guilds/static-raid-rankings', [
+            $response = $this->get('/raiding/raid-rankings', [
                 'raid' => $raid,
                 'difficulty' => 'mythic',
                 'region' => $region,
@@ -35,7 +35,7 @@ class RaiderIOClient
                 'page' => $page,
             ]);
 
-            $rows = $response->json('rankings.rankedGuilds') ?? [];
+            $rows = $response->json('raidRankings') ?? [];
 
             if ($rows === []) {
                 return;
@@ -59,8 +59,9 @@ class RaiderIOClient
 
     protected function currentRaidSlug(): string
     {
-        // Phase 1: hardcode current Midnight raid that drives mythic rankings.
-        return 'the-voidspire';
+        // raider.io's raid-rankings endpoint keys raids by tier slug (e.g. "tier-mn-1"
+        // for Midnight tier 1), NOT by raid instance slug. Bump per tier rotation.
+        return (string) config('raiderio.current_raid_tier', 'tier-mn-1');
     }
 
     protected function http(): PendingRequest
