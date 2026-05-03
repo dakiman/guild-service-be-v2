@@ -14,7 +14,7 @@ class GameDataTitleMapperTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->mapper = new GameDataTitleMapper();
+        $this->mapper = new GameDataTitleMapper;
     }
 
     public function test_extracts_gender_specific_strings_when_present(): void

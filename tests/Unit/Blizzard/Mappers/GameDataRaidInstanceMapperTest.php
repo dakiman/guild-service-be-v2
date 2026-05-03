@@ -14,7 +14,7 @@ class GameDataRaidInstanceMapperTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->mapper = new GameDataRaidInstanceMapper();
+        $this->mapper = new GameDataRaidInstanceMapper;
     }
 
     public function test_maps_full_detail_response(): void

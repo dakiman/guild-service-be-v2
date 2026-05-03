@@ -1,0 +1,244 @@
+{
+    "raidRankings": [
+        {
+            "rank": 1,
+            "guild": {
+                "name": "G1",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 2,
+            "guild": {
+                "name": "G2",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 3,
+            "guild": {
+                "name": "G3",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 4,
+            "guild": {
+                "name": "G4",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 5,
+            "guild": {
+                "name": "G5",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 6,
+            "guild": {
+                "name": "G6",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 7,
+            "guild": {
+                "name": "G7",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 8,
+            "guild": {
+                "name": "G8",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 9,
+            "guild": {
+                "name": "G9",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 10,
+            "guild": {
+                "name": "G10",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 11,
+            "guild": {
+                "name": "G11",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 12,
+            "guild": {
+                "name": "G12",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 13,
+            "guild": {
+                "name": "G13",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 14,
+            "guild": {
+                "name": "G14",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 15,
+            "guild": {
+                "name": "G15",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 16,
+            "guild": {
+                "name": "G16",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 17,
+            "guild": {
+                "name": "G17",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 18,
+            "guild": {
+                "name": "G18",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 19,
+            "guild": {
+                "name": "G19",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 20,
+            "guild": {
+                "name": "G20",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        }
+    ]
+}

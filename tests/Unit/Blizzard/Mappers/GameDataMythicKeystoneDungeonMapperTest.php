@@ -14,7 +14,7 @@ class GameDataMythicKeystoneDungeonMapperTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->mapper = new GameDataMythicKeystoneDungeonMapper();
+        $this->mapper = new GameDataMythicKeystoneDungeonMapper;
     }
 
     public function test_maps_full_detail_response(): void

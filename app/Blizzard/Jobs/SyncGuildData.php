@@ -37,6 +37,10 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
         public readonly string $region,
         public readonly string $realm,
         public readonly string $name,
+        // Non-readonly with property-default so unserialize of old-shape queued
+        // jobs gets `false` rather than "uninitialized" — see SyncCharacterData
+        // forceTeammateCrawl for the same pattern + rationale.
+        public bool $forceRosterFanout = false,
     ) {
         $this->onQueue('blizzard-user-sync');
     }
@@ -130,10 +134,12 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
         // Update roster sync timestamp
         $guild->update(['roster_synced_at' => now()]);
 
-        // Dispatch roster sync if roster is stale
-        if ($guild->isRosterStale()) {
-            SyncGuildRoster::dispatch($guild);
-        }
+        // Dispatch the roster job — drives Shallow Bus::batch for all members AND
+        // (when raiderio.dispatch_roster_character_syncs is true) Full per-member
+        // SyncCharacterData fan-out. Previously gated on isRosterStale(), which is
+        // always false here because we just set roster_synced_at to now() — the
+        // gate was dead code, and the roster job never fired.
+        SyncGuildRoster::dispatch($guild, $this->forceRosterFanout);
     }
 
     public function failed(Throwable $exception): void

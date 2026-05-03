@@ -14,7 +14,7 @@ class GameDataAchievementMapperTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->mapper = new GameDataAchievementMapper();
+        $this->mapper = new GameDataAchievementMapper;
     }
 
     public function test_maps_full_achievement(): void

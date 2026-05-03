@@ -36,7 +36,11 @@ class CharacterController extends Controller
                 ->header('Retry-After', '5');
         }
 
-        $result->load(['guild', 'dungeonRuns.memberEntries', 'pvpBrackets', 'professions.expansion', 'raidEncounterKills', 'titles.gameData', 'reputations.faction.expansion', 'mounts.gameData', 'pets', 'toys']);
+        $relations = ['guild', 'dungeonRuns.memberEntries', 'pvpBrackets', 'professions.expansion', 'raidEncounterKills', 'titles.gameData', 'reputations.faction.expansion', 'mounts.gameData', 'toys'];
+        if (config('blizzard.sync.pets_enabled')) {
+            $relations[] = 'pets';
+        }
+        $result->load($relations);
 
         $response = (new CharacterResource($result))->response($request);
 

@@ -68,6 +68,12 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         public readonly SyncDepth $depth = SyncDepth::Standard,
         public readonly ?int $userId = null,
         public readonly int $crawlDepth = 0,
+        // Non-readonly with a property-declaration default: when an OLD-shape job
+        // (queued before this param existed) is unserialized into the new class,
+        // PHP applies the default `false` rather than throwing "uninitialized".
+        // Readonly props can't have property-declaration defaults — only constructor
+        // defaults — and constructors don't run on unserialize.
+        public bool $forceTeammateCrawl = false,
     ) {
         // Crawled teammate jobs (crawlDepth > 0) land on the lowest-priority queue
         // so they cannot starve user-initiated lookups. Seed (crawlDepth=0) keeps
@@ -674,25 +680,28 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                     ->when($keepMounts !== [], fn ($q) => $q->whereNotIn('mount_id', $keepMounts))
                     ->delete();
 
-                $keepPets = [];
-                foreach ($petDtos as $dto) {
-                    CharacterPet::updateOrCreate(
-                        ['character_id' => $character->id, 'pet_id' => $dto->petId],
-                        [
-                            'species_id' => $dto->speciesId,
-                            'name' => $dto->name,
-                            'level' => $dto->level,
-                            'breed_id' => $dto->breedId,
-                            'quality' => $dto->quality,
-                            'is_favorite' => $dto->isFavorite,
-                            'creature_display_id' => $dto->creatureDisplayId,
-                        ],
-                    );
-                    $keepPets[] = $dto->petId;
+                // Feature-gated: pets carry significant disk cost; off by default.
+                if (config('blizzard.sync.pets_enabled')) {
+                    $keepPets = [];
+                    foreach ($petDtos as $dto) {
+                        CharacterPet::updateOrCreate(
+                            ['character_id' => $character->id, 'pet_id' => $dto->petId],
+                            [
+                                'species_id' => $dto->speciesId,
+                                'name' => $dto->name,
+                                'level' => $dto->level,
+                                'breed_id' => $dto->breedId,
+                                'quality' => $dto->quality,
+                                'is_favorite' => $dto->isFavorite,
+                                'creature_display_id' => $dto->creatureDisplayId,
+                            ],
+                        );
+                        $keepPets[] = $dto->petId;
+                    }
+                    CharacterPet::where('character_id', $character->id)
+                        ->when($keepPets !== [], fn ($q) => $q->whereNotIn('pet_id', $keepPets))
+                        ->delete();
                 }
-                CharacterPet::where('character_id', $character->id)
-                    ->when($keepPets !== [], fn ($q) => $q->whereNotIn('pet_id', $keepPets))
-                    ->delete();
 
                 $keepToys = [];
                 foreach ($toyDtos as $dto) {
@@ -721,6 +730,11 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         CharacterAchievementMapper $mapper,
         Character $character,
     ): void {
+        // Feature-gated: achievements are expensive (≈70% of DB); off by default.
+        if (! config('blizzard.sync.achievements_enabled')) {
+            return;
+        }
+
         try {
             $data = $client->getCharacterAchievements($this->realm, $this->name);
             $dtos = $mapper->map($data);
@@ -772,7 +786,11 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         BlizzardGameDataClient $gameDataClient,
         Character $character,
     ): void {
-        if (! config('blizzard.sync.teammate_crawl_enabled')) {
+        // Phase 2: a seed-originated job (forceTeammateCrawl=true) overrides the
+        // global kill-switch. Crawled descendants get forceTeammateCrawl=false at
+        // the self::dispatch call below — the override does not recurse, so nested
+        // crawls fall back to the global config flag.
+        if (! $this->forceTeammateCrawl && ! config('blizzard.sync.teammate_crawl_enabled')) {
             return;
         }
 

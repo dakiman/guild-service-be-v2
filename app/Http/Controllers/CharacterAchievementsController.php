@@ -32,6 +32,19 @@ class CharacterAchievementsController extends Controller
      */
     public function index(string $region, string $realm, string $name, Request $request): JsonResponse
     {
+        // Feature-gated: return empty payload when achievements sync is disabled.
+        // Preserves response shape so bookmarked URLs do not crash the FE.
+        if (! config('blizzard.sync.achievements_enabled')) {
+            return response()->json([
+                'data' => [],
+                'meta' => [
+                    'total' => 0,
+                    'per_page' => (int) $request->input('per_page', self::DEFAULT_PER_PAGE),
+                    'next_cursor' => null,
+                ],
+            ]);
+        }
+
         $realm = BlizzardIdentity::realm($realm);
         $name = BlizzardIdentity::name($name);
 

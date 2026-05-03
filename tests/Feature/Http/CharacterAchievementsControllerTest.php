@@ -21,6 +21,11 @@ class CharacterAchievementsControllerTest extends TestCase
     {
         parent::setUp();
 
+        // Achievements slice is feature-flagged off by default. These pre-existing
+        // tests exercise the happy-path response shape and assume the endpoint
+        // queries the DB normally — enable the flag for this suite.
+        config()->set('blizzard.sync.achievements_enabled', true);
+
         GameDataAchievementCategory::create(['id' => 1, 'name' => 'General', 'parent_id' => null, 'display_order' => 0]);
         GameDataAchievementCategory::create(['id' => 2, 'name' => 'Quests', 'parent_id' => 1, 'display_order' => 1]);
         GameDataAchievementCategory::create(['id' => 81, 'name' => 'Feats of Strength', 'parent_id' => null, 'display_order' => 99]);
