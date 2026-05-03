@@ -51,4 +51,35 @@ class RaiderIOClientTest extends TestCase
         $this->assertCount(23, $refs);
         Http::assertSentCount(2);
     }
+
+    public function test_top_guilds_retries_once_after_429_with_retry_after(): void
+    {
+        $fixture = json_decode(file_get_contents(base_path('tests/fixtures/raiderio/top-guilds-eu.json')), true);
+
+        $calls = 0;
+        Http::fake(function () use ($fixture, &$calls) {
+            $calls++;
+            if ($calls === 1) {
+                return Http::response('', 429, ['Retry-After' => '0']);
+            }
+            return Http::response($fixture, 200);
+        });
+
+        $client = app(\App\Services\RaiderIO\RaiderIOClient::class);
+
+        $refs = iterator_to_array($client->topGuilds('eu', 3), preserve_keys: false);
+
+        $this->assertCount(3, $refs);
+        $this->assertSame(2, $calls);
+    }
+
+    public function test_top_guilds_throws_after_second_429(): void
+    {
+        Http::fake(fn () => Http::response('', 429, ['Retry-After' => '0']));
+
+        $client = app(\App\Services\RaiderIO\RaiderIOClient::class);
+
+        $this->expectException(\App\Services\RaiderIO\Exceptions\RaiderIOException::class);
+        iterator_to_array($client->topGuilds('eu', 3), preserve_keys: false);
+    }
 }
