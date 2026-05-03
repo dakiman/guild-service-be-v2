@@ -82,4 +82,34 @@ class RaiderIOClientTest extends TestCase
         $this->expectException(\App\Services\RaiderIO\Exceptions\RaiderIOException::class);
         iterator_to_array($client->topGuilds('eu', 3), preserve_keys: false);
     }
+
+    public function test_top_guilds_retries_on_5xx_up_to_three_times(): void
+    {
+        $fixture = json_decode(file_get_contents(base_path('tests/fixtures/raiderio/top-guilds-eu.json')), true);
+
+        $calls = 0;
+        Http::fake(function () use ($fixture, &$calls) {
+            $calls++;
+            return $calls < 3
+                ? Http::response('', 502)
+                : Http::response($fixture, 200);
+        });
+
+        $client = app(\App\Services\RaiderIO\RaiderIOClient::class);
+
+        $refs = iterator_to_array($client->topGuilds('eu', 3), preserve_keys: false);
+
+        $this->assertCount(3, $refs);
+        $this->assertSame(3, $calls);
+    }
+
+    public function test_top_guilds_throws_after_3_5xx_failures(): void
+    {
+        Http::fake(fn () => Http::response('', 502));
+
+        $client = app(\App\Services\RaiderIO\RaiderIOClient::class);
+
+        $this->expectException(\App\Services\RaiderIO\Exceptions\RaiderIOException::class);
+        iterator_to_array($client->topGuilds('eu', 3), preserve_keys: false);
+    }
 }
