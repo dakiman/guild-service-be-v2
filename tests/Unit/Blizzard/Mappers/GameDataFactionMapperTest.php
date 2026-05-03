@@ -14,10 +14,10 @@ class GameDataFactionMapperTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->mapper = new GameDataFactionMapper();
+        $this->mapper = new GameDataFactionMapper;
     }
 
-    public function test_maps_a_known_TWW_faction_to_expansion_1(): void
+    public function test_maps_a_known_tw_w_faction_to_expansion_1(): void
     {
         $dto = $this->mapper->mapDetail([
             'id' => 2570,

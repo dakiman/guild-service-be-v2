@@ -14,7 +14,7 @@ class GameDataAchievementCategoryMapperTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->mapper = new GameDataAchievementCategoryMapper();
+        $this->mapper = new GameDataAchievementCategoryMapper;
     }
 
     public function test_maps_category_with_parent(): void

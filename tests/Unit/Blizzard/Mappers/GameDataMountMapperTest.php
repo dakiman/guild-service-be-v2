@@ -14,7 +14,7 @@ class GameDataMountMapperTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->mapper = new GameDataMountMapper();
+        $this->mapper = new GameDataMountMapper;
     }
 
     public function test_maps_full_detail_response(): void

@@ -42,6 +42,7 @@ class RealmIndexService
                     'region' => $region,
                     'error' => $e->getMessage(),
                 ]);
+
                 continue;
             }
 

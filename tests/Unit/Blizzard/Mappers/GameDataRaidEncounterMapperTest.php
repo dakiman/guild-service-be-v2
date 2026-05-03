@@ -14,7 +14,7 @@ class GameDataRaidEncounterMapperTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->mapper = new GameDataRaidEncounterMapper();
+        $this->mapper = new GameDataRaidEncounterMapper;
     }
 
     public function test_maps_full_detail_response(): void
