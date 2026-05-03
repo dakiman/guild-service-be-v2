@@ -78,6 +78,29 @@ class Guild extends Model
         return $query->orderByDesc('member_count')->limit($limit);
     }
 
+    public function scopeNameSearch(Builder $query, string $q, int $limit = 8): Builder
+    {
+        $needle = strtolower(trim($q));
+
+        if (strlen($needle) < 2) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        // Names are stored canonical-lowercase (see BlizzardIdentity::name); plain LIKE is case-correct on Postgres.
+        $prefix = $needle . '%';
+        $substring = '%' . $needle . '%';
+
+        return $query
+            ->where(function ($q) use ($prefix, $substring) {
+                $q->where('name', 'LIKE', $prefix)
+                    ->orWhere('name', 'LIKE', $substring);
+            })
+            ->orderByRaw('CASE WHEN name LIKE ? THEN 1 ELSE 2 END', [$prefix])
+            ->orderByRaw('num_of_searches DESC NULLS LAST')
+            ->orderBy('name')
+            ->limit($limit);
+    }
+
     public function scopeRecentlyCreated(Builder $query, int $limit = 5): Builder
     {
         return $query->where('created_timestamp', '>', 0)
