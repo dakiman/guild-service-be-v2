@@ -6,6 +6,7 @@ namespace Tests\Unit\Services\RaiderIO;
 
 use App\Blizzard\Jobs\SyncCharacterData;
 use App\Enums\SyncDepth;
+use App\Models\Character;
 use App\Models\SeededRun;
 use App\Services\RaiderIO\DTO\SeedCharacterRef;
 use App\Services\RaiderIO\DTO\SeedOptions;
@@ -53,8 +54,7 @@ class RaiderIOSeederRunsTest extends TestCase
         $report = $seeder->seedRuns($opts);
 
         Bus::assertDispatched(SyncCharacterData::class, 3);
-        Bus::assertDispatched(SyncCharacterData::class, fn (SyncCharacterData $j) =>
-            $j->name === 'Alice' && $j->depth === SyncDepth::Full);
+        Bus::assertDispatched(SyncCharacterData::class, fn (SyncCharacterData $j) => $j->name === 'Alice' && $j->depth === SyncDepth::Full);
 
         $this->assertSame(2, $report->considered);
         $this->assertSame(3, $report->dispatched);
@@ -87,12 +87,12 @@ class RaiderIOSeederRunsTest extends TestCase
 
     public function test_seed_runs_skips_fresh_characters(): void
     {
-        \App\Models\Character::factory()->create([
+        Character::factory()->create([
             'name' => 'fresh-bob',
             'realm' => 'tarren-mill',
             'region' => 'eu',
         ]);
-        \App\Models\Character::where(['name' => 'fresh-bob', 'realm' => 'tarren-mill', 'region' => 'eu'])
+        Character::where(['name' => 'fresh-bob', 'realm' => 'tarren-mill', 'region' => 'eu'])
             ->update(['updated_at' => now()->subMinutes(5)]);
 
         $client = $this->mock(RaiderIOClient::class);
@@ -120,10 +120,10 @@ class RaiderIOSeederRunsTest extends TestCase
 
     public function test_seed_runs_force_bypasses_character_ttl_skip(): void
     {
-        \App\Models\Character::factory()->create([
+        Character::factory()->create([
             'name' => 'fresh-bob', 'realm' => 'tarren-mill', 'region' => 'eu',
         ]);
-        \App\Models\Character::where(['name' => 'fresh-bob', 'realm' => 'tarren-mill', 'region' => 'eu'])
+        Character::where(['name' => 'fresh-bob', 'realm' => 'tarren-mill', 'region' => 'eu'])
             ->update(['updated_at' => now()->subMinutes(5)]);
 
         $client = $this->mock(RaiderIOClient::class);
@@ -154,6 +154,6 @@ class RaiderIOSeederRunsTest extends TestCase
 
         Bus::assertNothingDispatched();
         $this->assertSame(2, $report->dispatched);
-        $this->assertTrue(\App\Models\SeededRun::where('keystone_run_id', 1001)->exists());
+        $this->assertTrue(SeededRun::where('keystone_run_id', 1001)->exists());
     }
 }
