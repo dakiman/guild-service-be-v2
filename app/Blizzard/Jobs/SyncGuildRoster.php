@@ -31,7 +31,9 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
 
     public function __construct(
         public readonly Guild $guild,
-        public readonly bool $forceFanout = false,
+        // Non-readonly with property-default so unserialize of old-shape queued
+        // jobs gets `false` rather than "uninitialized".
+        public bool $forceFanout = false,
     ) {
         $this->onQueue('blizzard-roster-sync');
     }

@@ -68,7 +68,12 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         public readonly SyncDepth $depth = SyncDepth::Standard,
         public readonly ?int $userId = null,
         public readonly int $crawlDepth = 0,
-        public readonly bool $forceTeammateCrawl = false,
+        // Non-readonly with a property-declaration default: when an OLD-shape job
+        // (queued before this param existed) is unserialized into the new class,
+        // PHP applies the default `false` rather than throwing "uninitialized".
+        // Readonly props can't have property-declaration defaults — only constructor
+        // defaults — and constructors don't run on unserialize.
+        public bool $forceTeammateCrawl = false,
     ) {
         // Crawled teammate jobs (crawlDepth > 0) land on the lowest-priority queue
         // so they cannot starve user-initiated lookups. Seed (crawlDepth=0) keeps

@@ -37,7 +37,10 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
         public readonly string $region,
         public readonly string $realm,
         public readonly string $name,
-        public readonly bool $forceRosterFanout = false,
+        // Non-readonly with property-default so unserialize of old-shape queued
+        // jobs gets `false` rather than "uninitialized" — see SyncCharacterData
+        // forceTeammateCrawl for the same pattern + rationale.
+        public bool $forceRosterFanout = false,
     ) {
         $this->onQueue('blizzard-user-sync');
     }
