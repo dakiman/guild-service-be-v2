@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Services\RaiderIO;
 
+use App\Services\RaiderIO\DTO\SeedCharacterRef;
 use App\Services\RaiderIO\DTO\SeedGuildRef;
+use App\Services\RaiderIO\DTO\SeedRunRef;
 use App\Services\RaiderIO\Exceptions\RaiderIOException;
 use Generator;
 use Illuminate\Http\Client\PendingRequest;
@@ -53,6 +55,65 @@ class RaiderIOClient
                 }
                 $yielded++;
                 yield new SeedGuildRef(region: $regionSlug, realmSlug: $realmSlug, name: $name);
+            }
+        }
+    }
+
+    /**
+     * Yields top mythic+ runs for the given region+season.
+     * `pages` is a fixed page count (1 page = 20 runs from raider.io).
+     *
+     * @return Generator<int, SeedRunRef>
+     */
+    public function topRuns(string $region, string $season, int $pages): Generator
+    {
+        for ($page = 0; $page < $pages; $page++) {
+            $response = $this->get('/mythic-plus/runs', [
+                'season' => $season,
+                'region' => $region,
+                'page' => $page,
+            ]);
+
+            $rankings = $response->json('rankings') ?? [];
+
+            if ($rankings === []) {
+                return;
+            }
+
+            foreach ($rankings as $ranking) {
+                $run = $ranking['run'] ?? null;
+                if ($run === null) {
+                    continue;
+                }
+                $keystoneRunId = $run['keystone_run_id'] ?? null;
+                if (! is_int($keystoneRunId)) {
+                    continue;
+                }
+
+                $members = [];
+                foreach (($run['roster'] ?? []) as $rosterEntry) {
+                    $character = $rosterEntry['character'] ?? null;
+                    if ($character === null) {
+                        continue;
+                    }
+                    $name = $character['name'] ?? null;
+                    $realmSlug = $character['realm']['slug'] ?? null;
+                    $regionSlug = $character['region']['slug'] ?? $region;
+                    if ($name === null || $realmSlug === null) {
+                        continue;
+                    }
+                    $members[] = new SeedCharacterRef(
+                        region: $regionSlug,
+                        realmSlug: $realmSlug,
+                        name: $name,
+                    );
+                }
+
+                yield new SeedRunRef(
+                    keystoneRunId: $keystoneRunId,
+                    region: $region,
+                    members: $members,
+                );
             }
         }
     }
