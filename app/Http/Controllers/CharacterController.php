@@ -8,6 +8,7 @@ use App\Blizzard\Jobs\SyncCharacterData;
 use App\Enums\SyncDepth;
 use App\Exceptions\EntityNotFoundException;
 use App\Http\Resources\CharacterResource;
+use App\Http\Resources\CharacterSuggestionResource;
 use App\Http\Resources\CharacterSummaryResource;
 use App\Models\Character;
 use App\Services\CharacterService;
@@ -58,6 +59,17 @@ class CharacterController extends Controller
         return response()->json([
             'recently_searched' => CharacterSummaryResource::collection($data['recently_searched']),
             'most_popular' => CharacterSummaryResource::collection($data['most_popular']),
+        ]);
+    }
+
+    public function suggest(Request $request): JsonResponse
+    {
+        $request->validate(['q' => 'present|nullable|string|max:64']);
+
+        $rows = Character::nameSearch((string) $request->query('q'))->get();
+
+        return response()->json([
+            'suggestions' => CharacterSuggestionResource::collection($rows),
         ]);
     }
 

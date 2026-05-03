@@ -59,6 +59,9 @@ Route::prefix('auth')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::get('/characters/popular', [CharacterController::class, 'popular'])->name('characters.popular');
+Route::get('/characters/suggest', [CharacterController::class, 'suggest'])
+    ->middleware('throttle:60,1')
+    ->name('characters.suggest');
 Route::get('/characters/{region}/{realm}/{character}', [CharacterController::class, 'show'])
     ->middleware('throttle:10,1')
     ->name('characters.show');
