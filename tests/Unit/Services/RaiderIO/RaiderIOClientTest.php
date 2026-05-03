@@ -31,4 +31,24 @@ class RaiderIOClientTest extends TestCase
         $this->assertSame('Method', $refs[1]->name);
         $this->assertSame('Pieces', $refs[2]->name);
     }
+
+    public function test_top_guilds_paginates_when_limit_exceeds_page_size(): void
+    {
+        $page0 = json_decode(file_get_contents(base_path('tests/fixtures/raiderio/top-guilds-eu-page-1-full.json')), true);
+        $page1 = json_decode(file_get_contents(base_path('tests/fixtures/raiderio/top-guilds-eu-page-2.json')), true);
+
+        Http::fake(function ($request) use ($page0, $page1) {
+            // raider.io page param starts at 0
+            parse_str(parse_url((string) $request->url(), PHP_URL_QUERY) ?? '', $q);
+            $page = (int) ($q['page'] ?? 0);
+            return Http::response($page === 0 ? $page0 : $page1, 200);
+        });
+
+        $client = app(\App\Services\RaiderIO\RaiderIOClient::class);
+
+        $refs = iterator_to_array($client->topGuilds('eu', 23), preserve_keys: false);
+
+        $this->assertCount(23, $refs);
+        Http::assertSentCount(2);
+    }
 }
