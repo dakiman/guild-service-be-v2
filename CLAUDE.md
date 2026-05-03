@@ -87,6 +87,38 @@ Self-contained module with `BlizzardServiceProvider`:
 - **Auto-discover guild on character sync.** When `SyncCharacterData` writes a `Guild::firstOrCreate` shell row for a character's guild, it dispatches `SyncGuildData` immediately *if* `wasRecentlyCreated` — so the guild's profile + roster populate ahead of the user's first click rather than waiting for a stale-and-refresh round-trip. ShouldBeUnique on SyncGuildData dedupes bursts when many guild members are synced concurrently. Subsequent character syncs for the same guild skip the dispatch and rely on the existing tier-2/proactive guild refresh.
 - **TokenManager** — Caches OAuth client-credentials tokens per region with double-check locking against thundering herd on refresh.
 
+### RaiderIO Seeder (`app/Services/RaiderIO/`)
+
+Lean discovery layer for bootstrapping the database from raider.io top-lists. Not a full module — raider.io is a throwaway discovery channel only. DTOs do not leak past `RaiderIOSeeder`; nothing raider.io-shaped is persisted.
+
+- **Architecture.** Single `RaiderIOClient` (Laravel `Http::` wrapper + Redis token-bucket throttle at 250/min, 17% under the 300/min public ceiling), one `RaiderIOSeeder` orchestrator (currently exposes `seedGuilds`; `seedRuns` and `seedCharacters` are planned for phases 2-3), one artisan command (`raiderio:seed`). Reuses existing `SyncGuildData` / `SyncCharacterData` jobs end-to-end — seeder dispatches and forgets.
+- **Trigger.** Manual artisan only. No scheduler entry today; add `Schedule::command('raiderio:seed --phase=guilds')->weekly()` later if desired. Run `--dry-run` first when memory is a concern (home-server). Generators yield rows lazily — at most one raider.io page (~20 rows) in memory at a time.
+- **Phase 1 (shipped): Guilds.** `php artisan raiderio:seed --phase=guilds --limit=N --regions=eu,us` pulls top mythic raiding guilds via `/guilds/static-raid-rankings`, dispatches `SyncGuildData` per guild. `SyncGuildRoster` modification then dispatches `SyncCharacterData::Full` for each roster member (TTL-gated on `Character.updated_at`). Phase-1 hardcodes the current Midnight raid slug `the-voidspire` in `RaiderIOClient::currentRaidSlug()` — bump per raid rotation.
+- **Phases 2-3 (not shipped): Runs, Characters.** Specs covered in `docs/superpowers/specs/2026-05-03-raiderio-seeder-design.md`; plans pending. The `seeded_runs` table and the `topRuns` / `topCharactersBySpec` client methods do not exist yet.
+- **Dedupe model (phase 1).** Guilds: existing `Guild::isRosterStale()` is reused (config/blizzard.php threshold). `--force` flag bypasses for the future "manual re-sync" UI button.
+- **Roster fan-out.** `SyncGuildRoster` previously created `guild_members` shells and dispatched a `Bus::batch` of `SyncCharacterData::Shallow` jobs. Phase 1 ADDS — does not replace — a per-member `SyncCharacterData::Full` dispatch loop, gated by `RAIDERIO_DISPATCH_ROSTER_CHAR_SYNCS` (default true). TTL gate reads `Character.updated_at` against `RAIDERIO_SEED_CHAR_TTL` (default 12h = 43200s). Members above `BLIZZARD_MIN_LEVEL_FOR_LOOKUP` only.
+- **Teammate crawl during seed.** `RAIDERIO_SEED_TEAMMATE_CRAWL_ENABLED` env var is documented but **not yet wired** into the seed loop in phase 1 — phase 2 (Runs) will wire it. Independent of the global `BLIZZARD_SYNC_TEAMMATE_CRAWL_ENABLED` flag.
+- **Rate limits.** raider.io 300/min public ceiling (no API-key tier known as of 2026-05-03). Client-side throttle 250/min, blocks up to 30s for a token. 429 retried once with `Retry-After`; 5xx retried up to 3 times with backoff [1, 4, 10]s. Phpunit sets `RAIDERIO_BACKOFF_SLEEP_ENABLED=0` so retry sleeps don't slow tests; production unset → real sleeps. Blizzard-side: existing `BlizzardRateLimiter` paces cascaded jobs at 80/s, 30k/hr — ~1,500 Full character syncs/hour ceiling. Seeder may dispatch many jobs in seconds; queue drains over hours.
+- **Future requirement (not phase 1).** If raider.io usage expands beyond discovery (e.g. consuming raider.io's score breakdowns, guild attendance, alt-tracking), promote `app/Services/RaiderIO/` to a full `app/RaiderIO/` module mirroring `app/Blizzard/` (Client, DTO, Mapper, Jobs, Middleware, ServiceProvider). Today's lean shape is right *only* because raider.io is discovery-only.
+
+#### Env vars
+
+`RAIDERIO_BASE_URL`, `RAIDERIO_RATE_PER_MINUTE` (default 250), `RAIDERIO_SEED_REGIONS` (default `eu,us`), `RAIDERIO_SEED_SEASON` (default `season-mn-1`), `RAIDERIO_SEED_GUILDS_PER_REGION` (default 10), `RAIDERIO_SEED_CHAR_TTL` (default 43200 = 12h), `RAIDERIO_SEED_TEAMMATE_CRAWL_ENABLED` (default false; not yet wired in phase 1), `RAIDERIO_SEED_CHUNK` (default 50), `RAIDERIO_DISPATCH_ROSTER_CHAR_SYNCS` (default true).
+
+#### Common invocations
+
+```bash
+# First run — verify on home-server with tiny budget
+php artisan raiderio:seed --phase=guilds --limit=10 --regions=eu --dry-run
+php artisan raiderio:seed --phase=guilds --limit=10 --regions=eu
+
+# Default (config-driven): 10 guilds × eu,us
+php artisan raiderio:seed --phase=guilds
+
+# Force-resync a region (future "manual re-sync" UI hook)
+php artisan raiderio:seed --phase=guilds --regions=eu --force
+```
+
 ### Sync Depth
 
 `SyncDepth` enum controls fetch breadth:
