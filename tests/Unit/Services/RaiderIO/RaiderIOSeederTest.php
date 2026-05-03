@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Services\RaiderIO;
 
 use App\Blizzard\Jobs\SyncGuildData;
+use App\Models\Guild;
 use App\Services\RaiderIO\DTO\SeedGuildRef;
 use App\Services\RaiderIO\DTO\SeedOptions;
 use App\Services\RaiderIO\Exceptions\RaiderIOException;
@@ -51,7 +52,7 @@ class RaiderIOSeederTest extends TestCase
             yield new SeedGuildRef('eu', 'tarren-mill', 'Echo');
         })());
 
-        \App\Models\Guild::factory()->create([
+        Guild::factory()->create([
             'region' => 'eu',
             'realm' => 'tarren-mill',
             'name' => 'Echo',
@@ -74,7 +75,7 @@ class RaiderIOSeederTest extends TestCase
             yield new SeedGuildRef('eu', 'tarren-mill', 'Echo');
         })());
 
-        \App\Models\Guild::factory()->create([
+        Guild::factory()->create([
             'region' => 'eu', 'realm' => 'tarren-mill', 'name' => 'Echo',
             'roster_synced_at' => now()->subMinutes(5),
         ]);

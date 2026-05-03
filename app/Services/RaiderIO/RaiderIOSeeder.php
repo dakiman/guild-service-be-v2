@@ -31,11 +31,13 @@ class RaiderIOSeeder
 
                     if (! $opts->force && $this->guildIsFresh($ref)) {
                         $report->skippedTtl++;
+
                         continue;
                     }
 
                     if ($opts->dryRun) {
                         $report->dispatched++;
+
                         continue;
                     }
 
