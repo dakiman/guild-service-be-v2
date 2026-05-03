@@ -115,4 +115,38 @@ class RaiderIOClientTest extends TestCase
         $this->expectException(RaiderIOException::class);
         iterator_to_array($client->topGuilds('eu', 3), preserve_keys: false);
     }
+
+    public function test_access_key_is_appended_when_configured(): void
+    {
+        config()->set('raiderio.access_key', 'secret-token-xyz');
+
+        $fixture = json_decode(file_get_contents(base_path('tests/fixtures/raiderio/top-guilds-eu.json')), true);
+        Http::fake(['raider.io/*' => Http::response($fixture, 200)]);
+
+        $client = app(RaiderIOClient::class);
+        iterator_to_array($client->topGuilds('eu', 3), preserve_keys: false);
+
+        Http::assertSent(function ($request) {
+            parse_str(parse_url((string) $request->url(), PHP_URL_QUERY) ?? '', $q);
+
+            return ($q['access_key'] ?? null) === 'secret-token-xyz';
+        });
+    }
+
+    public function test_access_key_is_omitted_when_not_configured(): void
+    {
+        config()->set('raiderio.access_key', null);
+
+        $fixture = json_decode(file_get_contents(base_path('tests/fixtures/raiderio/top-guilds-eu.json')), true);
+        Http::fake(['raider.io/*' => Http::response($fixture, 200)]);
+
+        $client = app(RaiderIOClient::class);
+        iterator_to_array($client->topGuilds('eu', 3), preserve_keys: false);
+
+        Http::assertSent(function ($request) {
+            parse_str(parse_url((string) $request->url(), PHP_URL_QUERY) ?? '', $q);
+
+            return ! array_key_exists('access_key', $q);
+        });
+    }
 }

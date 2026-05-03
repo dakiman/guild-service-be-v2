@@ -5,8 +5,15 @@ declare(strict_types=1);
 return [
     'base_url' => env('RAIDERIO_BASE_URL', 'https://raider.io/api/v1'),
 
+    // Optional API key from https://raider.io/settings/apps. When set, raider.io
+    // unlocks higher request rates than the 200/min unauthenticated ceiling. The
+    // throttle below is still applied locally — bump it up if you set a key.
+    'access_key' => env('RAIDERIO_ACCESS_KEY'),
+
     'throttle' => [
-        'per_minute' => (int) env('RAIDERIO_RATE_PER_MINUTE', 250),
+        // Public ceiling per raider.io swagger is 200/min. Default leaves ~12% headroom.
+        // If RAIDERIO_ACCESS_KEY is set you can safely raise this.
+        'per_minute' => (int) env('RAIDERIO_RATE_PER_MINUTE', 175),
     ],
 
     'regions' => array_values(array_filter(array_map(

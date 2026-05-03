@@ -175,6 +175,12 @@ class RaiderIOClient
 
     protected function doGet(string $path, array $query): Response
     {
+        // Append the optional API key once, here, so callers don't need to know.
+        $accessKey = (string) config('raiderio.access_key', '');
+        if ($accessKey !== '') {
+            $query['access_key'] = $accessKey;
+        }
+
         $attempt429 = 0;
         $attempt5xx = 0;
         $backoffSeconds = [1, 4, 10];
