@@ -52,7 +52,7 @@ class RaiderIOClientRunsTest extends TestCase
             };
         });
 
-        $client = app(\App\Services\RaiderIO\RaiderIOClient::class);
+        $client = app(RaiderIOClient::class);
 
         // Request 3 pages — page 0 = 3 runs, page 1 = 1 run, page 2 returns empty (generator stops).
         $runs = iterator_to_array($client->topRuns('eu', 'season-mn-1', 3), preserve_keys: false);
@@ -65,7 +65,7 @@ class RaiderIOClientRunsTest extends TestCase
     {
         Http::fake(['raider.io/*' => Http::response(['rankings' => []], 200)]);
 
-        $client = app(\App\Services\RaiderIO\RaiderIOClient::class);
+        $client = app(RaiderIOClient::class);
 
         $runs = iterator_to_array($client->topRuns('eu', 'season-mn-1', 5), preserve_keys: false);
 
