@@ -109,7 +109,7 @@ class CharacterSpecializationMapper
         return $result;
     }
 
-    /** @return array<int, array{slot: int, talent_id: int, spell_id: int}> */
+    /** @return array<int, array{slot: int, talent_id: int, spell_id: int, name: string}> */
     private function extractPvpTalents(array $slots): array
     {
         $result = [];
@@ -119,6 +119,7 @@ class CharacterSpecializationMapper
                 'slot' => (int) ($slot['slot_number'] ?? 0),
                 'talent_id' => (int) ($slot['selected']['talent']['id'] ?? 0),
                 'spell_id' => (int) ($slot['selected']['spell_tooltip']['spell']['id'] ?? 0),
+                'name' => (string) ($slot['selected']['talent']['name'] ?? ''),
             ];
         }
 

@@ -31,19 +31,33 @@ class GameDataTalentTreeMapper
         $edges = [];
 
         $classNodes = $this->mapNodes($data['class_talent_nodes'] ?? [], $edges);
-        $specNodes = $this->mapNodes($data['spec_talent_nodes'] ?? [], $edges);
 
         $heroTrees = [];
+        $heroNodeIds = [];
         foreach ($data['hero_talent_trees'] ?? [] as $hero) {
             if (! isset($hero['id'])) {
                 continue;
             }
+            $mapped = $this->mapNodes($hero['hero_talent_nodes'] ?? [], $edges);
+            foreach ($mapped as $n) {
+                $heroNodeIds[$n['id']] = true;
+            }
             $heroTrees[] = [
                 'id' => (int) $hero['id'],
                 'name' => (string) ($hero['name'] ?? ''),
-                'nodes' => $this->mapNodes($hero['hero_talent_nodes'] ?? [], $edges),
+                'nodes' => $mapped,
             ];
         }
+
+        // Blizzard's `spec_talent_nodes` bundles hero-tree nodes alongside the
+        // active spec's nodes. Without filtering, the hero nodes render as a
+        // ghost lane in the spec column with no picks. Drop any spec node
+        // whose id already appears in a hero tree.
+        $specNodesRaw = $this->mapNodes($data['spec_talent_nodes'] ?? [], $edges);
+        $specNodes = array_values(array_filter(
+            $specNodesRaw,
+            fn (array $n) => ! isset($heroNodeIds[$n['id']]),
+        ));
 
         return new GameDataTalentTree(
             treeId: $treeId,
