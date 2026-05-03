@@ -16,7 +16,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -57,21 +56,18 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
             ->where('level', '>=', $minLevel)
             ->get();
 
-        $shallowJobs = $members
-            ->map(fn ($member) => new SyncCharacterData(
+        // Dispatch Shallow per-member individually. The previous Bus::batch path
+        // never actually worked: SyncCharacterData lacks the Batchable trait, so
+        // every batch dispatch threw. This was hidden by SyncGuildData's dead
+        // isRosterStale() gate (always false because roster_synced_at had just
+        // been set), which meant SyncGuildRoster never fired in production.
+        foreach ($members as $member) {
+            SyncCharacterData::dispatch(
                 region: $this->guild->region,
                 realm: $member->realm,
                 name: $member->name,
                 depth: SyncDepth::Shallow,
-            ))
-            ->all();
-
-        if (! empty($shallowJobs)) {
-            Bus::batch($shallowJobs)
-                ->allowFailures()
-                ->name("guild-roster-sync:{$this->guild->id}")
-                ->onQueue('blizzard-roster-sync')
-                ->dispatch();
+            );
         }
 
         if (config('raiderio.dispatch_roster_character_syncs', false)) {
