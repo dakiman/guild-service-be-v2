@@ -43,13 +43,14 @@ class RaiderIOSeed extends Command
         };
 
         $this->table(
-            ['phase', 'regions', 'considered', 'dispatched', 'skipped_ttl', 'errors'],
+            ['phase', 'regions', 'considered', 'dispatched', 'skipped_ttl', 'skipped_dedupe', 'errors'],
             [[
                 $report->phase,
                 implode(',', $report->regions),
                 $report->considered,
                 $report->dispatched,
                 $report->skippedTtl,
+                $report->skippedDedupe,
                 $report->errors,
             ]]
         );
