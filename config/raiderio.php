@@ -20,6 +20,7 @@ return [
 
     'phase' => [
         'guilds_per_region' => (int) env('RAIDERIO_SEED_GUILDS_PER_REGION', 10),
+        'runs_pages_per_region' => (int) env('RAIDERIO_SEED_RUNS_PAGES_PER_REGION', 5),
     ],
 
     'character_resync_ttl' => (int) env('RAIDERIO_SEED_CHAR_TTL', 12 * 3600),
