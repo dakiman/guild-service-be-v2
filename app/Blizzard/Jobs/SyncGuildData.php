@@ -130,10 +130,12 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
         // Update roster sync timestamp
         $guild->update(['roster_synced_at' => now()]);
 
-        // Dispatch roster sync if roster is stale
-        if ($guild->isRosterStale()) {
-            SyncGuildRoster::dispatch($guild);
-        }
+        // Dispatch the roster job — drives Shallow Bus::batch for all members AND
+        // (when raiderio.dispatch_roster_character_syncs is true) Full per-member
+        // SyncCharacterData fan-out. Previously gated on isRosterStale(), which is
+        // always false here because we just set roster_synced_at to now() — the
+        // gate was dead code, and the roster job never fired.
+        SyncGuildRoster::dispatch($guild);
     }
 
     public function failed(Throwable $exception): void
