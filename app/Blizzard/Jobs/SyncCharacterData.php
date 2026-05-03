@@ -68,6 +68,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         public readonly SyncDepth $depth = SyncDepth::Standard,
         public readonly ?int $userId = null,
         public readonly int $crawlDepth = 0,
+        public readonly bool $forceTeammateCrawl = false,
     ) {
         // Crawled teammate jobs (crawlDepth > 0) land on the lowest-priority queue
         // so they cannot starve user-initiated lookups. Seed (crawlDepth=0) keeps
@@ -772,7 +773,11 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         BlizzardGameDataClient $gameDataClient,
         Character $character,
     ): void {
-        if (! config('blizzard.sync.teammate_crawl_enabled')) {
+        // Phase 2: a seed-originated job (forceTeammateCrawl=true) overrides the
+        // global kill-switch. Crawled descendants get forceTeammateCrawl=false at
+        // the self::dispatch call below — the override does not recurse, so nested
+        // crawls fall back to the global config flag.
+        if (! $this->forceTeammateCrawl && ! config('blizzard.sync.teammate_crawl_enabled')) {
             return;
         }
 
