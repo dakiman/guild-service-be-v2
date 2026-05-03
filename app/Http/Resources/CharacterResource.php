@@ -68,21 +68,31 @@ class CharacterResource extends JsonResource
      */
     public function with(Request $request): array
     {
+        $freshness = [
+            'profile' => $this->freshnessFor('updated_at', 'profile'),
+            'mythic_plus' => $this->freshnessFor('mythics_synced_at', 'mythic_plus'),
+            'pvp' => $this->freshnessFor('pvp_synced_at', 'pvp'),
+            'professions' => $this->freshnessFor('professions_synced_at', 'professions'),
+            'raids' => $this->freshnessFor('raids_synced_at', 'raids'),
+            'stats' => $this->freshnessFor('stats_synced_at', 'stats'),
+            'titles' => $this->freshnessFor('titles_synced_at', 'titles'),
+            'reputations' => $this->freshnessFor('reputations_synced_at', 'reputations'),
+            'collections' => $this->freshnessFor('collections_synced_at', 'collections'),
+        ];
+
+        // Drop achievements freshness key when flag is off — FE has nothing to filter on.
+        if (config('blizzard.sync.achievements_enabled')) {
+            $freshness['achievements'] = $this->freshnessFor('achievements_synced_at', 'achievements');
+        }
+
         return [
             'meta' => [
                 'game_version' => $this->game_version ?? 'retail',
                 'forced_refresh' => false,
-                'freshness' => [
-                    'profile' => $this->freshnessFor('updated_at', 'profile'),
-                    'mythic_plus' => $this->freshnessFor('mythics_synced_at', 'mythic_plus'),
-                    'pvp' => $this->freshnessFor('pvp_synced_at', 'pvp'),
-                    'professions' => $this->freshnessFor('professions_synced_at', 'professions'),
-                    'raids' => $this->freshnessFor('raids_synced_at', 'raids'),
-                    'stats' => $this->freshnessFor('stats_synced_at', 'stats'),
-                    'titles' => $this->freshnessFor('titles_synced_at', 'titles'),
-                    'reputations' => $this->freshnessFor('reputations_synced_at', 'reputations'),
-                    'collections' => $this->freshnessFor('collections_synced_at', 'collections'),
-                    'achievements' => $this->freshnessFor('achievements_synced_at', 'achievements'),
+                'freshness' => $freshness,
+                'feature_flags' => [
+                    'achievements' => (bool) config('blizzard.sync.achievements_enabled'),
+                    'pets' => (bool) config('blizzard.sync.pets_enabled'),
                 ],
             ],
         ];

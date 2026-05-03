@@ -680,25 +680,28 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                     ->when($keepMounts !== [], fn ($q) => $q->whereNotIn('mount_id', $keepMounts))
                     ->delete();
 
-                $keepPets = [];
-                foreach ($petDtos as $dto) {
-                    CharacterPet::updateOrCreate(
-                        ['character_id' => $character->id, 'pet_id' => $dto->petId],
-                        [
-                            'species_id' => $dto->speciesId,
-                            'name' => $dto->name,
-                            'level' => $dto->level,
-                            'breed_id' => $dto->breedId,
-                            'quality' => $dto->quality,
-                            'is_favorite' => $dto->isFavorite,
-                            'creature_display_id' => $dto->creatureDisplayId,
-                        ],
-                    );
-                    $keepPets[] = $dto->petId;
+                // Feature-gated: pets carry significant disk cost; off by default.
+                if (config('blizzard.sync.pets_enabled')) {
+                    $keepPets = [];
+                    foreach ($petDtos as $dto) {
+                        CharacterPet::updateOrCreate(
+                            ['character_id' => $character->id, 'pet_id' => $dto->petId],
+                            [
+                                'species_id' => $dto->speciesId,
+                                'name' => $dto->name,
+                                'level' => $dto->level,
+                                'breed_id' => $dto->breedId,
+                                'quality' => $dto->quality,
+                                'is_favorite' => $dto->isFavorite,
+                                'creature_display_id' => $dto->creatureDisplayId,
+                            ],
+                        );
+                        $keepPets[] = $dto->petId;
+                    }
+                    CharacterPet::where('character_id', $character->id)
+                        ->when($keepPets !== [], fn ($q) => $q->whereNotIn('pet_id', $keepPets))
+                        ->delete();
                 }
-                CharacterPet::where('character_id', $character->id)
-                    ->when($keepPets !== [], fn ($q) => $q->whereNotIn('pet_id', $keepPets))
-                    ->delete();
 
                 $keepToys = [];
                 foreach ($toyDtos as $dto) {
@@ -727,6 +730,11 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         CharacterAchievementMapper $mapper,
         Character $character,
     ): void {
+        // Feature-gated: achievements are expensive (≈70% of DB); off by default.
+        if (! config('blizzard.sync.achievements_enabled')) {
+            return;
+        }
+
         try {
             $data = $client->getCharacterAchievements($this->realm, $this->name);
             $dtos = $mapper->map($data);

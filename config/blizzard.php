@@ -64,12 +64,14 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Per-Slice Sync Feature Flags (Plan 2 only)
+    | Per-Slice Sync Feature Flags
     |--------------------------------------------------------------------------
     | Plan 2 retail slices (mythic+, pvp, professions, raids) keep individual
     | kill-switch env flags. The Plan 4 slices (stats, titles, reputations,
     | collections, achievements) were removed in Plan 5 — they now run
     | unconditionally. To disable one of those, revert the slice in code.
+    | Exception: achievements and pets were re-flagged (default false) due
+    | to their significant disk cost (achievements alone ≈ 70 % of total DB).
     */
 
     'sync' => [
@@ -78,6 +80,8 @@ return [
         'professions_enabled' => (bool) env('BLIZZARD_SYNC_PROFESSIONS_ENABLED', true),
         'raids_enabled' => (bool) env('BLIZZARD_SYNC_RAIDS_ENABLED', true),
         'teammate_crawl_enabled' => (bool) env('BLIZZARD_SYNC_TEAMMATE_CRAWL_ENABLED', false),
+        'achievements_enabled' => env('BLIZZARD_SYNC_ACHIEVEMENTS_ENABLED', false),
+        'pets_enabled' => env('BLIZZARD_SYNC_PETS_ENABLED', false),
     ],
 
     /*
