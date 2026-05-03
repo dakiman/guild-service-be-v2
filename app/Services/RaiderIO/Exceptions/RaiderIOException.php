@@ -6,6 +6,4 @@ namespace App\Services\RaiderIO\Exceptions;
 
 use RuntimeException;
 
-class RaiderIOException extends RuntimeException
-{
-}
+class RaiderIOException extends RuntimeException {}
