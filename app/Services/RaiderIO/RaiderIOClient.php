@@ -8,6 +8,7 @@ use App\Services\RaiderIO\DTO\SeedCharacterRef;
 use App\Services\RaiderIO\DTO\SeedGuildRef;
 use App\Services\RaiderIO\DTO\SeedRunRef;
 use App\Services\RaiderIO\Exceptions\RaiderIOException;
+use App\Support\BlizzardIdentity;
 use Generator;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
@@ -54,7 +55,15 @@ class RaiderIOClient
                     continue;
                 }
                 $yielded++;
-                yield new SeedGuildRef(region: $regionSlug, realmSlug: $realmSlug, name: $name);
+                // Canonicalize at the boundary so downstream byIdentity() probes and
+                // job dispatches use the same form the rest of the app uses (controllers
+                // call BlizzardIdentity on user input). Guild names go through realm()
+                // (Str::slug) per GuildController; realm slugs already canonical.
+                yield new SeedGuildRef(
+                    region: $regionSlug,
+                    realmSlug: BlizzardIdentity::realm($realmSlug),
+                    name: BlizzardIdentity::realm($name),
+                );
             }
         }
     }
@@ -102,10 +111,12 @@ class RaiderIOClient
                     if ($name === null || $realmSlug === null) {
                         continue;
                     }
+                    // Canonicalize: character names get lowercased (UTF-8-safe), realm slugs
+                    // get Str::slug. Matches CharacterController so byIdentity() probes hit.
                     $members[] = new SeedCharacterRef(
                         region: $regionSlug,
-                        realmSlug: $realmSlug,
-                        name: $name,
+                        realmSlug: BlizzardIdentity::realm($realmSlug),
+                        name: BlizzardIdentity::name($name),
                     );
                 }
 

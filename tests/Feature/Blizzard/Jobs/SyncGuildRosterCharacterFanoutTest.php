@@ -118,4 +118,23 @@ class SyncGuildRosterCharacterFanoutTest extends TestCase
 
         Bus::assertNotDispatched(SyncCharacterData::class, fn ($job) => $job->depth === SyncDepth::Full);
     }
+
+    public function test_force_fanout_constructor_param_overrides_disabled_config(): void
+    {
+        config()->set('raiderio.dispatch_roster_character_syncs', false);
+        config()->set('raiderio.character_resync_ttl', 3600);
+        config()->set('blizzard.min_level_for_character_lookup', 70);
+
+        $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill', 'name' => 'Echo']);
+        GuildMember::create([
+            'guild_id' => $guild->id, 'name' => 'Alpha', 'realm' => 'tarren-mill', 'level' => 80,
+            'class_id' => 1, 'race_id' => 1, 'rank' => 0,
+        ]);
+
+        // forceFanout=true overrides the config flag — used by the seeder so
+        // routine guild syncs don't accidentally cascade Full per-member.
+        (new SyncGuildRoster($guild, forceFanout: true))->handle();
+
+        Bus::assertDispatched(SyncCharacterData::class, fn ($job) => $job->depth === SyncDepth::Full && $job->name === 'Alpha');
+    }
 }

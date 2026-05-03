@@ -5,14 +5,15 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Services\RaiderIO\DTO\SeedOptions;
+use App\Services\RaiderIO\DTO\SeedReport;
 use App\Services\RaiderIO\RaiderIOSeeder;
 use Illuminate\Console\Command;
 
 class RaiderIOSeed extends Command
 {
     protected $signature = 'raiderio:seed
-        {--phase= : guilds|runs|characters|all (only "guilds" implemented in phase 1)}
-        {--limit= : Override per-phase limit (e.g., guilds_per_region)}
+        {--phase= : guilds|runs|all (Phase 3 / characters cancelled — no public raider.io endpoint)}
+        {--limit= : Override per-phase limit (guilds: guilds-per-region; runs: pages-per-region)}
         {--regions= : Comma-separated region slugs (overrides config)}
         {--force : Bypass TTL gates}
         {--dry-run : Skip dispatches; report what would happen}';
@@ -22,7 +23,7 @@ class RaiderIOSeed extends Command
     public function handle(RaiderIOSeeder $seeder): int
     {
         $phase = (string) $this->option('phase');
-        $allowed = ['guilds', 'runs', 'characters', 'all'];
+        $allowed = ['guilds', 'runs', 'all'];
 
         if (! in_array($phase, $allowed, true)) {
             $this->error('Invalid --phase. Allowed: '.implode(', ', $allowed));
@@ -30,29 +31,26 @@ class RaiderIOSeed extends Command
             return self::FAILURE;
         }
 
-        if ($phase === 'characters' || $phase === 'all') {
-            $this->error("Phase '$phase' not yet implemented (phase 3 deliverable).");
-
-            return self::FAILURE;
-        }
-
-        $opts = $this->buildOptions($phase);
-        $report = match ($phase) {
-            'guilds' => $seeder->seedGuilds($opts),
-            'runs' => $seeder->seedRuns($opts),
+        $reports = match ($phase) {
+            'guilds' => [$seeder->seedGuilds($this->buildOptions('guilds'))],
+            'runs' => [$seeder->seedRuns($this->buildOptions('runs'))],
+            'all' => [
+                $seeder->seedGuilds($this->buildOptions('guilds')),
+                $seeder->seedRuns($this->buildOptions('runs')),
+            ],
         };
 
         $this->table(
             ['phase', 'regions', 'considered', 'dispatched', 'skipped_ttl', 'skipped_dedupe', 'errors'],
-            [[
-                $report->phase,
-                implode(',', $report->regions),
-                $report->considered,
-                $report->dispatched,
-                $report->skippedTtl,
-                $report->skippedDedupe,
-                $report->errors,
-            ]]
+            array_map(fn (SeedReport $r) => [
+                $r->phase,
+                implode(',', $r->regions),
+                $r->considered,
+                $r->dispatched,
+                $r->skippedTtl,
+                $r->skippedDedupe,
+                $r->errors,
+            ], $reports)
         );
 
         return self::SUCCESS;

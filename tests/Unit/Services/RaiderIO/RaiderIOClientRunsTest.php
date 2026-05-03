@@ -29,7 +29,8 @@ class RaiderIOClientRunsTest extends TestCase
         $this->assertSame('eu', $runs[0]->region);
         $this->assertCount(5, $runs[0]->members);
         $this->assertInstanceOf(SeedCharacterRef::class, $runs[0]->members[0]);
-        $this->assertSame('Alice', $runs[0]->members[0]->name);
+        // Character names are lowercased via BlizzardIdentity::name() at the client boundary.
+        $this->assertSame('alice', $runs[0]->members[0]->name);
         $this->assertSame('tarren-mill', $runs[0]->members[0]->realmSlug);
         $this->assertSame('eu', $runs[0]->members[0]->region);
         $this->assertSame(1003, $runs[2]->keystoneRunId);

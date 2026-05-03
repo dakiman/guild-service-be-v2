@@ -11,6 +11,7 @@ use App\Models\SeededRun;
 use App\Services\RaiderIO\DTO\SeedCharacterRef;
 use App\Services\RaiderIO\DTO\SeedOptions;
 use App\Services\RaiderIO\DTO\SeedRunRef;
+use App\Services\RaiderIO\Exceptions\RaiderIOException;
 use App\Services\RaiderIO\RaiderIOClient;
 use App\Services\RaiderIO\RaiderIOSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -156,6 +157,52 @@ class RaiderIOSeederRunsTest extends TestCase
         $this->assertSame(2, $report->dispatched);
         // Dry-run does NOT write to the ledger so a subsequent real run sees fresh runs.
         $this->assertFalse(SeededRun::where('keystone_run_id', 1001)->exists());
+    }
+
+    public function test_seed_runs_isolates_per_region_errors(): void
+    {
+        $client = $this->mock(RaiderIOClient::class);
+        $client->shouldReceive('topRuns')->with('eu', 'season-mn-1', 1)->andReturn((function () {
+            yield new SeedRunRef(1001, 'eu', [new SeedCharacterRef('eu', 'tarren-mill', 'A')]);
+        })());
+        $client->shouldReceive('topRuns')->with('us', 'season-mn-1', 1)->andThrow(
+            new RaiderIOException('boom')
+        );
+
+        $seeder = app(RaiderIOSeeder::class);
+        $report = $seeder->seedRuns(new SeedOptions(regions: ['eu', 'us'], limit: 1));
+
+        Bus::assertDispatched(SyncCharacterData::class, 1);
+        $this->assertSame(1, $report->dispatched);
+        $this->assertSame(1, $report->errors);
+    }
+
+    public function test_seed_runs_threads_teammate_crawl_into_dispatched_jobs(): void
+    {
+        $client = $this->mock(RaiderIOClient::class);
+        $client->shouldReceive('topRuns')->andReturn((function () {
+            yield new SeedRunRef(1001, 'eu', [new SeedCharacterRef('eu', 'tarren-mill', 'A')]);
+        })());
+
+        $seeder = app(RaiderIOSeeder::class);
+        $seeder->seedRuns(new SeedOptions(regions: ['eu'], limit: 1, teammateCrawl: true));
+
+        // The dispatched job carries forceTeammateCrawl=true so the worker bypasses
+        // the global BLIZZARD_SYNC_TEAMMATE_CRAWL_ENABLED kill-switch.
+        Bus::assertDispatched(SyncCharacterData::class, fn (SyncCharacterData $j) => $j->name === 'A' && $j->forceTeammateCrawl === true);
+    }
+
+    public function test_seed_runs_does_not_force_teammate_crawl_by_default(): void
+    {
+        $client = $this->mock(RaiderIOClient::class);
+        $client->shouldReceive('topRuns')->andReturn((function () {
+            yield new SeedRunRef(1001, 'eu', [new SeedCharacterRef('eu', 'tarren-mill', 'A')]);
+        })());
+
+        $seeder = app(RaiderIOSeeder::class);
+        $seeder->seedRuns(new SeedOptions(regions: ['eu'], limit: 1));
+
+        Bus::assertDispatched(SyncCharacterData::class, fn (SyncCharacterData $j) => $j->forceTeammateCrawl === false);
     }
 
     public function test_seed_runs_dry_run_skips_already_seeded_runs_without_writing(): void

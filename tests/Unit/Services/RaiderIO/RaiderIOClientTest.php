@@ -27,9 +27,12 @@ class RaiderIOClientTest extends TestCase
         $this->assertInstanceOf(SeedGuildRef::class, $refs[0]);
         $this->assertSame('eu', $refs[0]->region);
         $this->assertSame('tarren-mill', $refs[0]->realmSlug);
-        $this->assertSame('Echo', $refs[0]->name);
-        $this->assertSame('Method', $refs[1]->name);
-        $this->assertSame('FatSharkYes', $refs[2]->name);
+        // Names are canonicalized via BlizzardIdentity::realm() (Str::slug) at the
+        // client boundary so seeder dispatches match the form CharacterController/
+        // GuildController use for user-initiated lookups.
+        $this->assertSame('echo', $refs[0]->name);
+        $this->assertSame('method', $refs[1]->name);
+        $this->assertSame('fatsharkyes', $refs[2]->name);
     }
 
     public function test_top_guilds_paginates_when_limit_exceeds_page_size(): void
@@ -114,6 +117,39 @@ class RaiderIOClientTest extends TestCase
 
         $this->expectException(RaiderIOException::class);
         iterator_to_array($client->topGuilds('eu', 3), preserve_keys: false);
+    }
+
+    public function test_top_guilds_canonicalizes_mixed_case_names(): void
+    {
+        Http::fake(['raider.io/*' => Http::response([
+            'raidRankings' => [
+                [
+                    'rank' => 1,
+                    'guild' => [
+                        'name' => 'FatSharkYes',  // mixed case
+                        'realm' => ['slug' => 'tarren-mill'],
+                        'region' => ['slug' => 'eu'],
+                    ],
+                ],
+                [
+                    'rank' => 2,
+                    'guild' => [
+                        'name' => 'Méthod',  // UTF-8 + mixed case
+                        'realm' => ['slug' => 'TWISTING-NETHER'],  // upper realm slug
+                        'region' => ['slug' => 'eu'],
+                    ],
+                ],
+            ],
+        ], 200)]);
+
+        $client = app(RaiderIOClient::class);
+        $refs = iterator_to_array($client->topGuilds('eu', 2), preserve_keys: false);
+
+        $this->assertSame('fatsharkyes', $refs[0]->name);
+        $this->assertSame('tarren-mill', $refs[0]->realmSlug);
+        // Str::slug strips accents and lowercases.
+        $this->assertSame('method', $refs[1]->name);
+        $this->assertSame('twisting-nether', $refs[1]->realmSlug);
     }
 
     public function test_access_key_is_appended_when_configured(): void

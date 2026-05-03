@@ -31,6 +31,7 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
 
     public function __construct(
         public readonly Guild $guild,
+        public readonly bool $forceFanout = false,
     ) {
         $this->onQueue('blizzard-roster-sync');
     }
@@ -70,7 +71,14 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
             );
         }
 
-        if (config('raiderio.dispatch_roster_character_syncs', false)) {
+        // Per-member SyncCharacterData::Full fan-out is gated by either:
+        // 1. forceFanout=true on this specific job (set by the seeder via SyncGuildData),
+        //    so a deliberate seed run cascades regardless of global config; OR
+        // 2. raiderio.dispatch_roster_character_syncs config flag (default false),
+        //    so an operator can globally turn it on if desired.
+        // The default-false config means routine ProactiveSyncGuilds + user-triggered
+        // SyncGuildData will NOT cascade Full per member — only the seeder will.
+        if ($this->forceFanout || config('raiderio.dispatch_roster_character_syncs', false)) {
             $this->dispatchFullSyncsForMembers($members);
         }
     }

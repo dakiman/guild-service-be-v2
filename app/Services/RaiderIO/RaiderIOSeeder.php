@@ -9,6 +9,7 @@ use App\Blizzard\Jobs\SyncGuildData;
 use App\Enums\SyncDepth;
 use App\Models\Character;
 use App\Models\Guild;
+use App\Models\SeededRun;
 use App\Services\RaiderIO\DTO\SeedCharacterRef;
 use App\Services\RaiderIO\DTO\SeedGuildRef;
 use App\Services\RaiderIO\DTO\SeedOptions;
@@ -46,7 +47,12 @@ class RaiderIOSeeder
                         continue;
                     }
 
-                    SyncGuildData::dispatch($ref->region, $ref->realmSlug, $ref->name);
+                    SyncGuildData::dispatch(
+                        $ref->region,
+                        $ref->realmSlug,
+                        $ref->name,
+                        forceRosterFanout: true,
+                    );
                     $report->dispatched++;
                 }
             } catch (RaiderIOException $e) {
@@ -83,7 +89,7 @@ class RaiderIOSeeder
 
                     if ($opts->dryRun) {
                         // Dry-run does not mutate the ledger; check existence read-only.
-                        if (\App\Models\SeededRun::where('keystone_run_id', $runRef->keystoneRunId)->exists()) {
+                        if (SeededRun::where('keystone_run_id', $runRef->keystoneRunId)->exists()) {
                             $report->skippedDedupe++;
 
                             continue;

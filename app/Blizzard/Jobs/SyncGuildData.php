@@ -37,6 +37,7 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
         public readonly string $region,
         public readonly string $realm,
         public readonly string $name,
+        public readonly bool $forceRosterFanout = false,
     ) {
         $this->onQueue('blizzard-user-sync');
     }
@@ -135,7 +136,7 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
         // SyncCharacterData fan-out. Previously gated on isRosterStale(), which is
         // always false here because we just set roster_synced_at to now() — the
         // gate was dead code, and the roster job never fired.
-        SyncGuildRoster::dispatch($guild);
+        SyncGuildRoster::dispatch($guild, $this->forceRosterFanout);
     }
 
     public function failed(Throwable $exception): void

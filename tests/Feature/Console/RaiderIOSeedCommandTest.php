@@ -51,10 +51,13 @@ class RaiderIOSeedCommandTest extends TestCase
             ->assertFailed();
     }
 
-    public function test_unsupported_phase_characters_returns_not_implemented(): void
+    public function test_phase_characters_is_rejected_as_invalid(): void
     {
+        // Phase 3 (characters) was cancelled — raider.io has no public per-character
+        // ranking endpoint. The flag is removed from --phase entirely and is rejected
+        // along with any other unknown phase.
         $this->artisan('raiderio:seed', ['--phase' => 'characters'])
-            ->expectsOutputToContain('not yet implemented')
+            ->expectsOutputToContain('Invalid --phase')
             ->assertFailed();
     }
 }
