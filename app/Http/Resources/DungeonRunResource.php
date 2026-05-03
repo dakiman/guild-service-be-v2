@@ -30,6 +30,7 @@ class DungeonRunResource extends JsonResource
                         'character_id' => $member->character_id,
                         'character_name' => $member->character_name,
                         'character_realm' => $member->character_realm,
+                        'character_realm_display' => $member->display_realm,
                         'character_region' => $member->character_region,
                         'spec_id' => $member->spec_id,
                         'spec_name' => $member->spec_name,

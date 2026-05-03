@@ -21,6 +21,9 @@ class CharacterProfileMapper
             equippedItemLevel: (int) ($data['equipped_item_level'] ?? 0),
             guildName: $data['guild']['name'] ?? null,
             guildRealm: $data['guild']['realm']['slug'] ?? null,
+            name: (string) ($data['name'] ?? ''),
+            realmName: isset($data['realm']['name']) ? (string) $data['realm']['name'] : null,
+            guildRealmName: isset($data['guild']['realm']['name']) ? (string) $data['guild']['realm']['name'] : null,
         );
     }
 }

@@ -22,6 +22,8 @@ class CharacterSummaryResource extends JsonResource
             'name' => $this->name,
             'realm' => $this->realm,
             'region' => $this->region,
+            'display_name' => $this->display_name,
+            'display_realm' => $this->display_realm,
             'class_id' => $this->class_id,
             'level' => $this->level,
             'faction' => $this->faction,

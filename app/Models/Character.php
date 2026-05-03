@@ -22,6 +22,8 @@ class Character extends Model
         'name',
         'realm',
         'region',
+        'display_name',
+        'display_realm',
         'game_version',
         'gender',
         'faction',

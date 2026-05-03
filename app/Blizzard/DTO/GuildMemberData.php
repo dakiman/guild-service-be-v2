@@ -13,5 +13,7 @@ final readonly class GuildMemberData
         public int $classId,
         public int $raceId,
         public int $rank,
+        public string $displayName,
+        public ?string $displayRealm,
     ) {}
 }

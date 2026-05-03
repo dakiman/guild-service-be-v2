@@ -19,6 +19,8 @@ class GuildResource extends JsonResource
             'name' => $this->name,
             'realm' => $this->realm,
             'region' => $this->region,
+            'display_name' => $this->display_name,
+            'display_realm' => $this->display_realm,
             'faction' => $this->faction,
             'achievement_points' => $this->achievement_points,
             'member_count' => $this->member_count,

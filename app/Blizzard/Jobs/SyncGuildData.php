@@ -88,6 +88,8 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
                 'achievement_points' => $profile->achievementPoints,
                 'member_count' => $profile->memberCount,
                 'created_timestamp' => $profile->createdTimestamp,
+                'display_name' => $profile->name !== '' ? $profile->name : null,
+                'display_realm' => $profile->realmName,
             ],
         );
 
@@ -105,6 +107,8 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
                 'class_id' => $member->classId,
                 'race_id' => $member->raceId,
                 'rank' => $member->rank,
+                'display_name' => $member->displayName,
+                'display_realm' => $member->displayRealm,
             ];
         }
 
@@ -113,7 +117,7 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
             GuildMember::upsert(
                 $memberRecords,
                 ['guild_id', 'name', 'realm'],
-                ['level', 'class_id', 'race_id', 'rank'],
+                ['level', 'class_id', 'race_id', 'rank', 'display_name', 'display_realm'],
             );
         }
 

@@ -18,6 +18,7 @@ class DungeonRunMember extends Model
         'character_name',
         'character_realm',
         'character_region',
+        'display_realm',
         'spec_id',
         'spec_name',
         'equipped_item_level',

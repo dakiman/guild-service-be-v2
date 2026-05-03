@@ -11,5 +11,7 @@ final readonly class GuildProfile
         public int $achievementPoints,
         public int $memberCount,
         public int $createdTimestamp,
+        public string $name,
+        public ?string $realmName,
     ) {}
 }

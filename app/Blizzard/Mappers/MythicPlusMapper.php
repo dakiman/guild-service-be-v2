@@ -29,6 +29,7 @@ class MythicPlusMapper
                 $team[] = [
                     'name' => $member['character']['name'] ?? 'Unknown',
                     'realm' => $member['character']['realm']['slug'] ?? 'unknown',
+                    'realm_name' => $member['character']['realm']['name'] ?? null,
                     'specialization' => $member['specialization']['name'] ?? 'Unknown',
                     'equipped_item_level' => (int) ($member['equipped_item_level'] ?? 0),
                 ];

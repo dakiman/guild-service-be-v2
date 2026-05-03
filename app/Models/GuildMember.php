@@ -17,6 +17,8 @@ class GuildMember extends Model
         'character_id',
         'name',
         'realm',
+        'display_name',
+        'display_realm',
         'level',
         'class_id',
         'race_id',

@@ -17,6 +17,8 @@ class Guild extends Model
         'name',
         'realm',
         'region',
+        'display_name',
+        'display_realm',
         'faction',
         'achievement_points',
         'member_count',

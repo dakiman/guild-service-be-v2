@@ -128,6 +128,8 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             'name' => $this->name,
             'realm' => $this->realm,
             'region' => $this->region,
+            'display_name' => $profile->name !== '' ? $profile->name : null,
+            'display_realm' => $profile->realmName,
         ];
 
         if ($this->depth === SyncDepth::Shallow) {
@@ -222,6 +224,8 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 ],
                 [
                     'faction' => $profile->faction,
+                    'display_name' => $profile->guildName,
+                    'display_realm' => $profile->guildRealmName,
                 ],
             );
 
@@ -322,7 +326,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
      *
      * Public so the regression tests in SyncMythicPlusTeamPivotTest can drive it.
      *
-     * @param  array<int, array{name: string, realm: string, specialization: ?string, equipped_item_level: ?int}>  $team
+     * @param  array<int, array{name: string, realm: string, realm_name?: ?string, specialization: ?string, equipped_item_level: ?int}>  $team
      */
     public function persistRunTeam(DungeonRun $run, array $team): void
     {
@@ -346,6 +350,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 ],
                 [
                     'character_id' => $resolvedId,
+                    'display_realm' => $member['realm_name'] ?? null,
                     'spec_name' => $member['specialization'],
                     'equipped_item_level' => $member['equipped_item_level'],
                     'created_at' => $now,

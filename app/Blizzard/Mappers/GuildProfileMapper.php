@@ -15,6 +15,8 @@ class GuildProfileMapper
             achievementPoints: (int) ($data['achievement_points'] ?? 0),
             memberCount: (int) ($data['member_count'] ?? 0),
             createdTimestamp: (int) ($data['created_timestamp'] ?? 0),
+            name: (string) ($data['name'] ?? ''),
+            realmName: isset($data['realm']['name']) ? (string) $data['realm']['name'] : null,
         );
     }
 }

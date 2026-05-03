@@ -17,5 +17,8 @@ final readonly class CharacterProfile
         public int $equippedItemLevel,
         public ?string $guildName,
         public ?string $guildRealm,
+        public string $name,
+        public ?string $realmName,
+        public ?string $guildRealmName,
     ) {}
 }

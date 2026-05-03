@@ -19,6 +19,8 @@ class CharacterResource extends JsonResource
             'name' => $this->name,
             'realm' => $this->realm,
             'region' => $this->region,
+            'display_name' => $this->display_name,
+            'display_realm' => $this->display_realm,
             'game_version' => $this->game_version ?? 'retail',
             'gender' => $this->gender,
             'faction' => $this->faction,
