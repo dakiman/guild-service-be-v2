@@ -51,13 +51,6 @@ class RaiderIOSeedCommandTest extends TestCase
             ->assertFailed();
     }
 
-    public function test_unsupported_phase_runs_returns_not_implemented(): void
-    {
-        $this->artisan('raiderio:seed', ['--phase' => 'runs'])
-            ->expectsOutputToContain('not yet implemented')
-            ->assertFailed();
-    }
-
     public function test_unsupported_phase_characters_returns_not_implemented(): void
     {
         $this->artisan('raiderio:seed', ['--phase' => 'characters'])
