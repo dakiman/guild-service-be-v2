@@ -70,9 +70,32 @@ class RaiderIOClient
             ->timeout(15);
     }
 
+    protected function skipRedisThrottle(): bool
+    {
+        return ! $this->backoffSleepEnabled();
+    }
+
+    protected function skipBackoffSleep(): bool
+    {
+        return ! $this->backoffSleepEnabled();
+    }
+
+    protected function backoffSleepEnabled(): bool
+    {
+        $value = $_SERVER['RAIDERIO_BACKOFF_SLEEP_ENABLED']
+            ?? $_ENV['RAIDERIO_BACKOFF_SLEEP_ENABLED']
+            ?? getenv('RAIDERIO_BACKOFF_SLEEP_ENABLED');
+
+        if ($value === false || $value === null || $value === '') {
+            return true;
+        }
+
+        return ! in_array(strtolower((string) $value), ['0', 'false', 'no', 'off'], true);
+    }
+
     protected function get(string $path, array $query): Response
     {
-        if (app()->runningUnitTests()) {
+        if ($this->skipRedisThrottle()) {
             return $this->doGet($path, $query);
         }
 
@@ -105,7 +128,7 @@ class RaiderIOClient
 
             if ($status === 429 && $attempt429 < 1) {
                 $retryAfter = (int) ($response->header('Retry-After') ?? 60);
-                if ($retryAfter > 0 && ! app()->runningUnitTests()) {
+                if ($retryAfter > 0 && ! $this->skipBackoffSleep()) {
                     sleep($retryAfter);
                 }
                 $attempt429++;
@@ -115,7 +138,7 @@ class RaiderIOClient
 
             if ($status >= 500 && $attempt5xx < count($backoffSeconds)) {
                 $sleep = $backoffSeconds[$attempt5xx];
-                if ($sleep > 0 && ! app()->runningUnitTests()) {
+                if ($sleep > 0 && ! $this->skipBackoffSleep()) {
                     sleep($sleep);
                 }
                 $attempt5xx++;
