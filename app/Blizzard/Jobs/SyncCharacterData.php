@@ -326,7 +326,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
      *
      * Public so the regression tests in SyncMythicPlusTeamPivotTest can drive it.
      *
-     * @param  array<int, array{name: string, realm: string, realm_name?: ?string, specialization: ?string, equipped_item_level: ?int}>  $team
+     * @param  array<int, array{name: string, realm: string, realm_name?: ?string, specialization_id?: ?int, specialization: ?string, equipped_item_level: ?int}>  $team
      */
     public function persistRunTeam(DungeonRun $run, array $team): void
     {
@@ -351,6 +351,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 [
                     'character_id' => $resolvedId,
                     'display_realm' => $member['realm_name'] ?? null,
+                    'spec_id' => $member['specialization_id'] ?? null,
                     'spec_name' => $member['specialization'],
                     'equipped_item_level' => $member['equipped_item_level'],
                     'created_at' => $now,

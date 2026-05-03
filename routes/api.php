@@ -74,6 +74,7 @@ Route::patch('/characters/{character}/recruitment', [CharacterController::class,
 |--------------------------------------------------------------------------
 */
 Route::get('/guilds/popular', [GuildController::class, 'popular'])->name('guilds.popular');
+Route::get('/guilds/discover', [GuildController::class, 'discover'])->name('guilds.discover');
 Route::get('/guilds/{region}/{realm}/{guild}', [GuildController::class, 'show'])->name('guilds.show');
 
 /*

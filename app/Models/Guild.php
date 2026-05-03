@@ -68,6 +68,23 @@ class Guild extends Model
             ->limit($limit);
     }
 
+    public function scopeTopByAchievementPoints(Builder $query, int $limit = 5): Builder
+    {
+        return $query->orderByDesc('achievement_points')->limit($limit);
+    }
+
+    public function scopeLargestByMembers(Builder $query, int $limit = 5): Builder
+    {
+        return $query->orderByDesc('member_count')->limit($limit);
+    }
+
+    public function scopeRecentlyCreated(Builder $query, int $limit = 5): Builder
+    {
+        return $query->where('created_timestamp', '>', 0)
+            ->orderByDesc('created_timestamp')
+            ->limit($limit);
+    }
+
     public function isStale(): bool
     {
         if (! $this->updated_at) {

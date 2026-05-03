@@ -30,6 +30,9 @@ class MythicPlusMapper
                     'name' => $member['character']['name'] ?? 'Unknown',
                     'realm' => $member['character']['realm']['slug'] ?? 'unknown',
                     'realm_name' => $member['character']['realm']['name'] ?? null,
+                    'specialization_id' => isset($member['specialization']['id'])
+                        ? (int) $member['specialization']['id']
+                        : null,
                     'specialization' => $member['specialization']['name'] ?? 'Unknown',
                     'equipped_item_level' => (int) ($member['equipped_item_level'] ?? 0),
                 ];

@@ -14,7 +14,7 @@ class GuildSummaryResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        return [
+        $base = [
             'id' => $this->id,
             'name' => $this->name,
             'realm' => $this->realm,
@@ -23,5 +23,12 @@ class GuildSummaryResource extends JsonResource
             'display_realm' => $this->display_realm,
             'faction' => $this->faction,
         ];
+
+        if (isset($this->resource->metric, $this->resource->metric_label)) {
+            $base['metric'] = (int) $this->resource->metric;
+            $base['metric_label'] = $this->resource->metric_label;
+        }
+
+        return $base;
     }
 }

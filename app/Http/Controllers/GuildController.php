@@ -57,4 +57,9 @@ class GuildController extends Controller
             'most_popular' => GuildSummaryResource::collection($data['most_popular']),
         ]);
     }
+
+    public function discover(GuildService $service): JsonResponse
+    {
+        return response()->json($service->getDiscover());
+    }
 }
