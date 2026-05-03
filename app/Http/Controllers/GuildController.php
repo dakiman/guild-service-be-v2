@@ -7,7 +7,9 @@ namespace App\Http\Controllers;
 use App\Blizzard\Jobs\SyncGuildData;
 use App\Exceptions\EntityNotFoundException;
 use App\Http\Resources\GuildResource;
+use App\Http\Resources\GuildSuggestionResource;
 use App\Http\Resources\GuildSummaryResource;
+use App\Models\Guild;
 use App\Services\GuildService;
 use App\Support\BlizzardIdentity;
 use Illuminate\Http\JsonResponse;
@@ -55,6 +57,17 @@ class GuildController extends Controller
         return response()->json([
             'recently_searched' => GuildSummaryResource::collection($data['recently_searched']),
             'most_popular' => GuildSummaryResource::collection($data['most_popular']),
+        ]);
+    }
+
+    public function suggest(Request $request): JsonResponse
+    {
+        $request->validate(['q' => 'present|nullable|string|max:64']);
+
+        $rows = Guild::nameSearch((string) $request->query('q'))->get();
+
+        return response()->json([
+            'suggestions' => GuildSuggestionResource::collection($rows),
         ]);
     }
 

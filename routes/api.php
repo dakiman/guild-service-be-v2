@@ -77,6 +77,9 @@ Route::patch('/characters/{character}/recruitment', [CharacterController::class,
 |--------------------------------------------------------------------------
 */
 Route::get('/guilds/popular', [GuildController::class, 'popular'])->name('guilds.popular');
+Route::get('/guilds/suggest', [GuildController::class, 'suggest'])
+    ->middleware('throttle:60,1')
+    ->name('guilds.suggest');
 Route::get('/guilds/discover', [GuildController::class, 'discover'])->name('guilds.discover');
 Route::get('/guilds/{region}/{realm}/{guild}', [GuildController::class, 'show'])->name('guilds.show');
 
