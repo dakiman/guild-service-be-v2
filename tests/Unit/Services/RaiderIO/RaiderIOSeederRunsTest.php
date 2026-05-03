@@ -139,7 +139,7 @@ class RaiderIOSeederRunsTest extends TestCase
         $this->assertSame(0, $report->skippedTtl);
     }
 
-    public function test_seed_runs_dry_run_dispatches_nothing_but_writes_ledger(): void
+    public function test_seed_runs_dry_run_dispatches_nothing_and_does_not_mutate_ledger(): void
     {
         $client = $this->mock(RaiderIOClient::class);
         $client->shouldReceive('topRuns')->andReturn((function () {
@@ -154,6 +154,28 @@ class RaiderIOSeederRunsTest extends TestCase
 
         Bus::assertNothingDispatched();
         $this->assertSame(2, $report->dispatched);
-        $this->assertTrue(SeededRun::where('keystone_run_id', 1001)->exists());
+        // Dry-run does NOT write to the ledger so a subsequent real run sees fresh runs.
+        $this->assertFalse(SeededRun::where('keystone_run_id', 1001)->exists());
+    }
+
+    public function test_seed_runs_dry_run_skips_already_seeded_runs_without_writing(): void
+    {
+        SeededRun::create(['keystone_run_id' => 1001, 'region' => 'eu']);
+
+        $client = $this->mock(RaiderIOClient::class);
+        $client->shouldReceive('topRuns')->andReturn((function () {
+            yield new SeedRunRef(1001, 'eu', [new SeedCharacterRef('eu', 'tarren-mill', 'A')]);
+            yield new SeedRunRef(1002, 'eu', [new SeedCharacterRef('eu', 'kazzak', 'B')]);
+        })());
+
+        $seeder = app(RaiderIOSeeder::class);
+        $report = $seeder->seedRuns(new SeedOptions(regions: ['eu'], limit: 1, dryRun: true));
+
+        Bus::assertNothingDispatched();
+        $this->assertSame(1, $report->skippedDedupe);
+        $this->assertSame(1, $report->dispatched);
+        // 1002 is fresh but dry-run did not insert it.
+        $this->assertFalse(SeededRun::where('keystone_run_id', 1002)->exists());
+        $this->assertSame(1, SeededRun::count()); // only the pre-seeded 1001
     }
 }

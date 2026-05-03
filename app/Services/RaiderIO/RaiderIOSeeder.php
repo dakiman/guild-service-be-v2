@@ -81,16 +81,25 @@ class RaiderIOSeeder
                 foreach ($this->client->topRuns($region, $season, $opts->limit) as $runRef) {
                     $report->considered++;
 
-                    $inserted = DB::table('seeded_runs')->insertOrIgnore([
-                        'keystone_run_id' => $runRef->keystoneRunId,
-                        'region' => $region,
-                        'seeded_at' => now(),
-                    ]);
+                    if ($opts->dryRun) {
+                        // Dry-run does not mutate the ledger; check existence read-only.
+                        if (\App\Models\SeededRun::where('keystone_run_id', $runRef->keystoneRunId)->exists()) {
+                            $report->skippedDedupe++;
 
-                    if ($inserted === 0) {
-                        $report->skippedDedupe++;
+                            continue;
+                        }
+                    } else {
+                        $inserted = DB::table('seeded_runs')->insertOrIgnore([
+                            'keystone_run_id' => $runRef->keystoneRunId,
+                            'region' => $region,
+                            'seeded_at' => now(),
+                        ]);
 
-                        continue;
+                        if ($inserted === 0) {
+                            $report->skippedDedupe++;
+
+                            continue;
+                        }
                     }
 
                     foreach ($runRef->members as $memberRef) {

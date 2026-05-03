@@ -50,7 +50,7 @@ class RaiderIOSeedCommandRunsTest extends TestCase
         ])->assertSuccessful();
 
         Bus::assertNothingDispatched();
-        // Ledger still gets written under dry-run.
-        $this->assertSame(3, SeededRun::count());
+        // Dry-run does NOT mutate the ledger — keeps the command idempotent.
+        $this->assertSame(0, SeededRun::count());
     }
 }
