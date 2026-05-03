@@ -1,0 +1,34 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Unit\Services\RaiderIO;
+
+use App\Services\RaiderIO\DTO\SeedGuildRef;
+use App\Services\RaiderIO\Exceptions\RaiderIOException;
+use App\Services\RaiderIO\RaiderIOClient;
+use Illuminate\Support\Facades\Http;
+use Tests\TestCase;
+
+class RaiderIOClientTest extends TestCase
+{
+    public function test_top_guilds_yields_guild_refs_from_response(): void
+    {
+        $fixture = json_decode(file_get_contents(base_path('tests/fixtures/raiderio/top-guilds-eu.json')), true);
+        Http::fake([
+            'raider.io/api/v1/guilds/static-raid-rankings*' => Http::response($fixture, 200),
+        ]);
+
+        $client = app(RaiderIOClient::class);
+
+        $refs = iterator_to_array($client->topGuilds('eu', 3), preserve_keys: false);
+
+        $this->assertCount(3, $refs);
+        $this->assertInstanceOf(SeedGuildRef::class, $refs[0]);
+        $this->assertSame('eu', $refs[0]->region);
+        $this->assertSame('tarren-mill', $refs[0]->realmSlug);
+        $this->assertSame('Echo', $refs[0]->name);
+        $this->assertSame('Method', $refs[1]->name);
+        $this->assertSame('Pieces', $refs[2]->name);
+    }
+}

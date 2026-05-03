@@ -1,0 +1,129 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Services\RaiderIO;
+
+use App\Services\RaiderIO\DTO\SeedGuildRef;
+use App\Services\RaiderIO\Exceptions\RaiderIOException;
+use Generator;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Redis;
+
+class RaiderIOClient
+{
+    /**
+     * Yields up to $limit SeedGuildRef rows for a region.
+     *
+     * @return Generator<int, SeedGuildRef>
+     */
+    public function topGuilds(string $region, int $limit): Generator
+    {
+        $raid = $this->currentRaidSlug();
+        $perPage = 20;
+        $pagesNeeded = (int) ceil($limit / $perPage);
+        $yielded = 0;
+
+        for ($page = 0; $page < $pagesNeeded && $yielded < $limit; $page++) {
+            $response = $this->get('/guilds/static-raid-rankings', [
+                'raid' => $raid,
+                'difficulty' => 'mythic',
+                'region' => $region,
+                'limit' => $perPage,
+                'page' => $page,
+            ]);
+
+            $rows = $response->json('rankings.rankedGuilds') ?? [];
+
+            if ($rows === []) {
+                return;
+            }
+
+            foreach ($rows as $row) {
+                if ($yielded >= $limit) {
+                    return;
+                }
+                $name = $row['guild']['name'] ?? null;
+                $realmSlug = $row['guild']['realm']['slug'] ?? null;
+                $regionSlug = $row['guild']['region']['slug'] ?? $region;
+                if ($name === null || $realmSlug === null) {
+                    continue;
+                }
+                $yielded++;
+                yield new SeedGuildRef(region: $regionSlug, realmSlug: $realmSlug, name: $name);
+            }
+        }
+    }
+
+    protected function currentRaidSlug(): string
+    {
+        // Phase 1: hardcode current Midnight raid that drives mythic rankings.
+        return 'the-voidspire';
+    }
+
+    protected function http(): PendingRequest
+    {
+        return Http::baseUrl((string) config('raiderio.base_url'))
+            ->acceptJson()
+            ->timeout(15);
+    }
+
+    protected function get(string $path, array $query): Response
+    {
+        if (app()->runningUnitTests()) {
+            return $this->doGet($path, $query);
+        }
+
+        return Redis::throttle('raiderio:requests')
+            ->allow((int) config('raiderio.throttle.per_minute'))
+            ->every(60)
+            ->block(30)
+            ->then(
+                fn () => $this->doGet($path, $query),
+                function () use ($path) {
+                    throw new RaiderIOException("raiderio: throttle timeout for $path");
+                }
+            );
+    }
+
+    protected function doGet(string $path, array $query): Response
+    {
+        $attempt429 = 0;
+        $attempt5xx = 0;
+        $backoffSeconds = [1, 4, 10];
+
+        while (true) {
+            $response = $this->http()->get($path, $query);
+
+            if ($response->successful()) {
+                return $response;
+            }
+
+            $status = $response->status();
+
+            if ($status === 429 && $attempt429 < 1) {
+                $retryAfter = (int) ($response->header('Retry-After') ?? 60);
+                if ($retryAfter > 0 && ! app()->runningUnitTests()) {
+                    sleep($retryAfter);
+                }
+                $attempt429++;
+                continue;
+            }
+
+            if ($status >= 500 && $attempt5xx < count($backoffSeconds)) {
+                $sleep = $backoffSeconds[$attempt5xx];
+                if ($sleep > 0 && ! app()->runningUnitTests()) {
+                    sleep($sleep);
+                }
+                $attempt5xx++;
+                continue;
+            }
+
+            throw new RaiderIOException(
+                sprintf('raider.io returned HTTP %d for %s', $status, $path)
+            );
+        }
+    }
+}
