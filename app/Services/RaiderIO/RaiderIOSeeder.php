@@ -159,7 +159,7 @@ class RaiderIOSeeder
         if ($existing === null || $existing->updated_at === null) {
             return false;
         }
-        $ttl = (int) config('raiderio.character_resync_ttl', 12 * 3600);
+        $ttl = (int) config('raiderio.character_resync_ttl', 86400);
 
         return $existing->updated_at->isAfter(now()->subSeconds($ttl));
     }
