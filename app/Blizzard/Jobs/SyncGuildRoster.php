@@ -59,12 +59,35 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
             ->where('level', '>=', $minLevel)
             ->get();
 
-        // Dispatch Shallow per-member individually. The previous Bus::batch path
-        // never actually worked: SyncCharacterData lacks the Batchable trait, so
-        // every batch dispatch threw. This was hidden by SyncGuildData's dead
-        // isRosterStale() gate (always false because roster_synced_at had just
-        // been set), which meant SyncGuildRoster never fired in production.
+        // When forceFanout is true (user-visit cascade or seeder run), skip both
+        // Shallow and Full dispatches for any member whose Character row is fresh
+        // (updated_at within $ttl). Cold + stale members get both Shallow and Full.
+        // When forceFanout is false (proactive path), Shallow fires unconditionally
+        // — same as today.
+        $freshTuples = [];
+        if ($this->forceFanout) {
+            $ttl = (int) config('raiderio.character_resync_ttl', 86400);
+            $cutoff = now()->subSeconds($ttl);
+
+            $freshTuples = Character::query()
+                ->where('region', $this->guild->region)
+                ->where('game_version', 'retail')
+                ->where('updated_at', '>', $cutoff)
+                ->where(function ($q) use ($members) {
+                    foreach ($members as $m) {
+                        $q->orWhere(fn ($qq) => $qq->where('name', $m->name)->where('realm', $m->realm));
+                    }
+                })
+                ->get(['name', 'realm'])
+                ->mapWithKeys(fn ($c) => ["{$c->name}|{$c->realm}" => true])
+                ->all();
+        }
+
         foreach ($members as $member) {
+            if ($this->forceFanout && isset($freshTuples["{$member->name}|{$member->realm}"])) {
+                continue;
+            }
+
             SyncCharacterData::dispatch(
                 region: $this->guild->region,
                 realm: $member->realm,
@@ -74,26 +97,37 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
         }
 
         // Per-member SyncCharacterData::Full fan-out is gated by either:
-        // 1. forceFanout=true on this specific job (set by the seeder via SyncGuildData),
-        //    so a deliberate seed run cascades regardless of global config; OR
-        // 2. raiderio.dispatch_roster_character_syncs config flag (default false),
-        //    so an operator can globally turn it on if desired.
-        // The default-false config means routine ProactiveSyncGuilds + user-triggered
-        // SyncGuildData will NOT cascade Full per member — only the seeder will.
+        // 1. forceFanout=true on this specific job (set by the seeder via SyncGuildData,
+        //    or by the user-visit cascade via SyncGuildData::forceCascade).
+        // 2. raiderio.dispatch_roster_character_syncs config flag (default false).
         if ($this->forceFanout || config('raiderio.dispatch_roster_character_syncs', false)) {
-            $this->dispatchFullSyncsForMembers($members);
+            $this->dispatchFullSyncsForMembers($members, $freshTuples);
         }
     }
 
-    protected function dispatchFullSyncsForMembers(Collection $members): void
+    /**
+     * @param  array<string, true>  $freshTuples  precomputed map of "name|realm" => true for members
+     *                                            whose Character is fresh under the unified TTL gate.
+     *                                            Empty when forceFanout was false (proactive path
+     *                                            uses its own self-contained TTL gate below).
+     */
+    protected function dispatchFullSyncsForMembers(Collection $members, array $freshTuples = []): void
     {
-        $ttl = (int) config('raiderio.character_resync_ttl', 12 * 3600);
+        $ttl = (int) config('raiderio.character_resync_ttl', 86400);
         $cutoff = now()->subSeconds($ttl);
 
         foreach ($members as $member) {
-            $existing = Character::byIdentity($member->name, $member->realm, $this->guild->region)->first();
-            if ($existing !== null && $existing->updated_at !== null && $existing->updated_at->isAfter($cutoff)) {
+            // Unified gate (already computed) takes precedence when forceFanout was true.
+            if ($this->forceFanout && isset($freshTuples["{$member->name}|{$member->realm}"])) {
                 continue;
+            }
+
+            // Proactive path (forceFanout=false, config flag=true) falls back to per-member lookup.
+            if (! $this->forceFanout) {
+                $existing = Character::byIdentity($member->name, $member->realm, $this->guild->region)->first();
+                if ($existing !== null && $existing->updated_at !== null && $existing->updated_at->isAfter($cutoff)) {
+                    continue;
+                }
             }
 
             SyncCharacterData::dispatch(
@@ -101,6 +135,9 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
                 realm: $member->realm,
                 name: $member->name,
                 depth: SyncDepth::Full,
+                userId: null,
+                crawlDepth: 0,
+                forceTeammateCrawl: $this->forceFanout,
             );
         }
     }
