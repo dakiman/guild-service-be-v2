@@ -37,6 +37,7 @@ class BlizzardController extends Controller
         $user = $request->user();
         $state = $request->validated('state');
         $cacheKey = "blizzard:oauth-state:{$user->id}:{$region}:{$state}";
+        // Atomic single-use: pull = get + forget. Replays must fail.
         $statePayload = Cache::pull($cacheKey);
 
         if (! is_array($statePayload)
