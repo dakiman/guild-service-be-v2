@@ -110,9 +110,14 @@ Route::get('/game-data/realms', [GameDataController::class, 'realms'])
 
 /*
 |--------------------------------------------------------------------------
-| Blizzard OAuth Route
+| Blizzard OAuth Routes
 |--------------------------------------------------------------------------
 */
-Route::post('/{region}/blizzard-oauth', [BlizzardController::class, 'handleCode'])
-    ->middleware('auth:sanctum')
-    ->name('blizzard.oauth');
+Route::middleware(['auth:sanctum', 'throttle:10,1'])
+    ->whereIn('region', config('blizzard.regions', ['eu', 'us', 'kr', 'tw']))
+    ->group(function () {
+        Route::post('/{region}/blizzard-oauth/state', [BlizzardController::class, 'state'])
+            ->name('blizzard.oauth.state');
+        Route::post('/{region}/blizzard-oauth', [BlizzardController::class, 'handleCode'])
+            ->name('blizzard.oauth');
+    });

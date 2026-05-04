@@ -327,7 +327,7 @@ git commit -m "fix(guilds): validate roster per_page (max 100) and filter length
 
 ### Task 3: Add OAuth state minting + redirect-URI allowlist
 
-> **DEFERRED — DO NOT EXECUTE.** Requires a paired frontend change (FE must call the new `/state` endpoint and pass `state` back into the code-exchange request). Shipping this without the FE PR breaks live OAuth. Skip to Task 4.
+> **Paired with FE plan `frontend/docs/superpowers/plans/2026-05-04-frontend-review-fixes.md`.** Execute alongside that plan's tasks; the two PRs must ship together.
 
 **Files:**
 - Modify: `config/blizzard.php`

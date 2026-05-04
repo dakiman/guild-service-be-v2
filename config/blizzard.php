@@ -146,4 +146,24 @@ return [
         'per_hour' => 30000,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | OAuth (Battle.net)
+    |--------------------------------------------------------------------------
+    | `redirect_uris` is a comma-separated allowlist; values not in this list
+    | are rejected by `BlizzardOAuthRequest` / `BlizzardOAuthStateRequest`.
+    | `state_ttl` controls how long a minted CSRF state is cached (seconds).
+    */
+
+    'oauth' => [
+        'redirect_uris' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env(
+                'BLIZZARD_OAUTH_REDIRECT_URIS',
+                rtrim((string) env('FRONTEND_URL', 'http://localhost:5173'), '/').'/blizzard-oauth'
+            ))
+        ))),
+        'state_ttl' => (int) env('BLIZZARD_OAUTH_STATE_TTL', 600),
+    ],
+
 ];

@@ -7,12 +7,43 @@ namespace App\Http\Controllers;
 use App\Blizzard\Client\BlizzardAuthClient;
 use App\Blizzard\Jobs\SyncUserCharacters;
 use App\Http\Requests\BlizzardOAuthRequest;
+use App\Http\Requests\BlizzardOAuthStateRequest;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 class BlizzardController extends Controller
 {
+    public function state(BlizzardOAuthStateRequest $request, string $region): JsonResponse
+    {
+        $state = Str::random(64);
+        $ttl = (int) config('blizzard.oauth.state_ttl', 600);
+        $user = $request->user();
+
+        Cache::put(
+            "blizzard:oauth-state:{$user->id}:{$region}:{$state}",
+            ['redirectUri' => $request->validated('redirectUri')],
+            $ttl
+        );
+
+        return response()->json([
+            'state' => $state,
+            'expires_in' => $ttl,
+        ]);
+    }
+
     public function handleCode(BlizzardOAuthRequest $request, string $region): JsonResponse
     {
+        $user = $request->user();
+        $state = $request->validated('state');
+        $cacheKey = "blizzard:oauth-state:{$user->id}:{$region}:{$state}";
+        $statePayload = Cache::pull($cacheKey);
+
+        if (! is_array($statePayload)
+            || ($statePayload['redirectUri'] ?? null) !== $request->validated('redirectUri')) {
+            return response()->json(['message' => 'Invalid OAuth state.'], 422);
+        }
+
         /** @var BlizzardAuthClient $authClient */
         $authClient = app(BlizzardAuthClient::class);
 
@@ -22,7 +53,6 @@ class BlizzardController extends Controller
             $request->validated('redirectUri'),
         );
 
-        $user = $request->user();
         $user->update(['bnet_region' => $region]);
 
         SyncUserCharacters::dispatch($user, $region, $tokenResponse->access_token);
