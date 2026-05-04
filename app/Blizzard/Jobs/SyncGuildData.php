@@ -11,6 +11,7 @@ use App\Blizzard\Mappers\GuildProfileMapper;
 use App\Blizzard\Mappers\GuildRosterMapper;
 use App\Blizzard\Middleware\BlizzardHealthCheck;
 use App\Blizzard\Middleware\BlizzardRateLimiter;
+use App\Models\Character;
 use App\Models\Guild;
 use App\Models\GuildMember;
 use Illuminate\Bus\Queueable;
@@ -106,10 +107,28 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
         $rosterData = $client->getGuildRoster($this->realm, $this->name);
         $members = $rosterMapper->map($rosterData);
 
+        // Pre-resolve character_id for each (name, realm) tuple so the upsert
+        // can wire the FK in one round-trip per roster sync, avoiding the
+        // GuildController stitch-by-tuple workaround.
+        $charsByTuple = collect();
+        if (! empty($members)) {
+            $charsByTuple = Character::query()
+                ->where('region', $this->region)
+                ->where('game_version', 'retail')
+                ->where(function ($q) use ($members) {
+                    foreach ($members as $m) {
+                        $q->orWhere(fn ($qq) => $qq->where('name', $m->name)->where('realm', $m->realm));
+                    }
+                })
+                ->get(['id', 'name', 'realm'])
+                ->keyBy(fn ($c) => $c->name.'|'.$c->realm);
+        }
+
         $memberRecords = [];
         foreach ($members as $member) {
             $memberRecords[] = [
                 'guild_id' => $guild->id,
+                'character_id' => $charsByTuple["{$member->name}|{$member->realm}"]?->id ?? null,
                 'name' => $member->name,
                 'realm' => $member->realm,
                 'level' => $member->level,
@@ -126,7 +145,7 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
             GuildMember::upsert(
                 $memberRecords,
                 ['guild_id', 'name', 'realm'],
-                ['level', 'class_id', 'race_id', 'rank', 'display_name', 'display_realm'],
+                ['character_id', 'level', 'class_id', 'race_id', 'rank', 'display_name', 'display_realm'],
             );
         }
 
