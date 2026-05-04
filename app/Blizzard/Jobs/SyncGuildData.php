@@ -41,6 +41,11 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
         // jobs gets `false` rather than "uninitialized" — see SyncCharacterData
         // forceTeammateCrawl for the same pattern + rationale.
         public bool $forceRosterFanout = false,
+        // Set true by user-visit dispatch sites (GuildController, GuildService)
+        // to force per-member Full fan-out + M+ teammate crawl on the resulting
+        // SyncGuildRoster. Default false so background ProactiveSyncGuilds stays
+        // Shallow-only.
+        public bool $forceCascade = false,
     ) {
         $this->onQueue('blizzard-user-sync');
     }
