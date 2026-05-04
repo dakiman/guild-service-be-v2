@@ -144,7 +144,7 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
         // SyncCharacterData fan-out. Previously gated on isRosterStale(), which is
         // always false here because we just set roster_synced_at to now() — the
         // gate was dead code, and the roster job never fired.
-        SyncGuildRoster::dispatch($guild, $this->forceRosterFanout);
+        SyncGuildRoster::dispatch($guild, $this->forceRosterFanout || $this->forceCascade);
     }
 
     public function failed(Throwable $exception): void
