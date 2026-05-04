@@ -27,8 +27,8 @@ class GuildMemberResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        $character = $this->whenLoaded('character');
-        $hasCharacter = $character && $character->exists;
+        $hasCharacter = $this->relationLoaded('character') && $this->character !== null;
+        $character = $hasCharacter ? $this->character : null;
 
         return [
             'id' => $this->id,
