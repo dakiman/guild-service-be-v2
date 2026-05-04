@@ -44,6 +44,30 @@ class Guild extends Model
         return $this->hasMany(GuildMember::class);
     }
 
+    /**
+     * Idempotent backfill: link any GuildMember in this guild whose
+     * character_id is still NULL but a matching retail Character now exists.
+     * Used by both SyncGuildData (post-roster-upsert) and GuildController
+     * (pre-render) so the eager-loaded `character` relation is populated even
+     * when SyncCharacterData::linkGuildMembers hasn't fired yet for that row.
+     * Subquery form rather than UPDATE...FROM so it runs on Postgres + SQLite.
+     */
+    public function backfillMemberCharacterIds(): void
+    {
+        GuildMember::query()
+            ->where('guild_id', $this->id)
+            ->whereNull('character_id')
+            ->update([
+                'character_id' => Character::query()
+                    ->select('id')
+                    ->whereColumn('characters.name', 'guild_members.name')
+                    ->whereColumn('characters.realm', 'guild_members.realm')
+                    ->where('region', $this->region)
+                    ->where('game_version', 'retail')
+                    ->limit(1),
+            ]);
+    }
+
     public function characters(): HasMany
     {
         return $this->hasMany(Character::class);
@@ -87,8 +111,8 @@ class Guild extends Model
         }
 
         // Names are stored canonical-lowercase (see BlizzardIdentity::name); plain LIKE is case-correct on Postgres.
-        $prefix = $needle . '%';
-        $substring = '%' . $needle . '%';
+        $prefix = $needle.'%';
+        $substring = '%'.$needle.'%';
 
         return $query
             ->where(function ($q) use ($prefix, $substring) {

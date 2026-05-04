@@ -11,6 +11,7 @@ use App\Blizzard\Mappers\GuildProfileMapper;
 use App\Blizzard\Mappers\GuildRosterMapper;
 use App\Blizzard\Middleware\BlizzardHealthCheck;
 use App\Blizzard\Middleware\BlizzardRateLimiter;
+use App\Models\Character;
 use App\Models\Guild;
 use App\Models\GuildMember;
 use Illuminate\Bus\Queueable;
@@ -41,13 +42,25 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
         // jobs gets `false` rather than "uninitialized" — see SyncCharacterData
         // forceTeammateCrawl for the same pattern + rationale.
         public bool $forceRosterFanout = false,
+        // Set true by user-visit dispatch sites (GuildController, GuildService)
+        // to force per-member Full fan-out + M+ teammate crawl on the resulting
+        // SyncGuildRoster. Default false so background ProactiveSyncGuilds stays
+        // Shallow-only.
+        public bool $forceCascade = false,
     ) {
         $this->onQueue('blizzard-user-sync');
     }
 
     public function uniqueId(): string
     {
-        return "sync-guild:{$this->region}:{$this->realm}:{$this->name}";
+        // Mode segment so a queued auto-mode job (proactive sweep) doesn't
+        // dedupe a force-mode job (user visit / seeder), which would silently
+        // skip the per-member Full fan-out + teammate crawl. Two parallel jobs
+        // for the same guild may run during a collision; both honor the rate
+        // limiter and the cost is one redundant API round-trip.
+        $mode = ($this->forceCascade || $this->forceRosterFanout) ? 'force' : 'auto';
+
+        return "sync-guild:{$this->region}:{$this->realm}:{$this->name}:{$mode}";
     }
 
     /**
@@ -101,10 +114,28 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
         $rosterData = $client->getGuildRoster($this->realm, $this->name);
         $members = $rosterMapper->map($rosterData);
 
+        // Pre-resolve character_id for each (name, realm) tuple so the upsert
+        // can wire the FK in one round-trip per roster sync, avoiding the
+        // GuildController stitch-by-tuple workaround.
+        $charsByTuple = collect();
+        if (! empty($members)) {
+            $charsByTuple = Character::query()
+                ->where('region', $this->region)
+                ->where('game_version', 'retail')
+                ->where(function ($q) use ($members) {
+                    foreach ($members as $m) {
+                        $q->orWhere(fn ($qq) => $qq->where('name', $m->name)->where('realm', $m->realm));
+                    }
+                })
+                ->get(['id', 'name', 'realm'])
+                ->keyBy(fn ($c) => $c->name.'|'.$c->realm);
+        }
+
         $memberRecords = [];
         foreach ($members as $member) {
             $memberRecords[] = [
                 'guild_id' => $guild->id,
+                'character_id' => $charsByTuple["{$member->name}|{$member->realm}"]?->id ?? null,
                 'name' => $member->name,
                 'realm' => $member->realm,
                 'level' => $member->level,
@@ -116,7 +147,14 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
             ];
         }
 
-        // Upsert guild members
+        // Upsert guild members.
+        // character_id is intentionally OMITTED from the UPDATE column list:
+        // INSERT still seeds it from the pre-resolve snapshot, but on conflict
+        // we don't touch it. Otherwise a concurrent SyncCharacterData run that
+        // called linkGuildMembers between our pre-resolve and this upsert could
+        // have set character_id to a valid id, and our stale-snapshot null
+        // would silently overwrite it. The post-upsert backfill below restores
+        // any rows where pre-resolve missed but a Character now exists.
         if (! empty($memberRecords)) {
             GuildMember::upsert(
                 $memberRecords,
@@ -124,6 +162,14 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
                 ['level', 'class_id', 'race_id', 'rank', 'display_name', 'display_realm'],
             );
         }
+
+        // Post-upsert backfill: catches (a) Characters that appeared between
+        // pre-resolve and the upsert above, and (b) Characters created since
+        // the previous SyncGuildData run (the "Character appeared later" path
+        // that the upsert update list used to cover, before that became
+        // race-prone). Same query is also called by GuildController before
+        // render — see Guild::backfillMemberCharacterIds().
+        $guild->backfillMemberCharacterIds();
 
         // Remove stale members not in roster
         $currentMemberNames = array_map(fn ($m) => $m->name, $members);
@@ -139,7 +185,7 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
         // SyncCharacterData fan-out. Previously gated on isRosterStale(), which is
         // always false here because we just set roster_synced_at to now() — the
         // gate was dead code, and the roster job never fired.
-        SyncGuildRoster::dispatch($guild, $this->forceRosterFanout);
+        SyncGuildRoster::dispatch($guild, $this->forceRosterFanout || $this->forceCascade);
     }
 
     public function failed(Throwable $exception): void

@@ -57,7 +57,15 @@ class SyncGameData extends Command
             ? ['factions', 'titles', 'mounts', 'achievements', 'pve', 'talent-trees']
             : [$resource];
 
+        $achievementsEnabled = (bool) config('blizzard.sync.achievements_enabled');
+
         foreach ($resources as $r) {
+            if ($r === 'achievements' && ! $achievementsEnabled) {
+                $this->warn('Achievements game-data sync skipped: BLIZZARD_SYNC_ACHIEVEMENTS_ENABLED is off.');
+
+                continue;
+            }
+
             match ($r) {
                 'factions' => $this->syncFactions($client, $factionMapper),
                 'titles' => $this->syncTitles($client, $titleMapper),

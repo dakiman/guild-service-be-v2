@@ -26,6 +26,11 @@ class SyncGameDataTest extends TestCase
     {
         parent::setUp();
         $this->seed(GameDataExpansionSeeder::class);
+
+        // Achievements game-data sync is gated on this flag (off by default
+        // in production due to ~40k row disk cost). Tests assert the catalog
+        // is populated, so flip it on for the duration of the test class.
+        config(['blizzard.sync.achievements_enabled' => true]);
     }
 
     public function test_sync_factions_upserts_known_factions_with_expansion_id(): void
