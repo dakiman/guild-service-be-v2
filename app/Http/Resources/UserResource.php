@@ -22,6 +22,7 @@ class UserResource extends JsonResource
             'bnet_tag' => $this->bnet_tag,
             'bnet_region' => $this->bnet_region,
             'bnet_synced_at' => $this->bnet_synced_at,
+            'bnet_sync_status' => $this->bnet_sync_status,
             'characters' => CharacterSummaryResource::collection($this->whenLoaded('characters')),
         ];
     }

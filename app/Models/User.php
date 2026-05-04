@@ -22,6 +22,7 @@ class User extends Authenticatable
         'bnet_tag',
         'bnet_region',
         'bnet_synced_at',
+        'bnet_sync_status',
     ];
 
     protected $hidden = [

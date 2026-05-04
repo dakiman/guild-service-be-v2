@@ -54,7 +54,7 @@ class BlizzardController extends Controller
             $request->validated('redirectUri'),
         );
 
-        $user->update(['bnet_region' => $region]);
+        $user->update(['bnet_region' => $region, 'bnet_sync_status' => 'syncing']);
 
         SyncUserCharacters::dispatch($user, $region, $tokenResponse->access_token);
 

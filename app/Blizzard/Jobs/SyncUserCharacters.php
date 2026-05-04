@@ -79,10 +79,14 @@ class SyncUserCharacters implements ShouldQueue
                 );
             }
         }
+
+        $this->user->update(['bnet_sync_status' => null]);
     }
 
     public function failed(Throwable $exception): void
     {
+        $this->user->update(['bnet_sync_status' => null]);
+
         Log::error('SyncUserCharacters failed', [
             'user_id' => $this->user->id,
             'region' => $this->region,
