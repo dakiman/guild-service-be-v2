@@ -6,6 +6,7 @@ namespace App\Http\Controllers;
 
 use App\Blizzard\Jobs\SyncGuildData;
 use App\Exceptions\EntityNotFoundException;
+use App\Http\Resources\GuildMemberResource;
 use App\Http\Resources\GuildResource;
 use App\Http\Resources\GuildSuggestionResource;
 use App\Http\Resources\GuildSummaryResource;
@@ -36,11 +37,13 @@ class GuildController extends Controller
         }
 
         $perPage = (int) $request->query('per_page', '50');
-        $members = $result->members()->paginate($perPage);
+        $members = $result->members()
+            ->with(['character:id,equipped_item_level,mythic_plus_rating,mythic_plus_rating_color,active_specialization_id,updated_at'])
+            ->paginate($perPage);
 
         $response = response()->json([
             'guild' => new GuildResource($result),
-            'members' => $members,
+            'members' => GuildMemberResource::collection($members)->response()->getData(true),
         ]);
 
         if ($result->isStale()) {
