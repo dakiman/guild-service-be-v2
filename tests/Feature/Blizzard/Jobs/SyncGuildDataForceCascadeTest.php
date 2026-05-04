@@ -40,6 +40,32 @@ class SyncGuildDataForceCascadeTest extends TestCase
         $this->assertTrue($job->forceCascade);
     }
 
+    public function test_unique_id_distinguishes_force_mode_from_auto_mode(): void
+    {
+        // Otherwise a queued auto-mode job (proactive sweep) silently dedupes
+        // a force-mode job (user visit / seeder) within the 60s uniqueFor
+        // window, dropping the per-member Full fan-out + teammate crawl.
+        $auto = new SyncGuildData(region: 'eu', realm: 'tarren-mill', name: 'echo');
+        $cascade = new SyncGuildData(region: 'eu', realm: 'tarren-mill', name: 'echo', forceCascade: true);
+        $rosterForce = new SyncGuildData(region: 'eu', realm: 'tarren-mill', name: 'echo', forceRosterFanout: true);
+
+        $this->assertNotSame($auto->uniqueId(), $cascade->uniqueId());
+        $this->assertNotSame($auto->uniqueId(), $rosterForce->uniqueId());
+
+        // Both force flags collapse onto a single "force" segment so the
+        // user-visit cascade and the seeder share one slot (they would
+        // produce identical work — fanning out per-member Full).
+        $this->assertSame($cascade->uniqueId(), $rosterForce->uniqueId());
+    }
+
+    public function test_unique_id_matches_for_same_mode(): void
+    {
+        $a = new SyncGuildData(region: 'eu', realm: 'tarren-mill', name: 'echo');
+        $b = new SyncGuildData(region: 'eu', realm: 'tarren-mill', name: 'echo');
+
+        $this->assertSame($a->uniqueId(), $b->uniqueId());
+    }
+
     public function test_dispatches_sync_guild_roster_with_force_fanout_when_force_cascade_true(): void
     {
         Bus::fake([SyncGuildRoster::class]);

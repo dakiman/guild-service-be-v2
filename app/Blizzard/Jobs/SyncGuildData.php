@@ -53,7 +53,14 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
 
     public function uniqueId(): string
     {
-        return "sync-guild:{$this->region}:{$this->realm}:{$this->name}";
+        // Mode segment so a queued auto-mode job (proactive sweep) doesn't
+        // dedupe a force-mode job (user visit / seeder), which would silently
+        // skip the per-member Full fan-out + teammate crawl. Two parallel jobs
+        // for the same guild may run during a collision; both honor the rate
+        // limiter and the cost is one redundant API round-trip.
+        $mode = ($this->forceCascade || $this->forceRosterFanout) ? 'force' : 'auto';
+
+        return "sync-guild:{$this->region}:{$this->realm}:{$this->name}:{$mode}";
     }
 
     /**
