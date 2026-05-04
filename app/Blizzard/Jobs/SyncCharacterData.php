@@ -38,6 +38,7 @@ use App\Models\CharacterTitle;
 use App\Models\CharacterToy;
 use App\Models\DungeonRun;
 use App\Models\Guild;
+use App\Models\GuildMember;
 use App\Models\RaidEncounterKill;
 use App\Support\BlizzardIdentity;
 use Illuminate\Bus\Queueable;
@@ -215,6 +216,8 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             ],
             $characterData,
         );
+
+        self::linkGuildMembers($character);
 
         // Link guild if present.
         // Canonicalize guildName the same way GuildController does
@@ -883,6 +886,21 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Backfill GuildMember.character_id for any rows whose (name, realm, guild.region)
+     * matches the given character. Idempotent: only fills NULLs, never overwrites.
+     * Public-static so it can be unit-tested without driving the full handle() path.
+     */
+    public static function linkGuildMembers(Character $character): void
+    {
+        GuildMember::query()
+            ->where('name', $character->name)
+            ->where('realm', $character->realm)
+            ->whereNull('character_id')
+            ->whereHas('guild', fn ($q) => $q->where('region', $character->region))
+            ->update(['character_id' => $character->id]);
     }
 
     public function failed(Throwable $exception): void
