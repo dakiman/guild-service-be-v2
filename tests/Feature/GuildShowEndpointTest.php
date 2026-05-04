@@ -111,21 +111,20 @@ class GuildShowEndpointTest extends TestCase
         $this->assertNull($unsynced['synced_at']);
     }
 
-    public function test_endpoint_stitches_character_data_when_character_id_fk_is_null(): void
+    public function test_endpoint_returns_character_data_via_character_id_fk(): void
     {
-        // Reproduces the production case: SyncGuildRoster left character_id NULL
-        // even though a matching Character row already exists. Controller should
-        // stitch the relation by (name, realm, region) tuple.
+        // Verifies that character data flows through via the character_id FK eager-load
+        // (the stitch-by-tuple workaround has been removed; character_id must be wired).
         $guild = Guild::factory()->create([
-            'name' => 'stitchguild',
+            'name' => 'linkedguild',
             'realm' => 'test-realm',
             'region' => 'eu',
             'roster_synced_at' => now(),
         ]);
         $guild->forceFill(['updated_at' => now()])->save();
 
-        Character::factory()->create([
-            'name' => 'orphanmember',
+        $character = Character::factory()->create([
+            'name' => 'linkedmember',
             'realm' => 'test-realm',
             'region' => 'eu',
             'equipped_item_level' => 542,
@@ -134,11 +133,10 @@ class GuildShowEndpointTest extends TestCase
             'active_specialization_id' => 105,
         ]);
 
-        // character_id NULL even though the Character row exists above.
         GuildMember::factory()->create([
             'guild_id' => $guild->id,
-            'character_id' => null,
-            'name' => 'orphanmember',
+            'character_id' => $character->id,
+            'name' => 'linkedmember',
             'realm' => 'test-realm',
             'level' => 80,
             'class_id' => 11,
@@ -146,10 +144,10 @@ class GuildShowEndpointTest extends TestCase
             'rank' => 3,
         ]);
 
-        $response = $this->getJson('/api/v1/guilds/eu/test-realm/stitchguild');
+        $response = $this->getJson('/api/v1/guilds/eu/test-realm/linkedguild');
         $response->assertOk();
 
-        $row = collect($response->json('members.data'))->firstWhere('name', 'orphanmember');
+        $row = collect($response->json('members.data'))->firstWhere('name', 'linkedmember');
         $this->assertNotNull($row);
         $this->assertSame(542, $row['equipped_item_level']);
         $this->assertSame(1800, $row['mythic_plus_rating']['rating']);
