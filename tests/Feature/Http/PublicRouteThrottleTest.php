@@ -57,4 +57,27 @@ class PublicRouteThrottleTest extends TestCase
         $this->getJson('/api/v1/characters/zz/the-maelstrom/melaniya')
             ->assertNotFound();
     }
+
+    public function test_forgot_password_route_is_throttled(): void
+    {
+        for ($i = 0; $i < 3; $i++) {
+            $this->postJson('/api/v1/auth/password/forgot', [
+                'email' => 'nobody@example.com',
+            ]);
+        }
+
+        $this->postJson('/api/v1/auth/password/forgot', [
+            'email' => 'nobody@example.com',
+        ])->assertStatus(429);
+    }
+
+    public function test_guilds_discover_route_is_throttled(): void
+    {
+        for ($i = 0; $i < 30; $i++) {
+            $this->getJson('/api/v1/guilds/discover');
+        }
+
+        $this->getJson('/api/v1/guilds/discover')
+            ->assertStatus(429);
+    }
 }

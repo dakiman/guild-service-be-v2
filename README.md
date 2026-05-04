@@ -151,6 +151,7 @@ Key `.env` variables:
 | `BLIZZARD_MIN_LEVEL_FOR_LOOKUP` | `70` | Min level to sync characters from guild rosters |
 | `BLIZZARD_MYTHIC_SEASON_OVERRIDE` | (empty) | Override auto-detected M+ season ID |
 | `HORIZON_ADMIN_EMAILS` | (empty) | Comma-separated emails allowed to access Horizon dashboard |
+| `SANCTUM_TOKEN_EXPIRATION_MINUTES` | `10080` | Minutes until bearer tokens expire (1 week). Unset = never expire. |
 
 ## Architecture
 

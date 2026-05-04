@@ -305,6 +305,8 @@ with:
 
 (Validation rejects out-of-range values upfront; the cast remains because `min:1, max:100` already constrains the inbound value.)
 
+> **Implementation note (post-review pivot, commit `c3f4c9e`):** As shipped, the validator drops `'max:100'` from the `per_page` rule and the controller clamps with `$perPage = min(100, ...)`. The original `max:100` would 422 on `per_page=500`, which contradicts the test that asserts a 200 with the response paginating at 100. Treat this section as historical; the live behavior is silent clamp.
+
 - [ ] **Step 4: Run the test and confirm green**
 
 ```bash
