@@ -19,11 +19,35 @@ class GameDataFactionMapper
      * @var array<int, int> faction_id => expansion_id (matches GameDataExpansionSeeder ids)
      */
     private const FACTION_TO_EXPANSION = [
+        // Midnight (expansion_id 12)
+        2658 => 12, // The K'aresh Trust
+        2688 => 12, // Flame's Radiance
+        2696 => 12, // Amani Tribe
+        2699 => 12, // The Singularity
+        2704 => 12, // Hara'ti
+        2710 => 12, // Silvermoon Court
+        2711 => 12, // Magisters
+        2712 => 12, // Blood Knights
+        2713 => 12, // Farstriders
+        2714 => 12, // Shades of the Row
+        2736 => 12, // Manaforge Vandals
+        2744 => 12, // Valeera Sanguinar
+        2770 => 12, // Slayer's Duellum
         // The War Within (expansion_id 1)
         2570 => 1, // Council of Dornogal
         2574 => 1, // The Assembly of the Deeps
         2590 => 1, // Hallowfall Arathi
         2600 => 1, // The Severed Threads
+        2601 => 1, // The Weaver
+        2605 => 1, // The General
+        2607 => 1, // The Vizier
+        2640 => 1, // Brann Bronzebeard
+        2653 => 1, // The Cartels of Undermine
+        2671 => 1, // Venture Company
+        2673 => 1, // Bilgewater Cartel
+        2675 => 1, // Blackwater Cartel
+        2677 => 1, // Steamwheedle Cartel
+        2685 => 1, // Gallagio Loyalty Rewards Club
         // Dragonflight (expansion_id 2)
         2510 => 2, // Valdrakken Accord
         2511 => 2, // Iskaara Tuskarr
