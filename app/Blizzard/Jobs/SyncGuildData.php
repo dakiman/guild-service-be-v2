@@ -163,27 +163,13 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
             );
         }
 
-        // Post-upsert backfill: link any GuildMember in this guild whose
-        // character_id is still NULL but a matching retail Character now
-        // exists. Catches (a) Characters that appeared between pre-resolve
-        // and the upsert above, and (b) Characters created since the previous
-        // SyncGuildData run (the "Character appeared later" path that the
-        // upsert update list used to cover, before that became race-prone).
-        // Idempotent: WHERE character_id IS NULL means we never overwrite.
-        // Subquery form rather than UPDATE...FROM so it runs on both Postgres
-        // (production) and SQLite (test) without driver-specific SQL.
-        GuildMember::query()
-            ->where('guild_id', $guild->id)
-            ->whereNull('character_id')
-            ->update([
-                'character_id' => Character::query()
-                    ->select('id')
-                    ->whereColumn('characters.name', 'guild_members.name')
-                    ->whereColumn('characters.realm', 'guild_members.realm')
-                    ->where('region', $this->region)
-                    ->where('game_version', 'retail')
-                    ->limit(1),
-            ]);
+        // Post-upsert backfill: catches (a) Characters that appeared between
+        // pre-resolve and the upsert above, and (b) Characters created since
+        // the previous SyncGuildData run (the "Character appeared later" path
+        // that the upsert update list used to cover, before that became
+        // race-prone). Same query is also called by GuildController before
+        // render — see Guild::backfillMemberCharacterIds().
+        $guild->backfillMemberCharacterIds();
 
         // Remove stale members not in roster
         $currentMemberNames = array_map(fn ($m) => $m->name, $members);

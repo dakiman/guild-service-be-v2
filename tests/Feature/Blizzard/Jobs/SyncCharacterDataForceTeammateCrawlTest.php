@@ -51,4 +51,15 @@ class SyncCharacterDataForceTeammateCrawlTest extends TestCase
 
         $this->assertTrue($restored->forceTeammateCrawl);
     }
+
+    public function test_unique_id_distinguishes_force_teammate_crawl_from_auto(): void
+    {
+        // Otherwise a queued non-crawl Full job (proactive sweep) silently
+        // dedupes a forceTeammateCrawl=true job within the 60s uniqueFor
+        // window, dropping the crawl override.
+        $auto = new SyncCharacterData('eu', 'tarren-mill', 'Test', SyncDepth::Full);
+        $force = new SyncCharacterData('eu', 'tarren-mill', 'Test', SyncDepth::Full, forceTeammateCrawl: true);
+
+        $this->assertNotSame($auto->uniqueId(), $force->uniqueId());
+    }
 }

@@ -40,7 +40,13 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
 
     public function uniqueId(): string
     {
-        return "sync-guild-roster:{$this->guild->id}";
+        // Mode segment so a queued auto-fanout job (proactive sweep) doesn't
+        // dedupe a force-fanout job (user visit / seeder), which would silently
+        // skip the per-member Full SyncCharacterData fan-out + teammate crawl.
+        // Mirrors SyncGuildData::uniqueId(); see commit 2e61a22.
+        $mode = $this->forceFanout ? 'force' : 'auto';
+
+        return "sync-guild-roster:{$this->guild->id}:{$mode}";
     }
 
     /**

@@ -84,7 +84,13 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
 
     public function uniqueId(): string
     {
-        return "sync-char:{$this->region}:{$this->realm}:{$this->name}:{$this->depth->value}";
+        // Mode segment so a queued non-crawl Full job doesn't dedupe a
+        // forceTeammateCrawl=true job (seeder / user-visit cascade), which
+        // would silently lose the crawl override. Mirrors SyncGuildData and
+        // SyncGuildRoster — see commit 2e61a22.
+        $mode = $this->forceTeammateCrawl ? 'force' : 'auto';
+
+        return "sync-char:{$this->region}:{$this->realm}:{$this->name}:{$this->depth->value}:{$mode}";
     }
 
     /**

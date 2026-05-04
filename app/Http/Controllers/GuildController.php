@@ -39,6 +39,12 @@ class GuildController extends Controller
         $perPage = (int) $request->query('per_page', '50');
         $filter = trim((string) $request->query('filter', ''));
 
+        // Self-heal any guild_members rows whose character_id is still NULL
+        // but a matching Character now exists (e.g., synced via teammate
+        // crawl after the last SyncGuildData run). Idempotent — once linked,
+        // the WHERE filters everything out and no rows are touched.
+        $result->backfillMemberCharacterIds();
+
         $query = $result->members()
             ->with(['character:id,equipped_item_level,mythic_plus_rating,mythic_plus_rating_color,active_specialization_id,updated_at']);
 

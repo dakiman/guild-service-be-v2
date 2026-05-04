@@ -137,4 +137,18 @@ class SyncGuildRosterCharacterFanoutTest extends TestCase
 
         Bus::assertDispatched(SyncCharacterData::class, fn ($job) => $job->depth === SyncDepth::Full && $job->name === 'Alpha');
     }
+
+    public function test_unique_id_distinguishes_force_fanout_from_auto(): void
+    {
+        // Otherwise a queued auto-fanout job (proactive sweep) silently
+        // dedupes a force-fanout job (user visit / seeder) within the 60s
+        // uniqueFor window, dropping per-member Full SyncCharacterData
+        // fan-out + teammate crawl.
+        $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill', 'name' => 'Echo']);
+
+        $auto = new SyncGuildRoster($guild);
+        $force = new SyncGuildRoster($guild, forceFanout: true);
+
+        $this->assertNotSame($auto->uniqueId(), $force->uniqueId());
+    }
 }
