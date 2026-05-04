@@ -66,7 +66,7 @@ Route::get('/characters/suggest', [CharacterController::class, 'suggest'])
     ->name('characters.suggest');
 Route::get('/characters/{region}/{realm}/{character}', [CharacterController::class, 'show'])
     ->whereIn('region', $regions)
-    ->middleware('throttle:10,1')
+    ->middleware('throttle:character-lookup')
     ->name('characters.show');
 Route::get('/characters/{region}/{realm}/{character}/achievements', [CharacterAchievementsController::class, 'index'])
     ->whereIn('region', $regions)
@@ -90,7 +90,7 @@ Route::get('/guilds/discover', [GuildController::class, 'discover'])
     ->name('guilds.discover');
 Route::get('/guilds/{region}/{realm}/{guild}', [GuildController::class, 'show'])
     ->whereIn('region', $regions)
-    ->middleware('throttle:10,1')
+    ->middleware('throttle:guild-lookup')
     ->name('guilds.show');
 
 /*
