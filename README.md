@@ -88,7 +88,9 @@ docker compose down -v
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | GET | `/characters/popular` | No | Recently searched + most popular |
+| GET | `/characters/suggest?q=` | No | Typeahead name search |
 | GET | `/characters/{region}/{realm}/{character}` | No | Character lookup (returns 202 if syncing) |
+| GET | `/characters/{region}/{realm}/{character}/achievements` | No | Cursor-paginated achievement list |
 | PATCH | `/characters/{character}/recruitment` | Yes | Toggle "looking for guild" status |
 
 ### Guilds
@@ -96,7 +98,18 @@ docker compose down -v
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | GET | `/guilds/popular` | No | Recently searched + most popular |
+| GET | `/guilds/suggest?q=` | No | Typeahead name search |
+| GET | `/guilds/discover` | No | Featured guilds for the discover view |
 | GET | `/guilds/{region}/{realm}/{guild}` | No | Guild lookup with paginated roster |
+
+### Game Data (long-cacheable)
+
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | `/game-data/raid-instances?expansion=current\|all` | No | Raid instances + encounters |
+| GET | `/game-data/mythic-keystone-dungeons?season=current` | No | Season's M+ dungeons + affixes |
+| GET | `/game-data/talent-trees/{treeId}/{specId}` | No | Talent tree definitions |
+| GET | `/game-data/realms` | No | Realm slugs and names |
 
 ### Blizzard OAuth
 
@@ -112,7 +125,7 @@ docker compose down -v
 
 ## Postman Collection
 
-Import `postman.json` into Postman for a ready-to-use collection with all endpoints, variables, and auto-token management.
+Import `postman.json` into Postman for a starter collection covering the core auth and character/guild lookup flows, with variables and auto-token management. The full set of endpoints listed above is not yet in the collection.
 
 ## Blizzard API Setup
 
