@@ -42,16 +42,18 @@ Route::get('/health', function () {
 |--------------------------------------------------------------------------
 */
 Route::prefix('auth')->group(function () {
-    Route::post('/register', [AuthController::class, 'register']);
-    Route::post('/login', [AuthController::class, 'login']);
-    Route::post('/password/forgot', ForgotPasswordController::class);
-    Route::post('/password/reset', [ResetPasswordController::class, 'reset']);
+    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+    Route::post('/password/forgot', ForgotPasswordController::class)->middleware('throttle:3,1');
+    Route::post('/password/reset', [ResetPasswordController::class, 'reset'])->middleware('throttle:5,1');
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);
         Route::get('/user', [AuthController::class, 'user']);
     });
 });
+
+$regions = config('blizzard.regions', ['eu', 'us', 'kr', 'tw']);
 
 /*
 |--------------------------------------------------------------------------
@@ -63,9 +65,12 @@ Route::get('/characters/suggest', [CharacterController::class, 'suggest'])
     ->middleware('throttle:60,1')
     ->name('characters.suggest');
 Route::get('/characters/{region}/{realm}/{character}', [CharacterController::class, 'show'])
+    ->whereIn('region', $regions)
     ->middleware('throttle:10,1')
     ->name('characters.show');
 Route::get('/characters/{region}/{realm}/{character}/achievements', [CharacterAchievementsController::class, 'index'])
+    ->whereIn('region', $regions)
+    ->middleware('throttle:30,1')
     ->name('characters.achievements');
 Route::patch('/characters/{character}/recruitment', [CharacterController::class, 'toggleRecruitment'])
     ->middleware('auth:sanctum')
@@ -80,8 +85,13 @@ Route::get('/guilds/popular', [GuildController::class, 'popular'])->name('guilds
 Route::get('/guilds/suggest', [GuildController::class, 'suggest'])
     ->middleware('throttle:60,1')
     ->name('guilds.suggest');
-Route::get('/guilds/discover', [GuildController::class, 'discover'])->name('guilds.discover');
-Route::get('/guilds/{region}/{realm}/{guild}', [GuildController::class, 'show'])->name('guilds.show');
+Route::get('/guilds/discover', [GuildController::class, 'discover'])
+    ->middleware('throttle:30,1')
+    ->name('guilds.discover');
+Route::get('/guilds/{region}/{realm}/{guild}', [GuildController::class, 'show'])
+    ->whereIn('region', $regions)
+    ->middleware('throttle:10,1')
+    ->name('guilds.show');
 
 /*
 |--------------------------------------------------------------------------
