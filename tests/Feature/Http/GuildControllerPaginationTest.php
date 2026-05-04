@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Http;
 
+use App\Blizzard\Jobs\SyncGuildData;
 use App\Models\Guild;
 use App\Models\GuildMember;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -37,13 +38,21 @@ class GuildControllerPaginationTest extends TestCase
 
     public function test_filter_longer_than_64_chars_is_rejected(): void
     {
+        Bus::fake();
+
         $this->getJson('/api/v1/guilds/eu/tarren-mill/echo?filter='.str_repeat('a', 65))
             ->assertUnprocessable();
+
+        Bus::assertNotDispatched(SyncGuildData::class);
     }
 
     public function test_negative_per_page_is_rejected(): void
     {
+        Bus::fake();
+
         $this->getJson('/api/v1/guilds/eu/tarren-mill/echo?per_page=-5')
             ->assertUnprocessable();
+
+        Bus::assertNotDispatched(SyncGuildData::class);
     }
 }

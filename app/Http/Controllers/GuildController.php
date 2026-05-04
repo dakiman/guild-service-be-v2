@@ -22,7 +22,6 @@ class GuildController extends Controller
     {
         $request->validate([
             'per_page' => ['nullable', 'integer', 'min:1'],
-            'page' => ['nullable', 'integer', 'min:1'],
             'filter' => ['nullable', 'string', 'max:64'],
         ]);
 
