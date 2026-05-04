@@ -14,20 +14,13 @@ class ForgotPasswordController extends Controller
     public function __invoke(Request $request): JsonResponse
     {
         $request->validate([
-            'email' => ['required', 'email', 'exists:users,email'],
+            'email' => ['required', 'email'],
         ]);
 
-        Password::sendResetLink(
-            $request->only('email'),
-            function ($user, $token) {
-                $url = config('app.frontend_url').'/reset-password?token='.$token.'&email='.urlencode($user->email);
-
-                $user->sendPasswordResetNotification($token);
-            }
-        );
+        Password::sendResetLink($request->only('email'));
 
         return response()->json([
-            'message' => 'Password reset link sent.',
+            'message' => 'If that email exists, a password reset link has been sent.',
         ]);
     }
 }

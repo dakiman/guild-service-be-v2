@@ -12,6 +12,7 @@
 /.vscode
 /.claude
 /.zed
+/.worktrees
 /auth.json
 /node_modules
 /public/build
