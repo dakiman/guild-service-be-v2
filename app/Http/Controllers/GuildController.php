@@ -20,6 +20,12 @@ class GuildController extends Controller
 {
     public function show(string $region, string $realm, string $guild, GuildService $service, Request $request): JsonResponse
     {
+        $request->validate([
+            'per_page' => ['nullable', 'integer', 'min:1'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'filter' => ['nullable', 'string', 'max:64'],
+        ]);
+
         $realm = BlizzardIdentity::realm($realm);
         $guild = BlizzardIdentity::realm($guild);
 
@@ -36,7 +42,7 @@ class GuildController extends Controller
                 ->header('Retry-After', '5');
         }
 
-        $perPage = (int) $request->query('per_page', '50');
+        $perPage = min(100, (int) $request->query('per_page', '50'));
         $filter = trim((string) $request->query('filter', ''));
 
         // Self-heal any guild_members rows whose character_id is still NULL
