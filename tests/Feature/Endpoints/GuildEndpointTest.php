@@ -32,7 +32,7 @@ class GuildEndpointTest extends EndpointIntegrationTestCase
         $response->assertOk();
 
         $response->assertJsonStructure([
-            'data' => [
+            'guild' => [
                 'id',
                 'name',
                 'realm',
@@ -43,6 +43,35 @@ class GuildEndpointTest extends EndpointIntegrationTestCase
             ],
         ]);
 
-        $this->assertSame($fixture['region'], $response->json('data.region'));
+        $this->assertSame($fixture['region'], $response->json('guild.region'));
+    }
+
+    #[DataProvider('guildProvider')]
+    public function test_guild_endpoint_returns_enriched_member_rows(array $fixture): void
+    {
+        $this->requireFixture($fixture, 'guild');
+
+        $url = "/api/v1/guilds/{$fixture['region']}/{$fixture['realm']}/{$fixture['name']}";
+
+        // Cold cache may 202, second call returns 200.
+        $this->getJson($url);
+        $response = $this->getJson($url);
+
+        $response->assertOk();
+
+        $members = $response->json('members.data');
+        $this->assertIsArray($members);
+        $this->assertNotEmpty($members, 'guild has at least one member');
+
+        $row = $members[0];
+        foreach ([
+            'id', 'guild_id', 'name', 'realm', 'level', 'class_id', 'race_id', 'rank',
+            'faction', 'equipped_item_level', 'mythic_plus_rating',
+            'active_specialization_id', 'synced_at',
+        ] as $key) {
+            $this->assertArrayHasKey($key, $row, "row missing key: {$key}");
+        }
+
+        $this->assertContains($row['faction'], ['Alliance', 'Horde', null]);
     }
 }
