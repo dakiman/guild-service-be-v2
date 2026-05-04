@@ -140,14 +140,43 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
             ];
         }
 
-        // Upsert guild members
+        // Upsert guild members.
+        // character_id is intentionally OMITTED from the UPDATE column list:
+        // INSERT still seeds it from the pre-resolve snapshot, but on conflict
+        // we don't touch it. Otherwise a concurrent SyncCharacterData run that
+        // called linkGuildMembers between our pre-resolve and this upsert could
+        // have set character_id to a valid id, and our stale-snapshot null
+        // would silently overwrite it. The post-upsert backfill below restores
+        // any rows where pre-resolve missed but a Character now exists.
         if (! empty($memberRecords)) {
             GuildMember::upsert(
                 $memberRecords,
                 ['guild_id', 'name', 'realm'],
-                ['character_id', 'level', 'class_id', 'race_id', 'rank', 'display_name', 'display_realm'],
+                ['level', 'class_id', 'race_id', 'rank', 'display_name', 'display_realm'],
             );
         }
+
+        // Post-upsert backfill: link any GuildMember in this guild whose
+        // character_id is still NULL but a matching retail Character now
+        // exists. Catches (a) Characters that appeared between pre-resolve
+        // and the upsert above, and (b) Characters created since the previous
+        // SyncGuildData run (the "Character appeared later" path that the
+        // upsert update list used to cover, before that became race-prone).
+        // Idempotent: WHERE character_id IS NULL means we never overwrite.
+        // Subquery form rather than UPDATE...FROM so it runs on both Postgres
+        // (production) and SQLite (test) without driver-specific SQL.
+        GuildMember::query()
+            ->where('guild_id', $guild->id)
+            ->whereNull('character_id')
+            ->update([
+                'character_id' => Character::query()
+                    ->select('id')
+                    ->whereColumn('characters.name', 'guild_members.name')
+                    ->whereColumn('characters.realm', 'guild_members.realm')
+                    ->where('region', $this->region)
+                    ->where('game_version', 'retail')
+                    ->limit(1),
+            ]);
 
         // Remove stale members not in roster
         $currentMemberNames = array_map(fn ($m) => $m->name, $members);
