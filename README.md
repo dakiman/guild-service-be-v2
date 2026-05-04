@@ -11,48 +11,21 @@ A World of Warcraft guild and character lookup API. Fetches and caches data from
 - **Laravel Sanctum** for API authentication
 - **Docker Compose** (6 containers)
 
-## API Base URL
+## Base URL
 
-```
-http://localhost:8091/api/v1
+`http://localhost:8091/api/v1`
 
-# Or from other machines on the LAN:
-http://192.168.100.253:8091/api/v1
-```
-
-## Quick Start
+## Quick start
 
 ```bash
-# 1. Clone and enter the project
-cd guild-service-v2/backend
-
-# 2. Copy environment file
 cp .env.example .env
-
-# 3. Copy dev docker override
 cp docker-compose.override.yml.example docker-compose.override.yml
-
-# 4. Install PHP dependencies (via Docker)
 docker run --rm -v $(pwd):/app -w /app composer:2 composer install --ignore-platform-req=ext-pcntl
-
-# 5. Generate app key
 docker run --rm -v $(pwd):/app -w /app composer:2 php artisan key:generate
-
-# 6. Start all services
 docker compose up -d
-
-# 7. Run database migrations
 docker compose exec app php artisan migrate
-
-# 8. (Optional) Publish Sanctum migration if not present
-docker compose exec app php artisan vendor:publish --provider="Laravel\Sanctum\SanctumServiceProvider"
-docker compose exec app php artisan migrate
-
-# 9. Fix storage permissions (dev only)
-docker compose exec app chmod -R 777 storage bootstrap/cache
+docker compose exec app chmod -R 777 storage bootstrap/cache    # dev only
 ```
-
-The API is now running at **http://localhost:8091/api/v1**.
 
 ## Docker Services
 
@@ -168,33 +141,7 @@ Key `.env` variables:
 
 ## Architecture
 
-```
-app/
-  Blizzard/           # Blizzard API integration module
-    Client/           # HTTP clients (auth, profile, game data, user)
-    Contracts/        # Interfaces (TokenManager)
-    DTO/              # Readonly data transfer objects
-    Exceptions/       # API-specific exceptions
-    Jobs/             # Queue jobs (sync character, guild, roster, proactive)
-    Mappers/          # API response -> DTO transformers
-    Middleware/        # Job middleware (rate limiter, health check)
-  Console/Commands/   # Artisan commands (RefreshBlizzardToken)
-  Enums/              # Region, Faction, SyncDepth, ItemQuality
-  Http/
-    Controllers/      # Thin controllers (Auth, Character, Guild, Blizzard)
-    Middleware/        # ForceJsonResponse
-    Requests/         # Form request validation
-    Resources/        # API response transformers
-  Models/             # Eloquent models (User, Character, Guild, etc.)
-  Policies/           # Authorization (CharacterPolicy)
-  Providers/          # Service providers (App, Horizon)
-  Services/           # Business logic (CharacterService, GuildService)
-config/
-  blizzard.php        # Blizzard API config (credentials, timeouts, staleness)
-  horizon.php         # Queue supervisor config
-  sanctum.php         # Sanctum token auth config
-docker/               # Docker infrastructure files
-```
+See `CLAUDE.md` for module layout, request flow, and slice semantics.
 
 ## Queue Architecture
 
