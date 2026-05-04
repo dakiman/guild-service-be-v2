@@ -30,7 +30,7 @@ return [
         'runs_pages_per_region' => (int) env('RAIDERIO_SEED_RUNS_PAGES_PER_REGION', 5),
     ],
 
-    'character_resync_ttl' => (int) env('RAIDERIO_SEED_CHAR_TTL', 12 * 3600),
+    'character_resync_ttl' => (int) env('RAIDERIO_SEED_CHAR_TTL', 24 * 3600),
 
     'teammate_crawl_during_seed' => (bool) env('RAIDERIO_SEED_TEAMMATE_CRAWL_ENABLED', false),
 

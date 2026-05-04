@@ -98,7 +98,7 @@ return [
 
     'crawl' => [
         'max_depth' => (int) env('BLIZZARD_CRAWL_MAX_DEPTH', 1),
-        'recent_threshold' => (int) env('BLIZZARD_CRAWL_RECENT_THRESHOLD', 21600),
+        'recent_threshold' => (int) env('BLIZZARD_CRAWL_RECENT_THRESHOLD', 259200),
     ],
 
     /*
