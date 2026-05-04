@@ -29,7 +29,7 @@ class GuildService
         $guild->update(['last_searched_at' => now()]);
 
         if ($guild->isStale() || $guild->isRosterStale()) {
-            SyncGuildData::dispatch($region, $realm, $name);
+            SyncGuildData::dispatch($region, $realm, $name, forceRosterFanout: false, forceCascade: true);
         }
 
         return $guild;

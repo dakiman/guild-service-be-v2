@@ -31,7 +31,7 @@ class GuildController extends Controller
         }
 
         if ($result === null) {
-            SyncGuildData::dispatch($region, $realm, $guild);
+            SyncGuildData::dispatch($region, $realm, $guild, forceRosterFanout: false, forceCascade: true);
 
             return response()->json(['message' => 'Guild sync initiated'], 202)
                 ->header('Retry-After', '5');
@@ -45,7 +45,7 @@ class GuildController extends Controller
 
         if ($filter !== '') {
             // Names are stored canonical-lowercase; LIKE is case-correct on Postgres.
-            $query->where('name', 'LIKE', '%' . strtolower($filter) . '%');
+            $query->where('name', 'LIKE', '%'.strtolower($filter).'%');
         }
 
         $members = $query->paginate($perPage);
@@ -72,13 +72,13 @@ class GuildController extends Controller
                     'id', 'name', 'realm', 'equipped_item_level', 'mythic_plus_rating',
                     'mythic_plus_rating_color', 'active_specialization_id', 'updated_at',
                 ])
-                ->keyBy(fn ($c) => $c->name . '|' . $c->realm);
+                ->keyBy(fn ($c) => $c->name.'|'.$c->realm);
 
             $members->getCollection()->each(function ($m) use ($charsByTuple) {
                 if ($m->character_id !== null) {
                     return;
                 }
-                $key = $m->name . '|' . $m->realm;
+                $key = $m->name.'|'.$m->realm;
                 if ($charsByTuple->has($key)) {
                     $m->setRelation('character', $charsByTuple[$key]);
                 }
