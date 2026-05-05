@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\Character;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 
 class CharacterStatsService
@@ -16,19 +17,23 @@ class CharacterStatsService
 
     private function computeStats(): array
     {
+        $baseQuery = Character::endgameActive();
+
         return [
             'total_characters' => Character::count(),
-            'class_distribution' => $this->getClassDistribution(),
-            'spec_distribution' => $this->getSpecDistribution(),
-            'faction_distribution' => $this->getFactionDistribution(),
-            'race_distribution' => $this->getRaceDistribution(),
-            'top_performers' => $this->getTopPerformers(),
+            'class_distribution' => $this->getClassDistribution(clone $baseQuery),
+            'spec_distribution' => $this->getSpecDistribution(clone $baseQuery),
+            'faction_distribution' => $this->getFactionDistribution(clone $baseQuery),
+            'race_distribution' => $this->getRaceDistribution(clone $baseQuery),
+            'top_performers' => $this->getTopPerformers(clone $baseQuery),
+            'avg_achievement_points' => $this->getAvgAchievementPoints(clone $baseQuery),
+            'most_popular_spec' => $this->getMostPopularSpec(clone $baseQuery),
         ];
     }
 
-    private function getClassDistribution(): array
+    private function getClassDistribution(Builder $query): array
     {
-        return Character::query()
+        return $query
             ->selectRaw('class_id, COUNT(*) as count, ROUND(AVG(average_item_level), 1) as avg_ilvl, ROUND(AVG(mythic_plus_rating), 1) as avg_mythic_plus_rating')
             ->groupBy('class_id')
             ->orderByDesc('count')
@@ -42,9 +47,9 @@ class CharacterStatsService
             ->all();
     }
 
-    private function getSpecDistribution(): array
+    private function getSpecDistribution(Builder $query): array
     {
-        return Character::query()
+        return $query
             ->selectRaw('active_specialization_id as spec_id, class_id, COUNT(*) as count')
             ->whereNotNull('active_specialization_id')
             ->groupBy('active_specialization_id', 'class_id')
@@ -58,10 +63,10 @@ class CharacterStatsService
             ->all();
     }
 
-    private function getFactionDistribution(): array
+    private function getFactionDistribution(Builder $query): array
     {
-        $counts = Character::query()
-            ->selectRaw("faction, COUNT(*) as count")
+        $counts = $query
+            ->selectRaw('faction, COUNT(*) as count')
             ->groupBy('faction')
             ->pluck('count', 'faction');
 
@@ -71,9 +76,9 @@ class CharacterStatsService
         ];
     }
 
-    private function getRaceDistribution(): array
+    private function getRaceDistribution(Builder $query): array
     {
-        return Character::query()
+        return $query
             ->selectRaw('race_id, COUNT(*) as count')
             ->groupBy('race_id')
             ->orderByDesc('count')
@@ -85,18 +90,18 @@ class CharacterStatsService
             ->all();
     }
 
-    private function getTopPerformers(int $limit = 5): array
+    private function getTopPerformers(Builder $query, int $limit = 5): array
     {
         return [
-            'mythic_plus' => $this->getTopBy('mythic_plus_rating', $limit),
-            'item_level' => $this->getTopBy('average_item_level', $limit),
-            'achievement_points' => $this->getTopBy('achievement_points', $limit),
+            'mythic_plus' => $this->getTopBy(clone $query, 'mythic_plus_rating', $limit),
+            'item_level' => $this->getTopBy(clone $query, 'average_item_level', $limit),
+            'achievement_points' => $this->getTopBy(clone $query, 'achievement_points', $limit),
         ];
     }
 
-    private function getTopBy(string $column, int $limit): array
+    private function getTopBy(Builder $query, string $column, int $limit): array
     {
-        return Character::query()
+        return $query
             ->select(['name', 'realm', 'region', 'class_id', 'active_specialization_id', $column])
             ->whereNotNull($column)
             ->where($column, '>', 0)
@@ -112,5 +117,30 @@ class CharacterStatsService
                 'value' => (float) $row->$column,
             ])
             ->all();
+    }
+
+    private function getAvgAchievementPoints(Builder $query): int
+    {
+        return (int) round((float) $query->avg('achievement_points'));
+    }
+
+    private function getMostPopularSpec(Builder $query): ?array
+    {
+        $row = $query
+            ->selectRaw('active_specialization_id as spec_id, class_id, COUNT(*) as count')
+            ->whereNotNull('active_specialization_id')
+            ->groupBy('active_specialization_id', 'class_id')
+            ->orderByDesc('count')
+            ->first();
+
+        if (! $row) {
+            return null;
+        }
+
+        return [
+            'spec_id' => (int) $row->spec_id,
+            'class_id' => (int) $row->class_id,
+            'count' => (int) $row->count,
+        ];
     }
 }

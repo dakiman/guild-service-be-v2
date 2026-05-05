@@ -205,6 +205,15 @@ class Character extends Model
         return $query->where('recruitment', true);
     }
 
+    public function scopeEndgameActive(Builder $query): Builder
+    {
+        return $query->where('level', 80)
+            ->where(function (Builder $q) {
+                $q->whereHas('raidEncounterKills')
+                    ->orWhereHas('dungeonRuns');
+            });
+    }
+
     public function isStale(): bool
     {
         if (! $this->updated_at) {
