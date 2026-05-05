@@ -225,6 +225,19 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
 
         self::linkGuildMembers($character);
 
+        if ($this->depth === SyncDepth::Shallow
+            && $character->level === 80
+            && $character->mythics_synced_at === null
+        ) {
+            self::dispatch(
+                region: $this->region,
+                realm: $this->realm,
+                name: $this->name,
+                depth: SyncDepth::Full,
+                forceTeammateCrawl: true,
+            );
+        }
+
         // Link guild if present.
         // Canonicalize guildName the same way GuildController does
         // (BlizzardIdentity::realm via Str::slug) so character-side and
