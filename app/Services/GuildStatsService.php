@@ -17,10 +17,10 @@ class GuildStatsService
     // 581 = Vengeance DH, 104 = Guardian Druid
     // Healers
     // 65 = Holy Paladin, 256 = Disc Priest, 257 = Holy Priest, 264 = Resto Shaman,
-    // 269 = Mistweaver Monk, 105 = Resto Druid, 1468 = Preservation Evoker
+    // 270 = Mistweaver Monk, 105 = Resto Druid, 1468 = Preservation Evoker
     private const SPEC_ROLES = [
         73 => 'tank', 66 => 'tank', 250 => 'tank', 268 => 'tank', 581 => 'tank', 104 => 'tank',
-        65 => 'healer', 256 => 'healer', 257 => 'healer', 264 => 'healer', 269 => 'healer', 105 => 'healer', 1468 => 'healer',
+        65 => 'healer', 256 => 'healer', 257 => 'healer', 264 => 'healer', 270 => 'healer', 105 => 'healer', 1468 => 'healer',
     ];
 
     public function getStats(Guild $guild): array
