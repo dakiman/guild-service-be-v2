@@ -11,6 +11,7 @@ use App\Http\Controllers\CharacterController;
 use App\Http\Controllers\CharacterStatsController;
 use App\Http\Controllers\GameDataController;
 use App\Http\Controllers\GuildController;
+use App\Http\Controllers\GuildStatsController;
 use App\Http\Controllers\RaidKillStatsController;
 use App\Http\Controllers\TopKeysController;
 use App\Http\Controllers\TopRunsController;
@@ -110,6 +111,10 @@ Route::get('/guilds/suggest', [GuildController::class, 'suggest'])
 Route::get('/guilds/discover', [GuildController::class, 'discover'])
     ->middleware('throttle:30,1')
     ->name('guilds.discover');
+Route::get('/guilds/{region}/{realm}/{guild}/stats', GuildStatsController::class)
+    ->whereIn('region', $regions)
+    ->middleware('throttle:30,1')
+    ->name('guilds.stats');
 Route::get('/guilds/{region}/{realm}/{guild}', [GuildController::class, 'show'])
     ->whereIn('region', $regions)
     ->middleware('throttle:guild-lookup')
