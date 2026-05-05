@@ -33,8 +33,12 @@ class CharacterController extends Controller
         if ($result === null) {
             SyncCharacterData::dispatch($region, $realm, $character, SyncDepth::Standard);
 
-            return response()->json(['message' => 'Character sync initiated'], 202)
-                ->header('Retry-After', '5');
+            $queueDepth = (int) \Illuminate\Support\Facades\Queue::size('blizzard-user-sync');
+
+            return response()->json([
+                'message' => 'Character sync initiated',
+                'queue_depth' => $queueDepth,
+            ], 202)->header('Retry-After', '10');
         }
 
         $relations = ['guild', 'dungeonRuns.memberEntries', 'pvpBrackets', 'professions.expansion', 'raidEncounterKills', 'titles.gameData', 'reputations.faction.expansion', 'mounts.gameData', 'toys'];
@@ -51,7 +55,7 @@ class CharacterController extends Controller
 
         if (in_array('never_synced', $response->getData(true)['meta']['freshness'] ?? [], true)) {
             $response->header('X-Sync-Status', 'syncing');
-            $response->header('Retry-After', '5');
+            $response->header('Retry-After', '30');
         }
 
         return $response;

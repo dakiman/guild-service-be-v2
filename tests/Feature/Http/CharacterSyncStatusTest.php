@@ -30,9 +30,10 @@ class CharacterSyncStatusTest extends TestCase
 
         $response->assertOk();
         $response->assertJsonPath('meta.sync_status', 'syncing');
-        $response->assertJsonPath('meta.poll_after', 5);
+        $response->assertJsonPath('meta.poll_after', 30);
+        $response->assertJsonStructure(['meta' => ['queue_depth']]);
         $response->assertHeader('X-Sync-Status', 'syncing');
-        $response->assertHeader('Retry-After', '5');
+        $response->assertHeader('Retry-After', '30');
     }
 
     public function test_response_includes_complete_status_when_all_slices_synced(): void
@@ -57,7 +58,7 @@ class CharacterSyncStatusTest extends TestCase
 
         $response->assertOk();
         $response->assertJsonPath('meta.sync_status', 'complete');
-        $response->assertJsonMissing(['poll_after' => 5]);
+        $response->assertJsonMissing(['poll_after' => 30]);
         $response->assertHeaderMissing('X-Sync-Status');
     }
 

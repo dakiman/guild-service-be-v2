@@ -99,7 +99,8 @@ class CharacterResource extends JsonResource
         ];
 
         if ($isSyncing) {
-            $meta['poll_after'] = 5;
+            $meta['poll_after'] = 30;
+            $meta['queue_depth'] = (int) \Illuminate\Support\Facades\Queue::size('blizzard-user-sync');
         }
 
         return ['meta' => $meta];

@@ -145,6 +145,15 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             'display_realm' => $profile->realmName,
         ];
 
+        if ($response['media']) {
+            $media = $mediaMapper->map($response['media']);
+            $characterData['media'] = [
+                'avatar' => $media->avatar,
+                'inset' => $media->inset,
+                'main' => $media->main,
+            ];
+        }
+
         if ($this->depth === SyncDepth::Shallow) {
             $characterData = array_merge($characterData, [
                 'gender' => $profile->gender,
@@ -168,15 +177,6 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 'average_item_level' => $profile->averageItemLevel,
                 'equipped_item_level' => $profile->equippedItemLevel,
             ]);
-
-            if ($response['media']) {
-                $media = $mediaMapper->map($response['media']);
-                $characterData['media'] = [
-                    'avatar' => $media->avatar,
-                    'inset' => $media->inset,
-                    'main' => $media->main,
-                ];
-            }
 
             if ($response['equipment']) {
                 $equipment = $equipmentMapper->map($response['equipment']);
