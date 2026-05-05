@@ -10,6 +10,7 @@ use App\Http\Controllers\CharacterAchievementsController;
 use App\Http\Controllers\CharacterController;
 use App\Http\Controllers\GameDataController;
 use App\Http\Controllers\GuildController;
+use App\Http\Controllers\RaidKillStatsController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Route;
@@ -81,6 +82,9 @@ Route::patch('/characters/{character}/recruitment', [CharacterController::class,
 | Stats Routes
 |--------------------------------------------------------------------------
 */
+Route::get('/stats/characters/raid-kills', RaidKillStatsController::class)
+    ->middleware('throttle:30,1')
+    ->name('stats.characters.raid-kills');
 Route::get('/stats/characters', \App\Http\Controllers\CharacterStatsController::class)
     ->middleware('throttle:30,1')
     ->name('stats.characters');
