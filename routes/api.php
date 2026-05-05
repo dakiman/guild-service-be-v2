@@ -78,6 +78,15 @@ Route::patch('/characters/{character}/recruitment', [CharacterController::class,
 
 /*
 |--------------------------------------------------------------------------
+| Stats Routes
+|--------------------------------------------------------------------------
+*/
+Route::get('/stats/characters', \App\Http\Controllers\CharacterStatsController::class)
+    ->middleware('throttle:30,1')
+    ->name('stats.characters');
+
+/*
+|--------------------------------------------------------------------------
 | Guild Routes
 |--------------------------------------------------------------------------
 */
