@@ -24,6 +24,9 @@ class CharacterProfileMapper
             name: (string) ($data['name'] ?? ''),
             realmName: isset($data['realm']['name']) ? (string) $data['realm']['name'] : null,
             guildRealmName: isset($data['guild']['realm']['name']) ? (string) $data['guild']['realm']['name'] : null,
+            activeSpecName: $data['active_spec']['name'] ?? null,
+            activeSpecId: isset($data['active_spec']['id']) ? (int) $data['active_spec']['id'] : null,
+            lastLoginTimestamp: isset($data['last_login_timestamp']) ? (int) $data['last_login_timestamp'] : null,
         );
     }
 }

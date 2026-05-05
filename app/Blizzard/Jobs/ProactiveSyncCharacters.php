@@ -42,6 +42,11 @@ class ProactiveSyncCharacters implements ShouldBeUnique, ShouldQueue
             default => Character::query()->whereRaw('1 = 0'), // empty result
         };
 
+        $query->where(function ($q) {
+            $q->whereNull('last_login_at')
+                ->orWhere('last_login_at', '>=', now()->subDays(30));
+        });
+
         $query->each(function (Character $character) {
             SyncCharacterData::dispatch(
                 region: $character->region,

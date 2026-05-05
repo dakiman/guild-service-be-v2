@@ -20,5 +20,8 @@ final readonly class CharacterProfile
         public string $name,
         public ?string $realmName,
         public ?string $guildRealmName,
+        public ?string $activeSpecName,
+        public ?int $activeSpecId,
+        public ?int $lastLoginTimestamp,
     ) {}
 }

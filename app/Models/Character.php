@@ -56,6 +56,7 @@ class Character extends Model
         'reputations_synced_at',
         'collections_synced_at',
         'achievements_synced_at',
+        'last_login_at',
     ];
 
     protected function casts(): array
@@ -76,6 +77,7 @@ class Character extends Model
             'reputations_synced_at' => 'datetime',
             'collections_synced_at' => 'datetime',
             'achievements_synced_at' => 'datetime',
+            'last_login_at' => 'datetime',
             'last_searched_at' => 'datetime',
             'race_id' => 'integer',
             'class_id' => 'integer',
@@ -183,8 +185,8 @@ class Character extends Model
         }
 
         // Names are stored canonical-lowercase (see BlizzardIdentity::name); plain LIKE is case-correct on Postgres.
-        $prefix = $needle . '%';
-        $substring = '%' . $needle . '%';
+        $prefix = $needle.'%';
+        $substring = '%'.$needle.'%';
 
         return $query
             ->where('game_version', 'retail')

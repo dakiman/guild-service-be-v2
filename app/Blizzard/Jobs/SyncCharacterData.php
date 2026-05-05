@@ -41,6 +41,7 @@ use App\Models\Guild;
 use App\Models\GuildMember;
 use App\Models\RaidEncounterKill;
 use App\Support\BlizzardIdentity;
+use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -143,6 +144,9 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             'region' => $this->region,
             'display_name' => $profile->name !== '' ? $profile->name : null,
             'display_realm' => $profile->realmName,
+            'last_login_at' => $profile->lastLoginTimestamp
+                ? Carbon::createFromTimestampMs($profile->lastLoginTimestamp)
+                : null,
         ];
 
         if ($response['media']) {
@@ -164,6 +168,8 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 'achievement_points' => $profile->achievementPoints,
                 'average_item_level' => $profile->averageItemLevel,
                 'equipped_item_level' => $profile->equippedItemLevel,
+                'active_specialization' => $profile->activeSpecName,
+                'active_specialization_id' => $profile->activeSpecId,
             ]);
         } else {
 
