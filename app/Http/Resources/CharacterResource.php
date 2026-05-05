@@ -85,17 +85,24 @@ class CharacterResource extends JsonResource
             $freshness['achievements'] = $this->freshnessFor('achievements_synced_at', 'achievements');
         }
 
-        return [
-            'meta' => [
-                'game_version' => $this->game_version ?? 'retail',
-                'forced_refresh' => false,
-                'freshness' => $freshness,
-                'feature_flags' => [
-                    'achievements' => (bool) config('blizzard.sync.achievements_enabled'),
-                    'pets' => (bool) config('blizzard.sync.pets_enabled'),
-                ],
+        $isSyncing = in_array('never_synced', $freshness, true);
+
+        $meta = [
+            'game_version' => $this->game_version ?? 'retail',
+            'forced_refresh' => false,
+            'sync_status' => $isSyncing ? 'syncing' : 'complete',
+            'freshness' => $freshness,
+            'feature_flags' => [
+                'achievements' => (bool) config('blizzard.sync.achievements_enabled'),
+                'pets' => (bool) config('blizzard.sync.pets_enabled'),
             ],
         ];
+
+        if ($isSyncing) {
+            $meta['poll_after'] = 5;
+        }
+
+        return ['meta' => $meta];
     }
 
     private function freshnessFor(string $timestampField, string $configKey): string
