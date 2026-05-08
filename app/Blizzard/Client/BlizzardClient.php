@@ -39,20 +39,12 @@ abstract class BlizzardClient
                 if ($exception instanceof RequestException) {
                     $status = $exception->response->status();
 
-                    // Never retry client errors
-                    if (in_array($status, [400, 401, 403, 404])) {
+                    // Never retry client errors (429 handled at job middleware layer)
+                    if ($status >= 400 && $status < 500) {
                         return false;
                     }
 
-                    // Respect Retry-After for rate limits
-                    if ($status === 429) {
-                        $retryAfter = (int) ($exception->response->header('Retry-After') ?: 5);
-                        usleep($retryAfter * 1_000_000);
-
-                        return true;
-                    }
-
-                    // Retry on 5xx with exponential backoff + jitter
+                    // Retry on 5xx
                     if ($status >= 500) {
                         return true;
                     }

@@ -48,6 +48,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -57,7 +58,9 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 3;
+    public int $tries = 15;
+
+    public int $maxExceptions = 3;
 
     public array $backoff = [30, 120, 300];
 
@@ -343,6 +346,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 ]);
             });
         } catch (Throwable $e) {
+            $this->rethrowIfRateLimited($e);
             Log::warning('Failed to sync mythic+ data for character', [
                 'character' => "{$this->name}-{$this->realm}-{$this->region}",
                 'error' => $e->getMessage(),
@@ -474,6 +478,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 $character->update(['pvp_synced_at' => now()]);
             });
         } catch (Throwable $e) {
+            $this->rethrowIfRateLimited($e);
             Log::warning('Failed to sync pvp data for character', [
                 'character' => "{$this->name}-{$this->realm}-{$this->region}",
                 'error' => $e->getMessage(),
@@ -522,6 +527,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 $character->update(['professions_synced_at' => now()]);
             });
         } catch (Throwable $e) {
+            $this->rethrowIfRateLimited($e);
             Log::warning('Failed to sync professions for character', [
                 'character' => "{$this->name}-{$this->realm}-{$this->region}",
                 'error' => $e->getMessage(),
@@ -571,6 +577,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 $character->update(['raids_synced_at' => now()]);
             });
         } catch (Throwable $e) {
+            $this->rethrowIfRateLimited($e);
             Log::warning('Failed to sync raid encounters for character', [
                 'character' => "{$this->name}-{$this->realm}-{$this->region}",
                 'error' => $e->getMessage(),
@@ -593,6 +600,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 ]);
             });
         } catch (Throwable $e) {
+            $this->rethrowIfRateLimited($e);
             Log::warning('Failed to sync character stats', [
                 'character' => "{$this->name}-{$this->realm}-{$this->region}",
                 'error' => $e->getMessage(),
@@ -633,6 +641,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 $character->update(['titles_synced_at' => now()]);
             });
         } catch (Throwable $e) {
+            $this->rethrowIfRateLimited($e);
             Log::warning('Failed to sync titles for character', [
                 'character' => "{$this->name}-{$this->realm}-{$this->region}",
                 'error' => $e->getMessage(),
@@ -674,6 +683,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 $character->update(['reputations_synced_at' => now()]);
             });
         } catch (Throwable $e) {
+            $this->rethrowIfRateLimited($e);
             Log::warning('Failed to sync reputations for character', [
                 'character' => "{$this->name}-{$this->realm}-{$this->region}",
                 'error' => $e->getMessage(),
@@ -688,6 +698,14 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         CharacterToyMapper $toyMapper,
         Character $character,
     ): void {
+        if (! config('blizzard.sync.mounts_enabled')
+            && ! config('blizzard.sync.pets_enabled')
+            && ! config('blizzard.sync.toys_enabled')) {
+            $character->update(['collections_synced_at' => now()]);
+
+            return;
+        }
+
         try {
             $bodies = $client->getCharacterCollections($this->realm, $this->name);
 
@@ -749,6 +767,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 $character->update(['collections_synced_at' => now()]);
             });
         } catch (Throwable $e) {
+            $this->rethrowIfRateLimited($e);
             Log::warning('Failed to sync collections for character', [
                 'character' => "{$this->name}-{$this->realm}-{$this->region}",
                 'error' => $e->getMessage(),
@@ -796,6 +815,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 $character->update(['achievements_synced_at' => now()]);
             });
         } catch (Throwable $e) {
+            $this->rethrowIfRateLimited($e);
             Log::warning('Failed to sync achievements for character', [
                 'character' => "{$this->name}-{$this->realm}-{$this->region}",
                 'error' => $e->getMessage(),
@@ -929,6 +949,13 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             ->whereNull('character_id')
             ->whereHas('guild', fn ($q) => $q->where('region', $character->region))
             ->update(['character_id' => $character->id]);
+    }
+
+    private function rethrowIfRateLimited(Throwable $e): void
+    {
+        if ($e instanceof RequestException && $e->response?->status() === 429) {
+            throw $e;
+        }
     }
 
     public function failed(Throwable $exception): void
