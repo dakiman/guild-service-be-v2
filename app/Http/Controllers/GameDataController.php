@@ -15,6 +15,7 @@ use App\Models\GameDataTalentTree;
 use App\Services\RealmIndexService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class GameDataController extends Controller
 {
@@ -35,32 +36,29 @@ class GameDataController extends Controller
     {
         $expansionFilter = $request->query('expansion', 'current');
 
-        $query = GameDataRaidInstance::query()
-            ->with(['expansion', 'encounters'])
-            ->orderBy('display_order')
-            ->orderBy('id');
-
-        if ($expansionFilter === 'current') {
-            $current = GameDataExpansion::query()
+        $payload = Cache::remember("game-data:raid-instances:{$expansionFilter}", 3600, function () use ($expansionFilter) {
+            $query = GameDataRaidInstance::query()
+                ->with(['expansion', 'encounters'])
                 ->orderBy('display_order')
-                ->first();
+                ->orderBy('id');
 
-            if ($current === null) {
-                // No expansion data yet — return an empty payload rather than
-                // an error so the FE can render an empty state cleanly.
-                return response()->json(['instances' => []])
-                    ->header('Cache-Control', 'public, max-age=3600');
+            if ($expansionFilter === 'current') {
+                $current = GameDataExpansion::query()
+                    ->orderBy('display_order')
+                    ->first();
+
+                if ($current === null) {
+                    return ['instances' => []];
+                }
+
+                $query->where('expansion_id', $current->id);
             }
 
-            $query->where('expansion_id', $current->id);
-        }
-        // 'all' => no scope filter applied.
+            return ['instances' => RaidInstanceResource::collection($query->get())->resolve()];
+        });
 
-        $instances = $query->get();
-
-        return response()->json([
-            'instances' => RaidInstanceResource::collection($instances)->resolve(),
-        ])->header('Cache-Control', 'public, max-age=3600');
+        return response()->json($payload)
+            ->header('Cache-Control', 'public, max-age=3600');
     }
 
     /**
@@ -83,27 +81,29 @@ class GameDataController extends Controller
      */
     public function mythicKeystoneDungeons(Request $request): JsonResponse
     {
-        // Season is implicit: the sync command repopulates
-        // game_data_mythic_keystone_dungeons each run with the current season.
-        // We return whatever is in the table.
-        $dungeons = GameDataMythicKeystoneDungeon::query()
-            ->orderBy('name')
-            ->get();
+        $payload = Cache::remember('game-data:mythic-keystone-dungeons', 3600, function () {
+            $dungeons = GameDataMythicKeystoneDungeon::query()
+                ->orderBy('name')
+                ->get();
 
-        $affixes = GameDataKeystoneAffix::query()
-            ->orderBy('id')
-            ->get();
+            $affixes = GameDataKeystoneAffix::query()
+                ->orderBy('id')
+                ->get();
 
-        $affixDict = [];
-        foreach ($affixes as $affix) {
-            $affixDict[(int) $affix->id] = (new KeystoneAffixResource($affix))->resolve();
-        }
+            $affixDict = [];
+            foreach ($affixes as $affix) {
+                $affixDict[(int) $affix->id] = (new KeystoneAffixResource($affix))->resolve();
+            }
 
-        return response()->json([
-            'dungeons' => MythicKeystoneDungeonResource::collection($dungeons)->resolve(),
-            'affixes' => (object) $affixDict,
-            'season' => null,
-        ])->header('Cache-Control', 'public, max-age=3600');
+            return [
+                'dungeons' => MythicKeystoneDungeonResource::collection($dungeons)->resolve(),
+                'affixes' => (object) $affixDict,
+                'season' => null,
+            ];
+        });
+
+        return response()->json($payload)
+            ->header('Cache-Control', 'public, max-age=3600');
     }
 
     /**
