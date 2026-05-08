@@ -10,17 +10,12 @@ use App\Enums\SyncDepth;
 use App\Models\CharacterAchievement;
 use App\Models\CharacterMount;
 use App\Models\CharacterPet;
+use App\Models\CharacterToy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
-/**
- * Tests for the feature-flag gating of the achievements and pets slices.
- *
- * The job is dispatched synchronously (QUEUE_CONNECTION=sync in phpunit.xml).
- * Http::fake() intercepts all outbound HTTP calls so no real network traffic occurs.
- */
 class SyncSliceGatingTest extends TestCase
 {
     use RefreshDatabase;
@@ -29,7 +24,6 @@ class SyncSliceGatingTest extends TestCase
     {
         parent::setUp();
 
-        // Stub token manager — job needs it to build HTTP client auth headers.
         $this->app->bind(TokenManagerInterface::class, fn () => new class implements TokenManagerInterface
         {
             public function getToken(string $region = 'eu'): string
@@ -43,12 +37,13 @@ class SyncSliceGatingTest extends TestCase
             }
         });
 
-        // Disable all optional slices by default; individual tests opt in.
         Config::set('blizzard.sync.mythic_plus_enabled', false);
         Config::set('blizzard.sync.pvp_enabled', false);
         Config::set('blizzard.sync.professions_enabled', false);
         Config::set('blizzard.sync.raids_enabled', false);
         Config::set('blizzard.sync.teammate_crawl_enabled', false);
+        Config::set('blizzard.sync.mounts_enabled', false);
+        Config::set('blizzard.sync.toys_enabled', false);
         Config::set('blizzard.sync.achievements_enabled', false);
         Config::set('blizzard.sync.pets_enabled', false);
     }
@@ -57,18 +52,11 @@ class SyncSliceGatingTest extends TestCase
     // Achievements slice
     // -------------------------------------------------------------------------
 
-    /**
-     * When BLIZZARD_SYNC_ACHIEVEMENTS_ENABLED is false, syncAchievements() must
-     * return before making any HTTP call to the achievements endpoint.
-     */
     public function test_sync_achievements_skips_http_and_db_write_when_flag_off(): void
     {
         Config::set('blizzard.sync.achievements_enabled', false);
 
         Http::fake([
-            // The achievements endpoint is deliberately NOT registered here.
-            // Http::fake() with a strict wildcard-only map would 500 any call
-            // to the achievements URL — but we assert via assertNotSent too.
             'eu.api.blizzard.com/*' => Http::response($this->minimalCharacterPoolResponse(), 200),
         ]);
 
@@ -79,23 +67,75 @@ class SyncSliceGatingTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // Mounts slice
+    // -------------------------------------------------------------------------
+
+    public function test_sync_collections_skips_mounts_when_flag_off(): void
+    {
+        Config::set('blizzard.sync.mounts_enabled', false);
+        Config::set('blizzard.sync.toys_enabled', true);
+
+        Http::fake([
+            'eu.api.blizzard.com/profile/wow/character/tarren-mill/mounttest/collections/mounts*' => Http::response([
+                'mounts' => [
+                    ['mount' => ['id' => 1234, 'name' => 'Test Mount'], 'is_useable' => true],
+                ],
+            ], 200),
+            'eu.api.blizzard.com/profile/wow/character/tarren-mill/mounttest/collections/pets*' => Http::response(['pets' => []], 200),
+            'eu.api.blizzard.com/profile/wow/character/tarren-mill/mounttest/collections/toys*' => Http::response([
+                'toys' => [
+                    ['toy' => ['id' => 10, 'name' => 'Test Toy']],
+                ],
+            ], 200),
+            'eu.api.blizzard.com/*' => Http::response($this->minimalCharacterPoolResponse(), 200),
+        ]);
+
+        SyncCharacterData::dispatchSync('eu', 'tarren-mill', 'mounttest', SyncDepth::Full);
+
+        $this->assertSame(0, CharacterMount::count(), 'no mount rows expected when mounts flag is off');
+        $this->assertGreaterThan(0, CharacterToy::count(), 'toys should be written when toys flag is on');
+    }
+
+    // -------------------------------------------------------------------------
+    // Toys slice
+    // -------------------------------------------------------------------------
+
+    public function test_sync_collections_skips_toys_when_flag_off(): void
+    {
+        Config::set('blizzard.sync.toys_enabled', false);
+        Config::set('blizzard.sync.mounts_enabled', true);
+
+        Http::fake([
+            'eu.api.blizzard.com/profile/wow/character/tarren-mill/toytest/collections/mounts*' => Http::response([
+                'mounts' => [
+                    ['mount' => ['id' => 1234, 'name' => 'Test Mount'], 'is_useable' => true],
+                ],
+            ], 200),
+            'eu.api.blizzard.com/profile/wow/character/tarren-mill/toytest/collections/pets*' => Http::response(['pets' => []], 200),
+            'eu.api.blizzard.com/profile/wow/character/tarren-mill/toytest/collections/toys*' => Http::response([
+                'toys' => [
+                    ['toy' => ['id' => 10, 'name' => 'Test Toy']],
+                ],
+            ], 200),
+            'eu.api.blizzard.com/*' => Http::response($this->minimalCharacterPoolResponse(), 200),
+        ]);
+
+        SyncCharacterData::dispatchSync('eu', 'tarren-mill', 'toytest', SyncDepth::Full);
+
+        $this->assertSame(0, CharacterToy::count(), 'no toy rows expected when toys flag is off');
+        $this->assertGreaterThan(0, CharacterMount::count(), 'mounts should be written when mounts flag is on');
+    }
+
+    // -------------------------------------------------------------------------
     // Pets slice
     // -------------------------------------------------------------------------
 
-    /**
-     * When BLIZZARD_SYNC_PETS_ENABLED is false, syncCollections() still performs
-     * the HTTP fetch (mounts + pets + toys pool), but writes NO pet rows.
-     * Mount rows should still be written to confirm the rest of the slice ran.
-     */
     public function test_sync_collections_writes_mounts_but_not_pets_when_pets_flag_off(): void
     {
         Config::set('blizzard.sync.pets_enabled', false);
+        Config::set('blizzard.sync.mounts_enabled', true);
 
         Http::fake([
-            // The trailing * is required: Laravel's Http::fake URL matching prepends a
-            // wildcard prefix but not a suffix, so without it query parameters
-            // (?namespace=...&locale=...) cause the specific pattern to miss and fall
-            // through to the wildcard catch-all below.
             'eu.api.blizzard.com/profile/wow/character/tarren-mill/pettest/collections/mounts*' => Http::response([
                 'mounts' => [
                     ['mount' => ['id' => 1234, 'name' => 'Test Mount'], 'is_useable' => true],
@@ -114,7 +154,6 @@ class SyncSliceGatingTest extends TestCase
                 ],
             ], 200),
             'eu.api.blizzard.com/profile/wow/character/tarren-mill/pettest/collections/toys*' => Http::response(['toys' => []], 200),
-            // Catch-all for standard-depth pool + stats/titles/reputations slices.
             'eu.api.blizzard.com/*' => Http::response($this->minimalCharacterPoolResponse(), 200),
         ]);
 
@@ -128,10 +167,6 @@ class SyncSliceGatingTest extends TestCase
     // Shared fixture helpers
     // -------------------------------------------------------------------------
 
-    /**
-     * Minimal Blizzard profile response that satisfies CharacterProfileMapper.
-     * Used as the fallback wildcard response for the standard-depth pool requests.
-     */
     private function minimalCharacterPoolResponse(): array
     {
         return [

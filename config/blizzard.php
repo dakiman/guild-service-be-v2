@@ -80,6 +80,8 @@ return [
         'professions_enabled' => (bool) env('BLIZZARD_SYNC_PROFESSIONS_ENABLED', true),
         'raids_enabled' => (bool) env('BLIZZARD_SYNC_RAIDS_ENABLED', true),
         'teammate_crawl_enabled' => (bool) env('BLIZZARD_SYNC_TEAMMATE_CRAWL_ENABLED', false),
+        'mounts_enabled' => (bool) env('BLIZZARD_SYNC_MOUNTS_ENABLED', false),
+        'toys_enabled' => (bool) env('BLIZZARD_SYNC_TOYS_ENABLED', false),
         'achievements_enabled' => env('BLIZZARD_SYNC_ACHIEVEMENTS_ENABLED', false),
         'pets_enabled' => env('BLIZZARD_SYNC_PETS_ENABLED', false),
     ],

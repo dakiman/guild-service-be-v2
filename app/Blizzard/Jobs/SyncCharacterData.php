@@ -696,19 +696,20 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $toyDtos = $toyMapper->map($bodies['toys']);
 
             DB::transaction(function () use ($character, $mountDtos, $petDtos, $toyDtos) {
-                $keepMounts = [];
-                foreach ($mountDtos as $dto) {
-                    CharacterMount::updateOrCreate(
-                        ['character_id' => $character->id, 'mount_id' => $dto->mountId],
-                        ['name' => $dto->name, 'is_useable' => $dto->isUseable],
-                    );
-                    $keepMounts[] = $dto->mountId;
+                if (config('blizzard.sync.mounts_enabled')) {
+                    $keepMounts = [];
+                    foreach ($mountDtos as $dto) {
+                        CharacterMount::updateOrCreate(
+                            ['character_id' => $character->id, 'mount_id' => $dto->mountId],
+                            ['name' => $dto->name, 'is_useable' => $dto->isUseable],
+                        );
+                        $keepMounts[] = $dto->mountId;
+                    }
+                    CharacterMount::where('character_id', $character->id)
+                        ->when($keepMounts !== [], fn ($q) => $q->whereNotIn('mount_id', $keepMounts))
+                        ->delete();
                 }
-                CharacterMount::where('character_id', $character->id)
-                    ->when($keepMounts !== [], fn ($q) => $q->whereNotIn('mount_id', $keepMounts))
-                    ->delete();
 
-                // Feature-gated: pets carry significant disk cost; off by default.
                 if (config('blizzard.sync.pets_enabled')) {
                     $keepPets = [];
                     foreach ($petDtos as $dto) {
@@ -731,17 +732,19 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                         ->delete();
                 }
 
-                $keepToys = [];
-                foreach ($toyDtos as $dto) {
-                    CharacterToy::updateOrCreate(
-                        ['character_id' => $character->id, 'toy_id' => $dto->toyId],
-                        ['name' => $dto->name],
-                    );
-                    $keepToys[] = $dto->toyId;
+                if (config('blizzard.sync.toys_enabled')) {
+                    $keepToys = [];
+                    foreach ($toyDtos as $dto) {
+                        CharacterToy::updateOrCreate(
+                            ['character_id' => $character->id, 'toy_id' => $dto->toyId],
+                            ['name' => $dto->name],
+                        );
+                        $keepToys[] = $dto->toyId;
+                    }
+                    CharacterToy::where('character_id', $character->id)
+                        ->when($keepToys !== [], fn ($q) => $q->whereNotIn('toy_id', $keepToys))
+                        ->delete();
                 }
-                CharacterToy::where('character_id', $character->id)
-                    ->when($keepToys !== [], fn ($q) => $q->whereNotIn('toy_id', $keepToys))
-                    ->delete();
 
                 $character->update(['collections_synced_at' => now()]);
             });
