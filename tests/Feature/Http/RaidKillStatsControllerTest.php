@@ -6,12 +6,19 @@ namespace Tests\Feature\Http;
 
 use App\Models\Character;
 use App\Models\RaidEncounterKill;
+use Database\Seeders\GameDataExpansionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class RaidKillStatsControllerTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(GameDataExpansionSeeder::class);
+    }
 
     public function test_returns_raid_kills_grouped_by_class(): void
     {
@@ -55,6 +62,8 @@ class RaidKillStatsControllerTest extends TestCase
                         ],
                     ],
                 ],
+                'expansions',
+                'current_expansion',
             ]);
 
         $raids = $response->json('raids');
@@ -161,6 +170,117 @@ class RaidKillStatsControllerTest extends TestCase
         $response = $this->getJson('/api/v1/stats/characters/raid-kills?difficulty=heroic');
 
         $response->assertOk()
-            ->assertJson(['raids' => []]);
+            ->assertJson([
+                'raids' => [],
+                'expansions' => [],
+                'current_expansion' => 'Midnight',
+            ]);
+    }
+
+    public function test_defaults_to_current_expansion(): void
+    {
+        $character = Character::factory()->create(['class_id' => 1, 'level' => 80]);
+
+        RaidEncounterKill::factory()->create([
+            'character_id' => $character->id,
+            'expansion_name' => 'Midnight',
+            'instance_id' => 1234,
+            'instance_name' => 'The Voidspire',
+            'encounter_id' => 5678,
+            'encounter_name' => 'Voidlord Xareth',
+            'difficulty' => 'heroic',
+            'completed_count' => 10,
+        ]);
+
+        RaidEncounterKill::factory()->create([
+            'character_id' => $character->id,
+            'expansion_name' => 'The War Within',
+            'instance_id' => 2345,
+            'instance_name' => 'Nerub-ar Palace',
+            'encounter_id' => 6789,
+            'encounter_name' => 'Queen Ansurek',
+            'difficulty' => 'heroic',
+            'completed_count' => 5,
+        ]);
+
+        // No expansion param — should default to current (Midnight)
+        $response = $this->getJson('/api/v1/stats/characters/raid-kills?difficulty=heroic');
+        $response->assertOk();
+
+        $raids = $response->json('raids');
+        $this->assertCount(1, $raids);
+        $this->assertEquals(1234, $raids[0]['instance_id']);
+        $this->assertEquals('The Voidspire', $raids[0]['name']);
+    }
+
+    public function test_filters_by_specific_expansion(): void
+    {
+        $character = Character::factory()->create(['class_id' => 1, 'level' => 80]);
+
+        RaidEncounterKill::factory()->create([
+            'character_id' => $character->id,
+            'expansion_name' => 'Midnight',
+            'instance_id' => 1234,
+            'instance_name' => 'The Voidspire',
+            'encounter_id' => 5678,
+            'encounter_name' => 'Voidlord Xareth',
+            'difficulty' => 'heroic',
+            'completed_count' => 10,
+        ]);
+
+        RaidEncounterKill::factory()->create([
+            'character_id' => $character->id,
+            'expansion_name' => 'The War Within',
+            'instance_id' => 2345,
+            'instance_name' => 'Nerub-ar Palace',
+            'encounter_id' => 6789,
+            'encounter_name' => 'Queen Ansurek',
+            'difficulty' => 'heroic',
+            'completed_count' => 5,
+        ]);
+
+        // Request TWW — should only get TWW kills
+        $response = $this->getJson('/api/v1/stats/characters/raid-kills?difficulty=heroic&expansion=The+War+Within');
+        $response->assertOk();
+
+        $raids = $response->json('raids');
+        $this->assertCount(1, $raids);
+        $this->assertEquals(2345, $raids[0]['instance_id']);
+        $this->assertEquals('Nerub-ar Palace', $raids[0]['name']);
+    }
+
+    public function test_response_includes_expansion_list(): void
+    {
+        $character = Character::factory()->create(['class_id' => 1, 'level' => 80]);
+
+        RaidEncounterKill::factory()->create([
+            'character_id' => $character->id,
+            'expansion_name' => 'Midnight',
+            'instance_id' => 1234,
+            'instance_name' => 'The Voidspire',
+            'encounter_id' => 5678,
+            'encounter_name' => 'Voidlord Xareth',
+            'difficulty' => 'heroic',
+            'completed_count' => 10,
+        ]);
+
+        RaidEncounterKill::factory()->create([
+            'character_id' => $character->id,
+            'expansion_name' => 'The War Within',
+            'instance_id' => 2345,
+            'instance_name' => 'Nerub-ar Palace',
+            'encounter_id' => 6789,
+            'encounter_name' => 'Queen Ansurek',
+            'difficulty' => 'heroic',
+            'completed_count' => 5,
+        ]);
+
+        $response = $this->getJson('/api/v1/stats/characters/raid-kills?difficulty=heroic');
+        $response->assertOk();
+
+        $expansions = $response->json('expansions');
+        $this->assertCount(2, $expansions);
+        $this->assertContains('Midnight', $expansions);
+        $this->assertContains('The War Within', $expansions);
     }
 }
