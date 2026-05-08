@@ -49,7 +49,7 @@ class RaidKillStatsService
         $query = DB::table('raid_encounter_kills')
             ->join('characters', 'raid_encounter_kills.character_id', '=', 'characters.id')
             ->where('raid_encounter_kills.difficulty', $difficulty)
-            ->where('characters.level', 80)
+            ->where('characters.level', '>=', 80)
             ->select([
                 'raid_encounter_kills.instance_id',
                 'raid_encounter_kills.instance_name',
