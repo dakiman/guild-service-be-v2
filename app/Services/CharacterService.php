@@ -25,10 +25,7 @@ class CharacterService
             return null;
         }
 
-        $character->update([
-            'num_of_searches' => \Illuminate\Support\Facades\DB::raw('num_of_searches + 1'),
-            'last_searched_at' => now(),
-        ]);
+        $character->increment('num_of_searches', 1, ['last_searched_at' => now()]);
 
         $anySliceStale = $character->isMythicsStale()
             || $character->isPvpStale()

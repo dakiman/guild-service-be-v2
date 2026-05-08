@@ -25,10 +25,7 @@ class GuildService
             return null;
         }
 
-        $guild->update([
-            'num_of_searches' => \Illuminate\Support\Facades\DB::raw('num_of_searches + 1'),
-            'last_searched_at' => now(),
-        ]);
+        $guild->increment('num_of_searches', 1, ['last_searched_at' => now()]);
 
         if ($guild->isStale() || $guild->isRosterStale()) {
             SyncGuildData::dispatch($region, $realm, $name, forceRosterFanout: false, forceCascade: true);
