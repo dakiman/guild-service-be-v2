@@ -4,19 +4,49 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Models\GameDataExpansion;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class RaidKillStatsService
 {
-    public function getByDifficulty(string $difficulty): array
+    public function getByDifficulty(string $difficulty, string $expansion = 'current'): array
     {
-        return Cache::remember("stats:raid-kills:{$difficulty}", 600, fn () => $this->compute($difficulty));
+        $resolvedExpansion = $this->resolveExpansion($expansion);
+        $cacheKey = "stats:raid-kills:{$difficulty}:{$resolvedExpansion}";
+
+        return Cache::remember($cacheKey, 600, fn () => $this->compute($difficulty, $resolvedExpansion));
     }
 
-    private function compute(string $difficulty): array
+    private function resolveExpansion(string $expansion): string
     {
-        $rows = DB::table('raid_encounter_kills')
+        if ($expansion === 'current') {
+            return $this->getCurrentExpansionName() ?? '';
+        }
+
+        return $expansion;
+    }
+
+    private function getCurrentExpansionName(): ?string
+    {
+        return GameDataExpansion::orderBy('display_order')->value('name');
+    }
+
+    private function getAvailableExpansions(): array
+    {
+        return Cache::remember('stats:raid-kills:expansions', 600, function () {
+            return DB::table('raid_encounter_kills')
+                ->select('expansion_name')
+                ->distinct()
+                ->orderBy('expansion_name')
+                ->pluck('expansion_name')
+                ->all();
+        });
+    }
+
+    private function compute(string $difficulty, string $resolvedExpansion): array
+    {
+        $query = DB::table('raid_encounter_kills')
             ->join('characters', 'raid_encounter_kills.character_id', '=', 'characters.id')
             ->where('raid_encounter_kills.difficulty', $difficulty)
             ->where('characters.level', 80)
@@ -34,10 +64,19 @@ class RaidKillStatsService
                 'raid_encounter_kills.encounter_id',
                 'raid_encounter_kills.encounter_name',
                 'characters.class_id',
-            )
-            ->get();
+            );
 
-        return ['raids' => $this->restructure($rows)];
+        if ($resolvedExpansion !== '') {
+            $query->where('raid_encounter_kills.expansion_name', $resolvedExpansion);
+        }
+
+        $rows = $query->get();
+
+        return [
+            'raids' => $this->restructure($rows),
+            'expansions' => $this->getAvailableExpansions(),
+            'current_expansion' => $this->getCurrentExpansionName(),
+        ];
     }
 
     private function restructure(object $rows): array

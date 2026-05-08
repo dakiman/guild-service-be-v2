@@ -15,6 +15,7 @@ class RaidKillStatsController extends Controller
     {
         $validator = Validator::make($request->query(), [
             'difficulty' => 'sometimes|in:lfr,normal,heroic,mythic',
+            'expansion' => 'sometimes|string|max:100',
         ]);
 
         if ($validator->fails()) {
@@ -22,7 +23,8 @@ class RaidKillStatsController extends Controller
         }
 
         $difficulty = $request->query('difficulty', 'heroic');
+        $expansion = $request->query('expansion', 'current');
 
-        return response()->json($service->getByDifficulty($difficulty));
+        return response()->json($service->getByDifficulty($difficulty, $expansion));
     }
 }
