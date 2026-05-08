@@ -146,6 +146,11 @@ return [
     'rate_limit' => [
         'per_second' => 80,
         'per_hour' => 30000,
+        'circuit_breaker' => [
+            'threshold' => (int) env('BLIZZARD_CIRCUIT_BREAKER_THRESHOLD', 10),
+            'window' => 120,
+            'cooldown' => 60,
+        ],
     ],
 
     /*

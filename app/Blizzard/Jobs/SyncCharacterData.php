@@ -688,6 +688,12 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         CharacterToyMapper $toyMapper,
         Character $character,
     ): void {
+        if (! config('blizzard.sync.mounts_enabled')
+            && ! config('blizzard.sync.pets_enabled')
+            && ! config('blizzard.sync.toys_enabled')) {
+            return;
+        }
+
         try {
             $bodies = $client->getCharacterCollections($this->realm, $this->name);
 
