@@ -41,9 +41,15 @@ class CharacterController extends Controller
             ], 202)->header('Retry-After', '10');
         }
 
-        $relations = ['guild', 'dungeonRuns.memberEntries', 'pvpBrackets', 'professions.expansion', 'raidEncounterKills', 'titles.gameData', 'reputations.faction.expansion', 'mounts.gameData', 'toys'];
+        $relations = ['guild', 'dungeonRuns.memberEntries', 'pvpBrackets', 'professions.expansion', 'raidEncounterKills', 'titles.gameData', 'reputations.faction.expansion'];
+        if (config('blizzard.sync.mounts_enabled')) {
+            $relations[] = 'mounts.gameData';
+        }
         if (config('blizzard.sync.pets_enabled')) {
             $relations[] = 'pets';
+        }
+        if (config('blizzard.sync.toys_enabled')) {
+            $relations[] = 'toys';
         }
         $result->load($relations);
 

@@ -95,6 +95,8 @@ class CharacterResource extends JsonResource
             'feature_flags' => [
                 'achievements' => (bool) config('blizzard.sync.achievements_enabled'),
                 'pets' => (bool) config('blizzard.sync.pets_enabled'),
+                'mounts' => (bool) config('blizzard.sync.mounts_enabled'),
+                'toys' => (bool) config('blizzard.sync.toys_enabled'),
             ],
         ];
 
