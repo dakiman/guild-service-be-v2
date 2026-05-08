@@ -25,8 +25,10 @@ class GuildService
             return null;
         }
 
-        $guild->increment('num_of_searches');
-        $guild->update(['last_searched_at' => now()]);
+        $guild->update([
+            'num_of_searches' => \Illuminate\Support\Facades\DB::raw('num_of_searches + 1'),
+            'last_searched_at' => now(),
+        ]);
 
         if ($guild->isStale() || $guild->isRosterStale()) {
             SyncGuildData::dispatch($region, $realm, $name, forceRosterFanout: false, forceCascade: true);
@@ -40,10 +42,10 @@ class GuildService
      */
     public function getPopular(): array
     {
-        return [
+        return Cache::remember('guilds:popular', 30, fn () => [
             'recently_searched' => Guild::recentlySearched(5)->get(),
             'most_popular' => Guild::mostPopular(5)->get(),
-        ];
+        ]);
     }
 
     public function getDiscover(): array

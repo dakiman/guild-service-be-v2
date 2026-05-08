@@ -25,8 +25,10 @@ class CharacterService
             return null;
         }
 
-        $character->increment('num_of_searches');
-        $character->update(['last_searched_at' => now()]);
+        $character->update([
+            'num_of_searches' => \Illuminate\Support\Facades\DB::raw('num_of_searches + 1'),
+            'last_searched_at' => now(),
+        ]);
 
         $anySliceStale = $character->isMythicsStale()
             || $character->isPvpStale()
@@ -54,10 +56,10 @@ class CharacterService
      */
     public function getPopular(): array
     {
-        return [
+        return Cache::remember('characters:popular', 30, fn () => [
             'recently_searched' => Character::recentlySearched(5)->get(),
             'most_popular' => Character::mostPopular(5)->get(),
-        ];
+        ]);
     }
 
     public function toggleRecruitment(Character $character): Character
