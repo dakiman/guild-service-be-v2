@@ -41,7 +41,7 @@ class SyncCharacterDataShallowPromotionTest extends TestCase
     public function test_shallow_sync_dispatches_full_for_max_level_never_fully_synced(): void
     {
         Http::fake([
-            'eu.api.blizzard.com/*' => Http::response($this->profileResponse(level: 80), 200),
+            'eu.api.blizzard.com/*' => Http::response($this->profileResponse(level: 90), 200),
         ]);
 
         $job = new SyncCharacterData(
@@ -53,10 +53,10 @@ class SyncCharacterDataShallowPromotionTest extends TestCase
 
         app()->call([$job, 'handle']);
 
-        // Character should have been created at level 80 with null mythics_synced_at.
+        // Character should have been created at level 90 with null mythics_synced_at.
         $character = Character::where('name', 'newbie')->where('realm', 'tarren-mill')->first();
         $this->assertNotNull($character);
-        $this->assertSame(80, $character->level);
+        $this->assertSame(90, $character->level);
         $this->assertNull($character->mythics_synced_at);
 
         // Should dispatch a Full sync with forceTeammateCrawl=true.
@@ -102,12 +102,12 @@ class SyncCharacterDataShallowPromotionTest extends TestCase
             'realm' => 'tarren-mill',
             'region' => 'eu',
             'game_version' => 'retail',
-            'level' => 80,
+            'level' => 90,
             'mythics_synced_at' => now()->subDay(),
         ]);
 
         Http::fake([
-            'eu.api.blizzard.com/*' => Http::response($this->profileResponse(level: 80, name: 'Veteran'), 200),
+            'eu.api.blizzard.com/*' => Http::response($this->profileResponse(level: 90, name: 'Veteran'), 200),
         ]);
 
         $job = new SyncCharacterData(

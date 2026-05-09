@@ -43,8 +43,8 @@ class SyncGuildDataLinksExistingCharacterTest extends TestCase
         ]);
 
         $this->fakeRosterWith([
-            ['name' => 'Alpha', 'realm' => 'Tarren Mill', 'level' => 80, 'class_id' => 1, 'race_id' => 1, 'rank' => 0],
-            ['name' => 'Beta',  'realm' => 'Tarren Mill', 'level' => 80, 'class_id' => 2, 'race_id' => 1, 'rank' => 1],
+            ['name' => 'Alpha', 'realm' => 'Tarren Mill', 'level' => 90, 'class_id' => 1, 'race_id' => 1, 'rank' => 0],
+            ['name' => 'Beta',  'realm' => 'Tarren Mill', 'level' => 90, 'class_id' => 2, 'race_id' => 1, 'rank' => 1],
         ]);
 
         (new SyncGuildData('eu', 'tarren-mill', 'echo'))->handle(
@@ -63,7 +63,7 @@ class SyncGuildDataLinksExistingCharacterTest extends TestCase
     public function test_backfills_character_id_on_subsequent_run_after_character_appears(): void
     {
         $this->fakeRosterWith([
-            ['name' => 'Gamma', 'realm' => 'Tarren Mill', 'level' => 80, 'class_id' => 1, 'race_id' => 1, 'rank' => 0],
+            ['name' => 'Gamma', 'realm' => 'Tarren Mill', 'level' => 90, 'class_id' => 1, 'race_id' => 1, 'rank' => 0],
         ]);
 
         (new SyncGuildData('eu', 'tarren-mill', 'echo'))->handle(
@@ -125,7 +125,7 @@ class SyncGuildDataLinksExistingCharacterTest extends TestCase
         // (from pre-resolve) and patched by the post-upsert backfill UPDATE
         // — never via the upsert update list.
         $this->fakeRosterWith([
-            ['name' => 'Theta', 'realm' => 'Tarren Mill', 'level' => 80, 'class_id' => 1, 'race_id' => 1, 'rank' => 0],
+            ['name' => 'Theta', 'realm' => 'Tarren Mill', 'level' => 90, 'class_id' => 1, 'race_id' => 1, 'rank' => 0],
         ]);
 
         DB::enableQueryLog();
@@ -173,7 +173,7 @@ class SyncGuildDataLinksExistingCharacterTest extends TestCase
         ]);
 
         $this->fakeRosterWith([
-            ['name' => 'Iota', 'realm' => 'Tarren Mill', 'level' => 80, 'class_id' => 1, 'race_id' => 1, 'rank' => 0],
+            ['name' => 'Iota', 'realm' => 'Tarren Mill', 'level' => 90, 'class_id' => 1, 'race_id' => 1, 'rank' => 0],
         ]);
 
         (new SyncGuildData('eu', 'tarren-mill', 'echo'))->handle(

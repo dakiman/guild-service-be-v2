@@ -22,8 +22,8 @@ class RaidKillStatsControllerTest extends TestCase
 
     public function test_returns_raid_kills_grouped_by_class(): void
     {
-        $warrior = Character::factory()->create(['class_id' => 1, 'level' => 80]);
-        $mage = Character::factory()->create(['class_id' => 8, 'level' => 80]);
+        $warrior = Character::factory()->create(['class_id' => 1, 'level' => 90]);
+        $mage = Character::factory()->create(['class_id' => 8, 'level' => 90]);
 
         RaidEncounterKill::factory()->create([
             'character_id' => $warrior->id,
@@ -83,7 +83,7 @@ class RaidKillStatsControllerTest extends TestCase
 
     public function test_filters_by_difficulty(): void
     {
-        $character = Character::factory()->create(['class_id' => 1, 'level' => 80]);
+        $character = Character::factory()->create(['class_id' => 1, 'level' => 90]);
 
         RaidEncounterKill::factory()->create([
             'character_id' => $character->id,
@@ -128,7 +128,7 @@ class RaidKillStatsControllerTest extends TestCase
 
     public function test_defaults_to_heroic_difficulty(): void
     {
-        $character = Character::factory()->create(['class_id' => 1, 'level' => 80]);
+        $character = Character::factory()->create(['class_id' => 1, 'level' => 90]);
 
         RaidEncounterKill::factory()->create([
             'character_id' => $character->id,
@@ -179,7 +179,7 @@ class RaidKillStatsControllerTest extends TestCase
 
     public function test_defaults_to_current_expansion(): void
     {
-        $character = Character::factory()->create(['class_id' => 1, 'level' => 80]);
+        $character = Character::factory()->create(['class_id' => 1, 'level' => 90]);
 
         RaidEncounterKill::factory()->create([
             'character_id' => $character->id,
@@ -215,7 +215,7 @@ class RaidKillStatsControllerTest extends TestCase
 
     public function test_filters_by_specific_expansion(): void
     {
-        $character = Character::factory()->create(['class_id' => 1, 'level' => 80]);
+        $character = Character::factory()->create(['class_id' => 1, 'level' => 90]);
 
         RaidEncounterKill::factory()->create([
             'character_id' => $character->id,
@@ -251,7 +251,7 @@ class RaidKillStatsControllerTest extends TestCase
 
     public function test_response_includes_expansion_list(): void
     {
-        $character = Character::factory()->create(['class_id' => 1, 'level' => 80]);
+        $character = Character::factory()->create(['class_id' => 1, 'level' => 90]);
 
         RaidEncounterKill::factory()->create([
             'character_id' => $character->id,

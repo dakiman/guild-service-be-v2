@@ -33,11 +33,11 @@ class SyncGuildRosterCharacterFanoutTest extends TestCase
 
         $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill', 'name' => 'Echo']);
         GuildMember::create([
-            'guild_id' => $guild->id, 'name' => 'Alpha', 'realm' => 'tarren-mill', 'level' => 80,
+            'guild_id' => $guild->id, 'name' => 'Alpha', 'realm' => 'tarren-mill', 'level' => 90,
             'class_id' => 1, 'race_id' => 1, 'rank' => 0,
         ]);
         GuildMember::create([
-            'guild_id' => $guild->id, 'name' => 'Beta', 'realm' => 'tarren-mill', 'level' => 80,
+            'guild_id' => $guild->id, 'name' => 'Beta', 'realm' => 'tarren-mill', 'level' => 90,
             'class_id' => 2, 'race_id' => 1, 'rank' => 1,
         ]);
 
@@ -59,7 +59,7 @@ class SyncGuildRosterCharacterFanoutTest extends TestCase
 
         $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill', 'name' => 'Echo']);
         GuildMember::create([
-            'guild_id' => $guild->id, 'name' => 'Fresh', 'realm' => 'tarren-mill', 'level' => 80,
+            'guild_id' => $guild->id, 'name' => 'Fresh', 'realm' => 'tarren-mill', 'level' => 90,
             'class_id' => 1, 'race_id' => 1, 'rank' => 0,
         ]);
 
@@ -87,7 +87,7 @@ class SyncGuildRosterCharacterFanoutTest extends TestCase
 
         $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill', 'name' => 'Echo']);
         GuildMember::create([
-            'guild_id' => $guild->id, 'name' => 'Stale', 'realm' => 'tarren-mill', 'level' => 80,
+            'guild_id' => $guild->id, 'name' => 'Stale', 'realm' => 'tarren-mill', 'level' => 90,
             'class_id' => 1, 'race_id' => 1, 'rank' => 0,
         ]);
 
@@ -110,7 +110,7 @@ class SyncGuildRosterCharacterFanoutTest extends TestCase
 
         $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill', 'name' => 'Echo']);
         GuildMember::create([
-            'guild_id' => $guild->id, 'name' => 'Alpha', 'realm' => 'tarren-mill', 'level' => 80,
+            'guild_id' => $guild->id, 'name' => 'Alpha', 'realm' => 'tarren-mill', 'level' => 90,
             'class_id' => 1, 'race_id' => 1, 'rank' => 0,
         ]);
 
@@ -127,7 +127,7 @@ class SyncGuildRosterCharacterFanoutTest extends TestCase
 
         $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill', 'name' => 'Echo']);
         GuildMember::create([
-            'guild_id' => $guild->id, 'name' => 'Alpha', 'realm' => 'tarren-mill', 'level' => 80,
+            'guild_id' => $guild->id, 'name' => 'Alpha', 'realm' => 'tarren-mill', 'level' => 90,
             'class_id' => 1, 'race_id' => 1, 'rank' => 0,
         ]);
 

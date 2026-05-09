@@ -19,7 +19,7 @@ class CharacterFactory extends Factory
             'faction' => fake()->randomElement(['Alliance', 'Horde']),
             'race_id' => fake()->numberBetween(1, 30),
             'class_id' => fake()->numberBetween(1, 13),
-            'level' => 80,
+            'level' => 90,
             'achievement_points' => fake()->numberBetween(0, 50000),
             'average_item_level' => fake()->numberBetween(400, 650),
             'equipped_item_level' => fake()->numberBetween(400, 650),

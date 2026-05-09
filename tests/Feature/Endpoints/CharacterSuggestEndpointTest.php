@@ -21,7 +21,7 @@ class CharacterSuggestEndpointTest extends TestCase
             'display_realm' => 'The Maelstrom',
             'region' => 'eu',
             'class_id' => 8,
-            'level' => 80,
+            'level' => 90,
             'faction' => 'Horde',
             'num_of_searches' => 5,
         ]);
@@ -36,7 +36,7 @@ class CharacterSuggestEndpointTest extends TestCase
                 'name' => 'melaniya',
                 'display_name' => 'Melaniya',
                 'class_id' => 8,
-                'level' => 80,
+                'level' => 90,
                 'faction' => 'Horde',
             ]],
         ]);

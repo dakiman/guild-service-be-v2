@@ -164,6 +164,54 @@ class SyncSliceGatingTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // Early M+ rating (from Standard sync pool)
+    // -------------------------------------------------------------------------
+
+    public function test_standard_sync_persists_mythic_plus_rating_from_pool(): void
+    {
+        Http::fake([
+            'eu.api.blizzard.com/profile/wow/character/tarren-mill/ratingtest/mythic-keystone-profile*' => Http::response([
+                'current_mythic_rating' => [
+                    'rating' => 2500.5,
+                    'color' => ['r' => 255, 'g' => 128, 'b' => 0, 'a' => 1.0],
+                ],
+            ], 200),
+            'eu.api.blizzard.com/*' => Http::response($this->minimalCharacterPoolResponse(), 200),
+        ]);
+
+        SyncCharacterData::dispatchSync('eu', 'tarren-mill', 'ratingtest', SyncDepth::Standard);
+
+        $character = \App\Models\Character::where('name', 'ratingtest')->first();
+        $this->assertNotNull($character);
+        $this->assertSame(2501, $character->mythic_plus_rating);
+        $this->assertSame('#ff8000', $character->mythic_plus_rating_color);
+        $this->assertNull($character->mythics_synced_at, 'mythics_synced_at must stay null after Standard sync');
+    }
+
+    public function test_standard_sync_does_not_wipe_existing_rating_on_keystone_404(): void
+    {
+        \App\Models\Character::forceCreate([
+            'name' => 'existing',
+            'realm' => 'tarren-mill',
+            'region' => 'eu',
+            'game_version' => 'retail',
+            'mythic_plus_rating' => 2000,
+            'mythic_plus_rating_color' => '#aabbcc',
+        ]);
+
+        Http::fake([
+            'eu.api.blizzard.com/profile/wow/character/tarren-mill/existing/mythic-keystone-profile*' => Http::response([], 404),
+            'eu.api.blizzard.com/*' => Http::response($this->minimalCharacterPoolResponse(), 200),
+        ]);
+
+        SyncCharacterData::dispatchSync('eu', 'tarren-mill', 'existing', SyncDepth::Standard);
+
+        $character = \App\Models\Character::where('name', 'existing')->first();
+        $this->assertSame(2000, $character->mythic_plus_rating);
+        $this->assertSame('#aabbcc', $character->mythic_plus_rating_color);
+    }
+
+    // -------------------------------------------------------------------------
     // Shared fixture helpers
     // -------------------------------------------------------------------------
 
@@ -176,7 +224,7 @@ class SyncSliceGatingTest extends TestCase
             'faction' => ['type' => 'ALLIANCE', 'name' => 'Alliance'],
             'race' => ['id' => 1, 'name' => 'Human'],
             'character_class' => ['id' => 1, 'name' => 'Warrior'],
-            'level' => 80,
+            'level' => 90,
             'achievement_points' => 100,
             'average_item_level' => 500,
             'equipped_item_level' => 490,

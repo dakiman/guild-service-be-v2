@@ -20,7 +20,7 @@ class CharacterSyncStatusTest extends TestCase
             'realm' => 'tarren-mill',
             'region' => 'eu',
             'game_version' => 'retail',
-            'level' => 80,
+            'level' => 90,
             'mythics_synced_at' => null,
             'pvp_synced_at' => null,
             'stats_synced_at' => null,
@@ -43,7 +43,7 @@ class CharacterSyncStatusTest extends TestCase
             'realm' => 'tarren-mill',
             'region' => 'eu',
             'game_version' => 'retail',
-            'level' => 80,
+            'level' => 90,
             'mythics_synced_at' => now(),
             'pvp_synced_at' => now(),
             'professions_synced_at' => now(),
@@ -69,7 +69,7 @@ class CharacterSyncStatusTest extends TestCase
             'realm' => 'tarren-mill',
             'region' => 'eu',
             'game_version' => 'retail',
-            'level' => 80,
+            'level' => 90,
             'mythics_synced_at' => null,
         ]);
 

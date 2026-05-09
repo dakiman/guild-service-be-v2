@@ -30,7 +30,7 @@ class SyncGuildRosterTtlGateTest extends TestCase
     {
         $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill']);
         GuildMember::factory()->create([
-            'guild_id' => $guild->id, 'name' => 'fresh', 'realm' => 'tarren-mill', 'level' => 80,
+            'guild_id' => $guild->id, 'name' => 'fresh', 'realm' => 'tarren-mill', 'level' => 90,
         ]);
 
         Character::factory()->create([
@@ -50,7 +50,7 @@ class SyncGuildRosterTtlGateTest extends TestCase
     {
         $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill']);
         GuildMember::factory()->create([
-            'guild_id' => $guild->id, 'name' => 'stale', 'realm' => 'tarren-mill', 'level' => 80,
+            'guild_id' => $guild->id, 'name' => 'stale', 'realm' => 'tarren-mill', 'level' => 90,
         ]);
 
         Character::factory()->create([
@@ -74,7 +74,7 @@ class SyncGuildRosterTtlGateTest extends TestCase
     {
         $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill']);
         GuildMember::factory()->create([
-            'guild_id' => $guild->id, 'name' => 'cold', 'realm' => 'tarren-mill', 'level' => 80,
+            'guild_id' => $guild->id, 'name' => 'cold', 'realm' => 'tarren-mill', 'level' => 90,
         ]);
 
         (new SyncGuildRoster($guild, forceFanout: true))->handle();
@@ -93,7 +93,7 @@ class SyncGuildRosterTtlGateTest extends TestCase
     {
         $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill']);
         GuildMember::factory()->create([
-            'guild_id' => $guild->id, 'name' => 'cold', 'realm' => 'tarren-mill', 'level' => 80,
+            'guild_id' => $guild->id, 'name' => 'cold', 'realm' => 'tarren-mill', 'level' => 90,
         ]);
 
         (new SyncGuildRoster($guild, forceFanout: true))->handle();
@@ -112,7 +112,7 @@ class SyncGuildRosterTtlGateTest extends TestCase
 
         $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill']);
         GuildMember::factory()->create([
-            'guild_id' => $guild->id, 'name' => 'proactive', 'realm' => 'tarren-mill', 'level' => 80,
+            'guild_id' => $guild->id, 'name' => 'proactive', 'realm' => 'tarren-mill', 'level' => 90,
         ]);
 
         (new SyncGuildRoster($guild, forceFanout: false))->handle();

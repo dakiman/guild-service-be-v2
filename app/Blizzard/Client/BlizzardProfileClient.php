@@ -65,6 +65,14 @@ class BlizzardProfileClient extends BlizzardClient
                 ->timeout($timeout)
                 ->connectTimeout(5)
                 ->get("{$basePath}/specializations"),
+
+            $pool->as('mythic_keystone')
+                ->withToken($token)
+                ->baseUrl($baseUrl)
+                ->withQueryParameters(['namespace' => $namespace, 'locale' => 'en_GB'])
+                ->timeout($timeout)
+                ->connectTimeout(5)
+                ->get("{$basePath}/mythic-keystone-profile"),
         ]);
 
         $basic = $responses['basic'];
@@ -78,6 +86,7 @@ class BlizzardProfileClient extends BlizzardClient
             'media' => $responses['media']->successful() ? $responses['media']->json() : null,
             'equipment' => $responses['equipment']->successful() ? $responses['equipment']->json() : null,
             'specializations' => $responses['specializations']->successful() ? $responses['specializations']->json() : null,
+            'mythic_keystone' => $responses['mythic_keystone']->successful() ? $responses['mythic_keystone']->json() : null,
         ];
     }
 

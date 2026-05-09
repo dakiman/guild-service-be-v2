@@ -46,9 +46,9 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -219,6 +219,16 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             }
         }
 
+        if ($response['mythic_keystone']) {
+            $mythicRating = $ratingMapper->map(
+                $response['mythic_keystone'], null, $this->name, $this->realm
+            );
+            if ($mythicRating->rating !== null) {
+                $characterData['mythic_plus_rating'] = $mythicRating->rating;
+                $characterData['mythic_plus_rating_color'] = $mythicRating->color;
+            }
+        }
+
         // Upsert the character.
         // game_version is always 'retail' here — Classic uses a separate read-through
         // service and does not flow through this job.
@@ -235,7 +245,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         self::linkGuildMembers($character);
 
         if ($this->depth === SyncDepth::Shallow
-            && $character->level === 80
+            && $character->level === (int) config('blizzard.endgame_level')
             && $character->mythics_synced_at === null
         ) {
             self::dispatch(

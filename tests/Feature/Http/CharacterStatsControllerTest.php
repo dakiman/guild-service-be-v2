@@ -185,12 +185,12 @@ class CharacterStatsControllerTest extends TestCase
 
     public function test_endgame_filter_excludes_inactive_characters(): void
     {
-        // Active: level 80 with a raid kill
-        $active = Character::factory()->create(['level' => 80, 'class_id' => 1]);
+        // Active: level 90 with a raid kill
+        $active = Character::factory()->create(['level' => 90, 'class_id' => 1]);
         RaidEncounterKill::factory()->create(['character_id' => $active->id]);
 
-        // Inactive: level 80, no activity
-        Character::factory()->create(['level' => 80, 'class_id' => 2]);
+        // Inactive: level 90, no activity
+        Character::factory()->create(['level' => 90, 'class_id' => 2]);
 
         // Low level: has a raid kill but not max level
         $lowLevel = Character::factory()->create(['level' => 70, 'class_id' => 3]);
