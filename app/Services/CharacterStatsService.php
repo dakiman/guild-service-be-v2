@@ -4,12 +4,17 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Blizzard\Client\BlizzardGameDataClient;
 use App\Models\Character;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 
 class CharacterStatsService
 {
+    public function __construct(
+        private readonly BlizzardGameDataClient $gameDataClient,
+    ) {}
+
     public function getStats(): array
     {
         return Cache::remember('stats:characters', 600, fn () => $this->computeStats());
@@ -20,7 +25,7 @@ class CharacterStatsService
         $baseQuery = Character::endgameActive();
 
         return [
-            'total_characters' => Character::count(),
+            'total_characters' => (clone $baseQuery)->count(),
             'class_distribution' => $this->getClassDistribution(clone $baseQuery),
             'spec_distribution' => $this->getSpecDistribution(clone $baseQuery),
             'faction_distribution' => $this->getFactionDistribution(clone $baseQuery),
@@ -92,8 +97,12 @@ class CharacterStatsService
 
     private function getTopPerformers(Builder $query, int $limit = 5): array
     {
+        $currentSeason = $this->gameDataClient->getCurrentMythicPlusSeason();
+
+        $mythicPlusQuery = (clone $query)->whereHas('dungeonRuns', fn (Builder $q) => $q->where('season', $currentSeason));
+
         return [
-            'mythic_plus' => $this->getTopBy(clone $query, 'mythic_plus_rating', $limit),
+            'mythic_plus' => $this->getTopBy($mythicPlusQuery, 'mythic_plus_rating', $limit),
             'item_level' => $this->getTopBy(clone $query, 'average_item_level', $limit),
             'achievement_points' => $this->getTopBy(clone $query, 'achievement_points', $limit),
         ];

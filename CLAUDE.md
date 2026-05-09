@@ -40,7 +40,7 @@ Self-contained, registered via `BlizzardServiceProvider`.
 - `dynamic-{region}` → mythic-keystone seasons / leaderboards / dungeon detail.
 - `static-{region}` → game-data (achievements, mounts, titles, factions, talents, items, races, journal-instance, keystone-affix). `BlizzardGameDataClient::getTalentTree()` and `getFactionIndex/getFaction` bypass `request()` and call `Http` directly.
 
-**Jobs/** — `ShouldQueue` + `ShouldBeUnique` (60s). `$tries = 15` / `$maxExceptions = 3` with backoff [30, 120, 300]s. Middleware: `BlizzardRateLimiter` (Redis throttle 80 req/s, catches 429 → non-blocking release, auto-trips circuit breaker after 10 hits in 2 min) + `BlizzardHealthCheck` (pauses all jobs for 60s when `blizzard:unhealthy` is set). Full sync strategy: `docs/sync-strategy.md`.
+**Jobs/** — `ShouldQueue` + `ShouldBeUnique` (60s). `$tries = 15` / `$maxExceptions = 3` with backoff [30, 120, 300]s. Middleware: `BlizzardRateLimiter` (Redis throttle 80 req/s, catches 429 → non-blocking `$job->release($retryAfter)`, auto-trips circuit breaker after 10 hits in 2 min) + `BlizzardHealthCheck` (pauses all jobs for 60s when `blizzard:unhealthy` is set). Full sync strategy: `docs/sync-strategy.md`.
 
 **Mappers/** — raw Blizzard JSON → readonly DTOs, one per data type. **DTOs** are readonly w/ constructor promotion; only fields we use.
 

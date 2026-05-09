@@ -207,7 +207,7 @@ class Character extends Model
 
     public function scopeEndgameActive(Builder $query): Builder
     {
-        return $query->where('level', 80)
+        return $query->where('level', config('blizzard.endgame_level', 90))
             ->where(function (Builder $q) {
                 $q->whereHas('raidEncounterKills')
                     ->orWhereHas('dungeonRuns');
