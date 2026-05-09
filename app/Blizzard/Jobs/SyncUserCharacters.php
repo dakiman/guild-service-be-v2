@@ -21,7 +21,9 @@ class SyncUserCharacters implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 3;
+    public int $tries = 15;
+
+    public int $maxExceptions = 3;
 
     public array $backoff = [30, 120, 300];
 
