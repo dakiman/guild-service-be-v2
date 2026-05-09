@@ -22,7 +22,7 @@ Laravel 13 / PHP 8.4 API for WoW character + guild lookups. Blizzard → fetch �
 
 ### Request flow
 
-User-initiated lookup (`Service::getByIdentity()`):
+User-initiated lookup (`CharacterService::getByIdentity()`; `GuildService` follows the same pattern):
 - found & fresh → 200 + Resource
 - found & stale → 200 + Resource + dispatch sync + `X-Data-Staleness: stale`
 - not found → dispatch sync, return 202 + `Retry-After`
@@ -40,7 +40,7 @@ Self-contained, registered via `BlizzardServiceProvider`.
 - `dynamic-{region}` → mythic-keystone seasons / leaderboards / dungeon detail.
 - `static-{region}` → game-data (achievements, mounts, titles, factions, talents, items, races, journal-instance, keystone-affix). `BlizzardGameDataClient::getTalentTree()` and `getFactionIndex/getFaction` bypass `request()` and call `Http` directly.
 
-**Jobs/** — `ShouldQueue` + `ShouldBeUnique` (60s). Retries 3 with backoff [30, 120, 300]s. Middleware: `BlizzardRateLimiter` (Redis throttle, 80 req/s) + `BlizzardHealthCheck` (cache-flag circuit breaker).
+**Jobs/** — `ShouldQueue` + `ShouldBeUnique` (60s). `$tries = 15` / `$maxExceptions = 3` with backoff [30, 120, 300]s. Middleware: `BlizzardRateLimiter` (Redis throttle 80 req/s, catches 429 → non-blocking release, auto-trips circuit breaker after 10 hits in 2 min) + `BlizzardHealthCheck` (pauses all jobs for 60s when `blizzard:unhealthy` is set). Full sync strategy: `docs/sync-strategy.md`.
 
 **Mappers/** — raw Blizzard JSON → readonly DTOs, one per data type. **DTOs** are readonly w/ constructor promotion; only fields we use.
 
@@ -57,19 +57,11 @@ Self-contained, registered via `BlizzardServiceProvider`.
 - Owns a `*_synced_at` column + config staleness threshold.
 - One slice failing **never** aborts the others; `*_synced_at` is updated only on success.
 
-Plan 2 slices (mythic+, pvp, professions, raids) have `BLIZZARD_SYNC_{SLICE}_ENABLED` kill-switches (default true).
-Plan 4 slices run unconditionally (Plan 5 cleanup removed flags) **except** `achievements` and `pets`, re-flagged behind `BLIZZARD_SYNC_ACHIEVEMENTS_ENABLED` / `BLIZZARD_SYNC_PETS_ENABLED` (both default false; achievements alone ≈ 70% of total DB).
+Plan 2 slices (mythic+, pvp, professions, raids) have `BLIZZARD_SYNC_{SLICE}_ENABLED` kill-switches (default true). Heavy slices (mounts, toys, achievements, pets) are also flag-gated (default false). Stats, titles, and reputations run unconditionally. Achievements alone ≈ 70% of total DB.
 
 **Delete-missing inside the slice's transaction** for: `character_pvp_brackets`, `character_professions`, `raid_encounter_kills`, `character_titles`, `character_reputations`. Empty/404 → wipe — required so dropped professions, unplayed brackets, reset lockouts, untrained titles, abandoned factions disappear.
 
-### Slice gotchas
-
-- **PvP bracket slugs are dynamic.** `pvp-summary.brackets[].href` is source of truth. Current patch: `2v2`, `3v3`, `blitz-{class}-{spec}` (Blitz replaced solo-shuffle). `PvpBracketStatsMapper::extractSlug()` regex-parses — do **not** hardcode an enum. `getCharacterPvpBracketsChunked()` caps each `Http::pool()` at 3 parallel slugs so a Full-sync job can't burst past 80 req/s under Horizon max concurrency. `tier_name` persisted as NULL.
-- **Mythic+ per-spec is character-identity-filtered.** `mythic_plus_rating_by_spec` reads `specialization.id` from `best_runs[].members[]` **only for the member matching the synced character's name + realm slug** (else teammates' specs get credited with this character's rating). `mythic_plus_rating_color` is Blizzard's RGBA → `#rrggbb`.
-- **Mythic+ team pivot bypasses `BelongsToMany`.** `dungeon_run_members` unique key is `(dungeon_run_id, character_name, character_realm, character_region)`, **not** `character_id` (which is a nullable secondary FK, only set when the teammate is one we already track). `SyncCharacterData::syncMythicPlus()` writes via `DB::table()->updateOrInsert([...unique cols...], [...])` — Eloquent's pivot upsert is `character_id`-keyed and (a) silently overwrites multiple unknown teammates onto one row, (b) hits SQLSTATE[23505] when two synced characters share a run with an unknown member. Unknown teammate's `character_id` stays NULL — never falls back to the syncing character's id. Repair tool: `php artisan blizzard:repair-dungeon-run-member-character-ids`.
-- **Stats slice.** `stats` JSONB carries the `/statistics` payload (envelope `_links`, `character` stripped). Path segment is `statistics`, NOT `character-stats` (latter 404s). 404 writes `stats=null` and updates `stats_synced_at`.
-- **Achievements slice — DELETE-then-bulk-INSERT.** Not the sibling `updateOrCreate` + per-row delete pattern. One `DB::transaction` issues `DELETE WHERE character_id=?` then chunked `Model::insert($rows)` (1000 rows/chunk, under PG's 65535-param ceiling). Achievements are append-only and max-level chars carry ~30k rows — per-row diff buys nothing. Schema has `(character_id, completed_timestamp)` recency index alongside the `(character_id, achievement_id)` unique. Category + Feats-of-Strength rendering joins the Plan 5 game-data tables.
-- **Collections slice.** Single `Http::pool()` for `/collections/{mounts,pets,toys}` → three sub-tables (`character_mounts`, `character_pets`, `character_toys`), one `DB::transaction`, delete-missing. Single `collections_synced_at`. Pets persist `creature_display_id` (Wowhead `npc=`); toys persist `toy_id` (`item=`); mounts persist id+name+is_useable, with summon-spell enrichment from Plan 5.
+Per-slice edge cases (PvP dynamic slugs, M+ team pivot, stats path, achievements DELETE-INSERT, collections pool): `docs/slice-gotchas.md`.
 
 ### Plan 5 game-data resolvers
 
@@ -86,7 +78,7 @@ Plan 4 slices run unconditionally (Plan 5 cleanup removed flags) **except** `ach
 - `GET /api/v1/game-data/raid-instances?expansion=current|all` — eager-loads `encounters`. `current` resolves to `display_order=1`.
 - `GET /api/v1/game-data/mythic-keystone-dungeons?season=current` — returns dungeons + the season's affixes piggybacked (~12-16 affix rows).
 
-Both: no auth, no `data` envelope, `Cache-Control: max-age=3600, public`. FE caches with TanStack Query `staleTime: Infinity`. Empty table → `data: []`, not error.
+Both: no auth, no `data` envelope, `Cache-Control: max-age=3600, public`. FE caches with TanStack Query `staleTime: Infinity`. Empty table → `instances: []` / `dungeons: []`, not error.
 
 - `GET /api/v1/characters/{region}/{realm}/{name}/achievements` (`CharacterAchievementsController::index`) — cursor-paginated joined rows: `{achievement_id, completed_timestamp, name, category_name}` + `meta.{total, per_page, next_cursor}`. Default per_page=100, max=200. Order: `completed_timestamp DESC NULLS LAST`, tiebreaker `achievement_id DESC`; cursor is base64url JSON `{ts, id}` so NULL-timestamp rows paginate through their own tail. Default filters `Feats of Strength`; `?include_feats=1` re-includes. Character payload no longer carries achievements (`CharacterController` doesn't eager-load, `CharacterResource` doesn't emit). Missing-row fallback: join returns `name=null`/`category_name=null`, FE renders `Achievement {id}`.
 
@@ -96,34 +88,9 @@ Both: no auth, no `data` envelope, `Cache-Control: max-age=3600, public`. FE cac
 - **Recursive teammate crawl.** On `SyncDepth::Full`, `dispatchTeammateCrawl()` runs as the last statement in `handle()` and dispatches one `Full` `SyncCharacterData` per Mythic+ teammate found in the seed's persisted `dungeon_run_members` for the current season — onto `blizzard-background`, with `crawlDepth = $this->crawlDepth + 1`. Gated on `BLIZZARD_SYNC_TEAMMATE_CRAWL_ENABLED` (default `false`); depth ceiling `BLIZZARD_CRAWL_MAX_DEPTH` (default 1, hard-clamped to 2). Skips teammates whose `Character.updated_at` is fresher than `BLIZZARD_CRAWL_RECENT_THRESHOLD` (default 259200 = 3d). Same rate-limit + health-check middleware as user-initiated. `ShouldBeUnique` key = `region:realm:name:depth` — `crawlDepth` is intentionally excluded so a seed and a crawl targeting the same character within 60s share the API call.
 - **Auto-discover guild.** When `SyncCharacterData` writes a `Guild::firstOrCreate` shell, it dispatches `SyncGuildData` if `wasRecentlyCreated` — guild profile + roster populate ahead of the user's first click. `ShouldBeUnique` dedupes bursts.
 
-### RaiderIO seeder (`app/Services/RaiderIO/`)
+RaiderIO seeder (`app/Services/RaiderIO/`) — lean discovery layer bootstrapping from raider.io top-lists. `php artisan raiderio:seed`. Detail: `docs/raiderio-seeder.md`.
 
-Lean discovery layer for bootstrapping from raider.io top-lists. **Not a full module** — DTOs do not leak past `RaiderIOSeeder`; nothing raider.io-shaped is persisted. Reuses existing Blizzard sync jobs end-to-end (dispatch and forget).
-
-- **Architecture.** `RaiderIOClient` (Laravel `Http::` + Redis token-bucket throttle, default 175/min vs raider.io's 200/min ceiling), `RaiderIOSeeder` orchestrator (`seedGuilds`, `seedRuns`), `php artisan raiderio:seed`. Generators yield rows lazily — at most ~20 rows in memory at a time.
-- **Phase 1 — Guilds.** `--phase=guilds` pulls top mythic raiding guilds via `/raiding/raid-rankings?raid={RAIDERIO_CURRENT_RAID_TIER}&difficulty=mythic`, dispatches `SyncGuildData`. `SyncGuildRoster` then dispatches `SyncCharacterData::Full` per roster member (TTL-gated on `Character.updated_at`).
-- **Phase 2 — Runs.** `--phase=runs` pulls top M+ runs from `/mythic-plus/runs?season={s}&region={r}&page={N}` (20 runs/page; `--limit` is *pages*). Each run yields 5 character refs; per-member `SyncCharacterData::Full`. Dedupe via `seeded_runs` table on `keystone_run_id` (immutable).
-- **Phase 3 — Cancelled.** raider.io has no public per-character/per-spec ranking endpoint. To broaden coverage, bump `RAIDERIO_SEED_GUILDS_PER_REGION` / `RAIDERIO_SEED_RUNS_PAGES_PER_REGION`.
-- **Roster fan-out is opt-in per dispatch (default OFF globally).** `SyncGuildRoster` dispatches per-member `SyncCharacterData::Full` only when (a) `forceFanout: true` was passed (seeder sets this), or (b) `RAIDERIO_DISPATCH_ROSTER_CHAR_SYNCS=true` globally. So routine `ProactiveSyncGuilds` and user-initiated `SyncGuildData` do NOT cascade per-member. Members above `BLIZZARD_MIN_LEVEL_FOR_LOOKUP` only.
-- **Teammate crawl override.** `RAIDERIO_SEED_TEAMMATE_CRAWL_ENABLED` (default false) overrides the global flag for seed-originated dispatches. Plumbed via `bool $forceTeammateCrawl` ctor param on `SyncCharacterData`. Crawled descendants get `false` (override doesn't recurse). Used by phases 2/3, not phase 1 (guild fan-out runs from `SyncGuildRoster`, not the seeder).
-- **Rate limits.** raider.io 200/min public; `RAIDERIO_ACCESS_KEY` (registered apps) unlocks higher rates and is appended when set. 429 retried once with `Retry-After`; 5xx retried up to 3 with backoff [1, 4, 10]s. Phpunit sets `RAIDERIO_BACKOFF_SLEEP_ENABLED=0`. Blizzard side: existing 80/s, 30k/hr ceiling — ~1500 Full character syncs/hour; queue drains over hours.
-- **Future.** If usage broadens beyond discovery, promote to a full `app/RaiderIO/` module mirroring `app/Blizzard/`.
-
-#### Common invocations
-
-```bash
-php artisan raiderio:seed --phase=guilds --limit=10 --regions=eu --dry-run
-php artisan raiderio:seed --phase=guilds                          # config defaults: 10 × eu,us
-php artisan raiderio:seed --phase=runs --limit=5 --regions=eu,us
-php artisan raiderio:seed --phase=guilds --regions=eu --force     # bypass TTL (NOT seeded_runs ledger)
-```
-
-### Sync depth
-
-`SyncDepth` enum:
-- **Shallow** — basic profile only (roster members).
-- **Standard** — profile + media + equipment + specializations.
-- **Full** — Standard + 9 slices (mythic+, pvp, professions, raids, stats, titles, reputations, collections, achievements).
+`SyncDepth` enum: **Shallow** (profile only, roster members) | **Standard** (+ media/equipment/specs) | **Full** (+ 9 slices).
 
 ### Auth
 
