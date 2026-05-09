@@ -245,7 +245,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         self::linkGuildMembers($character);
 
         if ($this->depth === SyncDepth::Shallow
-            && $character->level === (int) config('blizzard.endgame_level')
+            && $character->level === (int) config('blizzard.endgame_level', 90)
             && $character->mythics_synced_at === null
         ) {
             self::dispatch(
