@@ -52,7 +52,7 @@ class CharacterControllerNotFoundTest extends TestCase
         // First request: 202 + sync runs synchronously (queue=sync) → marker written
         $this->getJson('/api/v1/characters/eu/the-maelstrom/zzz')
             ->assertStatus(202)
-            ->assertHeader('Retry-After', '5');
+            ->assertHeader('Retry-After', '10');
 
         $this->assertSame(0, Character::query()->count(), 'no garbage row');
         $this->assertTrue(Cache::has('blizzard:not-found:character:eu:the-maelstrom:zzz'));
