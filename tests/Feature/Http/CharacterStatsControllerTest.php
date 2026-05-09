@@ -5,19 +5,35 @@ declare(strict_types=1);
 namespace Tests\Feature\Http;
 
 use App\Models\Character;
+use App\Models\DungeonRun;
 use App\Models\RaidEncounterKill;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Config;
 use Tests\TestCase;
 
 class CharacterStatsControllerTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** Create a character that passes the endgame-active filter. */
+    private const TEST_SEASON = 14;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Config::set('blizzard.mythic_plus.season_override', self::TEST_SEASON);
+    }
+
+    /** Create a character that passes the endgame-active filter (raid kill + dungeon run). */
     private function createActiveCharacter(array $attributes = []): Character
     {
         $character = Character::factory()->create($attributes);
         RaidEncounterKill::factory()->create(['character_id' => $character->id]);
+        $run = DungeonRun::factory()->create(['season' => self::TEST_SEASON]);
+        $character->dungeonRuns()->attach($run, [
+            'character_name' => $character->name,
+            'character_realm' => $character->realm,
+            'character_region' => $character->region,
+        ]);
 
         return $character;
     }
@@ -201,8 +217,7 @@ class CharacterStatsControllerTest extends TestCase
 
         $data = $response->json();
 
-        // total_characters counts ALL characters (unfiltered)
-        $this->assertEquals(3, $data['total_characters']);
+        $this->assertEquals(1, $data['total_characters']);
 
         // class_distribution should only include the active endgame character
         $classDist = collect($data['class_distribution']);
