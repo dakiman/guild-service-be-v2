@@ -1,0 +1,14 @@
+# Slice Gotchas
+
+Fragment extracted from `CLAUDE.md`. Primary reference: `../CLAUDE.md`.
+
+---
+
+Per-slice edge cases for the nine Full-sync slices in `SyncCharacterData`.
+
+- **PvP bracket slugs are dynamic.** `pvp-summary.brackets[].href` is source of truth. Current patch: `2v2`, `3v3`, `blitz-{class}-{spec}` (Blitz replaced solo-shuffle). `PvpBracketStatsMapper::extractSlug()` regex-parses — do **not** hardcode an enum. `getCharacterPvpBracketsChunked()` caps each `Http::pool()` at 3 parallel slugs so a Full-sync job can't burst past 80 req/s under Horizon max concurrency. `tier_name` persisted as NULL.
+- **Mythic+ per-spec is character-identity-filtered.** `mythic_plus_rating_by_spec` reads `specialization.id` from `best_runs[].members[]` **only for the member matching the synced character's name + realm slug** (else teammates' specs get credited with this character's rating). `mythic_plus_rating_color` is Blizzard's RGBA -> `#rrggbb`.
+- **Mythic+ team pivot bypasses `BelongsToMany`.** `dungeon_run_members` unique key is `(dungeon_run_id, character_name, character_realm, character_region)`, **not** `character_id` (which is a nullable secondary FK, only set when the teammate is one we already track). `SyncCharacterData::syncMythicPlus()` writes via `DB::table()->updateOrInsert([...unique cols...], [...])` — Eloquent's pivot upsert is `character_id`-keyed and (a) silently overwrites multiple unknown teammates onto one row, (b) hits SQLSTATE[23505] when two synced characters share a run with an unknown member. Unknown teammate's `character_id` stays NULL — never falls back to the syncing character's id. Repair tool: `php artisan blizzard:repair-dungeon-run-member-character-ids`.
+- **Stats slice.** `stats` JSONB carries the `/statistics` payload (envelope `_links`, `character` stripped). Path segment is `statistics`, NOT `character-stats` (latter 404s). 404 writes `stats=null` and updates `stats_synced_at`.
+- **Achievements slice — DELETE-then-bulk-INSERT.** Not the sibling `updateOrCreate` + per-row delete pattern. One `DB::transaction` issues `DELETE WHERE character_id=?` then chunked `Model::insert($rows)` (1000 rows/chunk, under PG's 65535-param ceiling). Achievements are append-only and max-level chars carry ~30k rows — per-row diff buys nothing. Schema has `(character_id, completed_timestamp)` recency index alongside the `(character_id, achievement_id)` unique. Category + Feats-of-Strength rendering joins the Plan 5 game-data tables.
+- **Collections slice.** Single `Http::pool()` for `/collections/{mounts,pets,toys}` -> three sub-tables (`character_mounts`, `character_pets`, `character_toys`), one `DB::transaction`, delete-missing. Single `collections_synced_at`. Pets persist `creature_display_id` (Wowhead `npc=`); toys persist `toy_id` (`item=`); mounts persist id+name+is_useable, with summon-spell enrichment from Plan 5.

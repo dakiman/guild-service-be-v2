@@ -1,0 +1,389 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Blizzard\Client;
+
+use App\Blizzard\Exceptions\BlizzardNotFoundException;
+use App\Support\BlizzardIdentity;
+use Illuminate\Http\Client\Pool;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Support\Facades\Http;
+
+class BlizzardProfileClient extends BlizzardClient
+{
+    protected function namespace(): string
+    {
+        return "profile-{$this->region}";
+    }
+
+    protected function timeout(): int
+    {
+        return (int) config('blizzard.timeouts.character_profile', 15);
+    }
+
+    public function getCharacterData(string $realm, string $name): array
+    {
+        $realm = BlizzardIdentity::realm($realm);
+        $name = BlizzardIdentity::name($name);
+
+        $basePath = "/profile/wow/character/{$realm}/{$name}";
+        $token = $this->tokenManager->getToken($this->region);
+        $namespace = $this->namespace();
+        $baseUrl = $this->baseUrl();
+        $timeout = (int) config('blizzard.timeouts.character_pool', 20);
+
+        $responses = Http::pool(fn (Pool $pool) => [
+            $pool->as('basic')
+                ->withToken($token)
+                ->baseUrl($baseUrl)
+                ->withQueryParameters(['namespace' => $namespace, 'locale' => 'en_GB'])
+                ->timeout($timeout)
+                ->connectTimeout(5)
+                ->get($basePath),
+
+            $pool->as('media')
+                ->withToken($token)
+                ->baseUrl($baseUrl)
+                ->withQueryParameters(['namespace' => $namespace, 'locale' => 'en_GB'])
+                ->timeout($timeout)
+                ->connectTimeout(5)
+                ->get("{$basePath}/character-media"),
+
+            $pool->as('equipment')
+                ->withToken($token)
+                ->baseUrl($baseUrl)
+                ->withQueryParameters(['namespace' => $namespace, 'locale' => 'en_GB'])
+                ->timeout($timeout)
+                ->connectTimeout(5)
+                ->get("{$basePath}/equipment"),
+
+            $pool->as('specializations')
+                ->withToken($token)
+                ->baseUrl($baseUrl)
+                ->withQueryParameters(['namespace' => $namespace, 'locale' => 'en_GB'])
+                ->timeout($timeout)
+                ->connectTimeout(5)
+                ->get("{$basePath}/specializations"),
+
+            $pool->as('mythic_keystone')
+                ->withToken($token)
+                ->baseUrl($baseUrl)
+                ->withQueryParameters(['namespace' => $namespace, 'locale' => 'en_GB'])
+                ->timeout($timeout)
+                ->connectTimeout(5)
+                ->get("{$basePath}/mythic-keystone-profile"),
+        ]);
+
+        $basic = $responses['basic'];
+        if ($basic->status() === 404) {
+            throw new BlizzardNotFoundException("character not found: {$this->region}/{$realm}/{$name}");
+        }
+        $basic->throw();
+
+        return [
+            'basic' => $basic->json(),
+            'media' => $responses['media']->successful() ? $responses['media']->json() : null,
+            'equipment' => $responses['equipment']->successful() ? $responses['equipment']->json() : null,
+            'specializations' => $responses['specializations']->successful() ? $responses['specializations']->json() : null,
+            'mythic_keystone' => $responses['mythic_keystone']->successful() ? $responses['mythic_keystone']->json() : null,
+        ];
+    }
+
+    /**
+     * @return array{base: ?array, season: ?array}
+     */
+    public function getCharacterMythicPlusPool(string $realm, string $name, int $season): array
+    {
+        $realm = BlizzardIdentity::realm($realm);
+        $name = BlizzardIdentity::name($name);
+
+        $basePath = "/profile/wow/character/{$realm}/{$name}";
+        $token = $this->tokenManager->getToken($this->region);
+        $namespace = $this->namespace();
+        $baseUrl = $this->baseUrl();
+        $timeout = (int) config('blizzard.timeouts.character_pool', 20);
+
+        $responses = Http::pool(fn (Pool $pool) => [
+            $pool->as('base')
+                ->withToken($token)
+                ->baseUrl($baseUrl)
+                ->withQueryParameters(['namespace' => $namespace, 'locale' => 'en_GB'])
+                ->timeout($timeout)
+                ->connectTimeout(5)
+                ->get("{$basePath}/mythic-keystone-profile"),
+
+            $pool->as('season')
+                ->withToken($token)
+                ->baseUrl($baseUrl)
+                ->withQueryParameters(['namespace' => $namespace, 'locale' => 'en_GB'])
+                ->timeout($timeout)
+                ->connectTimeout(5)
+                ->get("{$basePath}/mythic-keystone-profile/season/{$season}"),
+        ]);
+
+        return [
+            'base' => $responses['base']->successful() ? $responses['base']->json() : null,
+            'season' => $responses['season']->successful() ? $responses['season']->json() : null,
+        ];
+    }
+
+    public function getCharacterPvpSummary(string $realm, string $name): ?array
+    {
+        $realm = BlizzardIdentity::realm($realm);
+        $name = BlizzardIdentity::name($name);
+
+        $response = $this->request()
+            ->get("/profile/wow/character/{$realm}/{$name}/pvp-summary");
+
+        if ($response->status() === 404) {
+            return null;
+        }
+
+        $response->throw();
+
+        return $response->json();
+    }
+
+    /**
+     * Chunked fan-out — at most 3 parallel requests per chunk so a single
+     * Full-sync job can't burst past the per-second rate-limit budget under
+     * Horizon's max concurrency. Returns [slug => decoded_body | null].
+     *
+     * @param  string[]  $slugs
+     * @return array<string, ?array>
+     */
+    public function getCharacterPvpBracketsChunked(string $realm, string $name, array $slugs, int $chunkSize = 3): array
+    {
+        $realm = BlizzardIdentity::realm($realm);
+        $name = BlizzardIdentity::name($name);
+
+        if ($slugs === []) {
+            return [];
+        }
+
+        $basePath = "/profile/wow/character/{$realm}/{$name}/pvp-bracket";
+        $token = $this->tokenManager->getToken($this->region);
+        $namespace = $this->namespace();
+        $baseUrl = $this->baseUrl();
+        $timeout = (int) config('blizzard.timeouts.character_pool', 20);
+        $out = [];
+
+        foreach (array_chunk($slugs, $chunkSize) as $chunk) {
+            $responses = Http::pool(function (Pool $pool) use ($chunk, $basePath, $token, $namespace, $baseUrl, $timeout) {
+                $reqs = [];
+                foreach ($chunk as $slug) {
+                    $reqs[] = $pool->as($slug)
+                        ->withToken($token)
+                        ->baseUrl($baseUrl)
+                        ->withQueryParameters(['namespace' => $namespace, 'locale' => 'en_GB'])
+                        ->timeout($timeout)
+                        ->connectTimeout(5)
+                        ->get("{$basePath}/{$slug}");
+                }
+
+                return $reqs;
+            });
+
+            foreach ($chunk as $slug) {
+                $r = $responses[$slug] ?? null;
+                $out[$slug] = ($r && $r->successful()) ? $r->json() : null;
+            }
+        }
+
+        return $out;
+    }
+
+    public function getCharacterProfessions(string $realm, string $name): ?array
+    {
+        $realm = BlizzardIdentity::realm($realm);
+        $name = BlizzardIdentity::name($name);
+
+        $response = $this->request()
+            ->get("/profile/wow/character/{$realm}/{$name}/professions");
+
+        if ($response->status() === 404) {
+            return null;
+        }
+
+        $response->throw();
+
+        return $response->json();
+    }
+
+    public function getCharacterRaidEncounters(string $realm, string $name): ?array
+    {
+        $realm = BlizzardIdentity::realm($realm);
+        $name = BlizzardIdentity::name($name);
+
+        $response = $this->request()
+            ->get("/profile/wow/character/{$realm}/{$name}/encounters/raids");
+
+        if ($response->status() === 404) {
+            return null;
+        }
+
+        $response->throw();
+
+        return $response->json();
+    }
+
+    public function getCharacterStats(string $realm, string $name): ?array
+    {
+        $realm = BlizzardIdentity::realm($realm);
+        $name = BlizzardIdentity::name($name);
+
+        $response = $this->request()
+            ->get("/profile/wow/character/{$realm}/{$name}/statistics");
+
+        if ($response->status() === 404) {
+            return null;
+        }
+
+        $response->throw();
+
+        return $response->json();
+    }
+
+    public function getCharacterTitles(string $realm, string $name): ?array
+    {
+        $realm = BlizzardIdentity::realm($realm);
+        $name = BlizzardIdentity::name($name);
+
+        $response = $this->request()
+            ->get("/profile/wow/character/{$realm}/{$name}/titles");
+
+        if ($response->status() === 404) {
+            return null;
+        }
+
+        $response->throw();
+
+        return $response->json();
+    }
+
+    public function getCharacterReputations(string $realm, string $name): ?array
+    {
+        $realm = BlizzardIdentity::realm($realm);
+        $name = BlizzardIdentity::name($name);
+
+        try {
+            $response = $this->request()
+                ->get("/profile/wow/character/{$realm}/{$name}/reputations");
+        } catch (RequestException $e) {
+            if ($e->response->status() === 404) {
+                return null;
+            }
+
+            throw $e;
+        }
+
+        return $response->json();
+    }
+
+    public function getCharacterAchievements(string $realm, string $name): ?array
+    {
+        $realm = BlizzardIdentity::realm($realm);
+        $name = BlizzardIdentity::name($name);
+
+        try {
+            $response = $this->request()
+                ->get("/profile/wow/character/{$realm}/{$name}/achievements");
+        } catch (RequestException $e) {
+            if ($e->response->status() === 404) {
+                return null;
+            }
+
+            throw $e;
+        }
+
+        return $response->json();
+    }
+
+    /**
+     * Fetch the three collections endpoints in parallel.
+     *
+     * @return array{mounts: ?array, pets: ?array, toys: ?array}
+     */
+    public function getCharacterCollections(string $realm, string $name): array
+    {
+        $realm = BlizzardIdentity::realm($realm);
+        $name = BlizzardIdentity::name($name);
+
+        $basePath = "/profile/wow/character/{$realm}/{$name}/collections";
+        $token = $this->tokenManager->getToken($this->region);
+        $namespace = $this->namespace();
+        $baseUrl = $this->baseUrl();
+        $timeout = (int) config('blizzard.timeouts.character_pool', 20);
+
+        $responses = Http::pool(fn (Pool $pool) => [
+            $pool->as('mounts')
+                ->withToken($token)
+                ->baseUrl($baseUrl)
+                ->withQueryParameters(['namespace' => $namespace, 'locale' => 'en_GB'])
+                ->timeout($timeout)
+                ->connectTimeout(5)
+                ->get("{$basePath}/mounts"),
+
+            $pool->as('pets')
+                ->withToken($token)
+                ->baseUrl($baseUrl)
+                ->withQueryParameters(['namespace' => $namespace, 'locale' => 'en_GB'])
+                ->timeout($timeout)
+                ->connectTimeout(5)
+                ->get("{$basePath}/pets"),
+
+            $pool->as('toys')
+                ->withToken($token)
+                ->baseUrl($baseUrl)
+                ->withQueryParameters(['namespace' => $namespace, 'locale' => 'en_GB'])
+                ->timeout($timeout)
+                ->connectTimeout(5)
+                ->get("{$basePath}/toys"),
+        ]);
+
+        return [
+            'mounts' => $responses['mounts']->successful() ? $responses['mounts']->json() : null,
+            'pets' => $responses['pets']->successful() ? $responses['pets']->json() : null,
+            'toys' => $responses['toys']->successful() ? $responses['toys']->json() : null,
+        ];
+    }
+
+    public function getGuildData(string $realm, string $guild): array
+    {
+        $realm = BlizzardIdentity::realm($realm);
+        $guild = BlizzardIdentity::realm($guild);
+
+        try {
+            $response = $this->request()
+                ->get("/data/wow/guild/{$realm}/{$guild}");
+        } catch (RequestException $e) {
+            if ($e->response->status() === 404) {
+                throw new BlizzardNotFoundException("guild not found: {$this->region}/{$realm}/{$guild}", previous: $e);
+            }
+
+            throw $e;
+        }
+
+        return $response->json();
+    }
+
+    public function getGuildRoster(string $realm, string $guild): array
+    {
+        $realm = BlizzardIdentity::realm($realm);
+        $guild = BlizzardIdentity::realm($guild);
+
+        try {
+            $response = $this->request()
+                ->get("/data/wow/guild/{$realm}/{$guild}/roster");
+        } catch (RequestException $e) {
+            if ($e->response->status() === 404) {
+                throw new BlizzardNotFoundException("guild roster not found: {$this->region}/{$realm}/{$guild}", previous: $e);
+            }
+
+            throw $e;
+        }
+
+        return $response->json();
+    }
+}

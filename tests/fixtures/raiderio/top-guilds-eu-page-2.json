@@ -1,0 +1,64 @@
+{
+    "raidRankings": [
+        {
+            "rank": 21,
+            "guild": {
+                "name": "G21",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 22,
+            "guild": {
+                "name": "G22",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 23,
+            "guild": {
+                "name": "G23",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 24,
+            "guild": {
+                "name": "G24",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        },
+        {
+            "rank": 25,
+            "guild": {
+                "name": "G25",
+                "realm": {
+                    "slug": "draenor"
+                },
+                "region": {
+                    "slug": "eu"
+                }
+            }
+        }
+    ]
+}

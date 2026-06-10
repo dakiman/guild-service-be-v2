@@ -1,0 +1,69 @@
+{
+  "keystone_run_id": 21957615,
+  "season": "season-mn-1",
+  "mythic_level": 16,
+  "clear_time_ms": 1814558,
+  "completed_at": "2026-05-05T18:28:26.000Z",
+  "par_time_ms": 2040999,
+  "num_keystone_upgrades": 1,
+  "map_challenge_mode_id": 239,
+  "dungeon": { "name": "Seat of the Triumvirate", "short_name": "SEAT" },
+  "score": 429.2,
+  "roster": [
+    {
+      "character": {
+        "name": "Testchar",
+        "realm": { "slug": "the-maelstrom", "name": "The Maelstrom" },
+        "region": { "slug": "eu" },
+        "spec": { "id": 259, "name": "Assassination", "slug": "assassination" },
+        "class": { "id": 4, "name": "Rogue", "slug": "rogue" }
+      },
+      "role": "dps",
+      "items": { "item_level_equipped": 489 }
+    },
+    {
+      "character": {
+        "name": "Healer",
+        "realm": { "slug": "tarren-mill", "name": "Tarren Mill" },
+        "region": { "slug": "eu" },
+        "spec": { "id": 65, "name": "Holy", "slug": "holy" },
+        "class": { "id": 2, "name": "Paladin", "slug": "paladin" }
+      },
+      "role": "healer",
+      "items": { "item_level_equipped": 495 }
+    },
+    {
+      "character": {
+        "name": "Tank",
+        "realm": { "slug": "kazzak", "name": "Kazzak" },
+        "region": { "slug": "eu" },
+        "spec": { "id": 73, "name": "Protection", "slug": "protection" },
+        "class": { "id": 1, "name": "Warrior", "slug": "warrior" }
+      },
+      "role": "tank",
+      "items": { "item_level_equipped": 492 }
+    },
+    {
+      "character": {
+        "name": "Dps2",
+        "realm": { "slug": "draenor", "name": "Draenor" },
+        "region": { "slug": "eu" },
+        "spec": { "id": 62, "name": "Arcane", "slug": "arcane" },
+        "class": { "id": 8, "name": "Mage", "slug": "mage" }
+      },
+      "role": "dps",
+      "items": { "item_level_equipped": 487 }
+    },
+    {
+      "character": {
+        "name": "Dps3",
+        "realm": { "slug": "stormscale", "name": "Stormscale" },
+        "region": { "slug": "eu" },
+        "spec": { "id": 577, "name": "Havoc", "slug": "havoc" },
+        "class": { "id": 12, "name": "Demon Hunter", "slug": "demon-hunter" }
+      },
+      "role": "dps",
+      "items": { "item_level_equipped": 491 }
+    }
+  ]
+}

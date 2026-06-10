@@ -1,0 +1,46 @@
+{
+  "rankings": [
+    {
+      "rank": 1,
+      "score": 518.2,
+      "run": {
+        "keystone_run_id": 1001,
+        "roster": [
+          { "character": { "name": "Alice", "realm": { "slug": "tarren-mill" }, "region": { "slug": "eu" } } },
+          { "character": { "name": "Bob",   "realm": { "slug": "tarren-mill" }, "region": { "slug": "eu" } } },
+          { "character": { "name": "Cara",  "realm": { "slug": "kazzak"      }, "region": { "slug": "eu" } } },
+          { "character": { "name": "Dan",   "realm": { "slug": "draenor"     }, "region": { "slug": "eu" } } },
+          { "character": { "name": "Eve",   "realm": { "slug": "stormscale"  }, "region": { "slug": "eu" } } }
+        ]
+      }
+    },
+    {
+      "rank": 2,
+      "score": 510.1,
+      "run": {
+        "keystone_run_id": 1002,
+        "roster": [
+          { "character": { "name": "Frank", "realm": { "slug": "tarren-mill" }, "region": { "slug": "eu" } } },
+          { "character": { "name": "Gina",  "realm": { "slug": "tarren-mill" }, "region": { "slug": "eu" } } },
+          { "character": { "name": "Hank",  "realm": { "slug": "kazzak"      }, "region": { "slug": "eu" } } },
+          { "character": { "name": "Ivy",   "realm": { "slug": "draenor"     }, "region": { "slug": "eu" } } },
+          { "character": { "name": "Jack",  "realm": { "slug": "stormscale"  }, "region": { "slug": "eu" } } }
+        ]
+      }
+    },
+    {
+      "rank": 3,
+      "score": 505.0,
+      "run": {
+        "keystone_run_id": 1003,
+        "roster": [
+          { "character": { "name": "Kara",  "realm": { "slug": "tarren-mill" }, "region": { "slug": "eu" } } },
+          { "character": { "name": "Leo",   "realm": { "slug": "tarren-mill" }, "region": { "slug": "eu" } } },
+          { "character": { "name": "Mia",   "realm": { "slug": "kazzak"      }, "region": { "slug": "eu" } } },
+          { "character": { "name": "Noah",  "realm": { "slug": "draenor"     }, "region": { "slug": "eu" } } },
+          { "character": { "name": "Olga",  "realm": { "slug": "stormscale"  }, "region": { "slug": "eu" } } }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "name": "Testchar",
+  "realm": "the-maelstrom",
+  "region": "eu",
+  "mythic_plus_recent_runs": [
+    {
+      "dungeon": "Seat of the Triumvirate",
+      "short_name": "SEAT",
+      "mythic_level": 16,
+      "completed_at": "2026-05-05T18:28:26.000Z",
+      "clear_time_ms": 1814558,
+      "par_time_ms": 2040999,
+      "num_keystone_upgrades": 1,
+      "map_challenge_mode_id": 239,
+      "score": 429.2,
+      "affixes": [{ "id": 9, "name": "Tyrannical" }],
+      "url": "https://raider.io/mythic-plus-runs/season-mn-1/21957615-16-seat-of-the-triumvirate",
+      "spec": { "id": 259, "name": "Assassination" },
+      "role": "dps"
+    },
+    {
+      "dungeon": "Darkflame Cleft",
+      "short_name": "DFC",
+      "mythic_level": 14,
+      "completed_at": "2026-05-04T10:00:00.000Z",
+      "clear_time_ms": 1500000,
+      "par_time_ms": 1800000,
+      "num_keystone_upgrades": 2,
+      "map_challenge_mode_id": 241,
+      "score": 380.5,
+      "affixes": [{ "id": 10, "name": "Fortified" }],
+      "url": "https://raider.io/mythic-plus-runs/season-mn-1/21900000-14-darkflame-cleft",
+      "spec": { "id": 259, "name": "Assassination" },
+      "role": "dps"
+    }
+  ],
+  "mythic_plus_best_runs": [
+    {
+      "dungeon": "Seat of the Triumvirate",
+      "short_name": "SEAT",
+      "mythic_level": 16,
+      "completed_at": "2026-05-05T18:28:26.000Z",
+      "clear_time_ms": 1814558,
+      "par_time_ms": 2040999,
+      "num_keystone_upgrades": 1,
+      "map_challenge_mode_id": 239,
+      "score": 429.2,
+      "affixes": [{ "id": 9, "name": "Tyrannical" }],
+      "url": "https://raider.io/mythic-plus-runs/season-mn-1/21957615-16-seat-of-the-triumvirate",
+      "spec": { "id": 259, "name": "Assassination" },
+      "role": "dps"
+    }
+  ],
+  "mythic_plus_highest_level_runs": [
+    {
+      "dungeon": "Seat of the Triumvirate",
+      "short_name": "SEAT",
+      "mythic_level": 16,
+      "completed_at": "2026-05-05T18:28:26.000Z",
+      "clear_time_ms": 1814558,
+      "par_time_ms": 2040999,
+      "num_keystone_upgrades": 1,
+      "map_challenge_mode_id": 239,
+      "score": 429.2,
+      "affixes": [{ "id": 9, "name": "Tyrannical" }],
+      "url": "https://raider.io/mythic-plus-runs/season-mn-1/21957615-16-seat-of-the-triumvirate",
+      "spec": { "id": 259, "name": "Assassination" },
+      "role": "dps"
+    },
+    {
+      "dungeon": "The Rookery",
+      "short_name": "ROOK",
+      "mythic_level": 15,
+      "completed_at": "2026-05-03T14:30:00.000Z",
+      "clear_time_ms": 1650000,
+      "par_time_ms": 1920000,
+      "num_keystone_upgrades": 1,
+      "map_challenge_mode_id": 245,
+      "score": 400.0,
+      "affixes": [{ "id": 9, "name": "Tyrannical" }],
+      "url": "https://raider.io/mythic-plus-runs/season-mn-1/21850000-15-the-rookery",
+      "spec": { "id": 259, "name": "Assassination" },
+      "role": "dps"
+    }
+  ]
+}

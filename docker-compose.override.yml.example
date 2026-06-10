@@ -1,0 +1,28 @@
+# Development overrides - copy to docker-compose.override.yml
+# Docker Compose auto-merges this file with docker-compose.yml
+
+services:
+  app:
+    volumes:
+      - .:/var/www/html
+      - /var/www/html/vendor
+    environment:
+      PHP_OPCACHE_VALIDATE_TIMESTAMPS: 1
+
+  horizon:
+    volumes:
+      - .:/var/www/html
+      - /var/www/html/vendor
+
+  scheduler:
+    volumes:
+      - .:/var/www/html
+      - /var/www/html/vendor
+
+  postgres:
+    ports:
+      - "5432:5432"
+
+  redis:
+    ports:
+      - "6379:6379"
