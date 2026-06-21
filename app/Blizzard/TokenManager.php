@@ -11,7 +11,11 @@ use Illuminate\Support\Facades\Cache;
 
 class TokenManager implements TokenManagerInterface
 {
-    private const int TTL = 86400 - 300; // 24h minus 5min safety buffer
+    // 24h minus a 5-min safety buffer — the hard ceiling applied when Blizzard's
+    // expires_in is absent or longer than a day.
+    private const int MAX_TTL = 86400 - 300;
+
+    private const int SAFETY_BUFFER = 300;
 
     public function __construct(
         private readonly BlizzardAuthClient $authClient,
@@ -20,37 +24,41 @@ class TokenManager implements TokenManagerInterface
 
     public function getToken(string $region = 'eu'): string
     {
-        return Cache::remember(
-            "blizzard:token:{$region}",
-            self::TTL,
-            fn () => $this->fetchToken($region),
-        );
+        return Cache::get("blizzard:token:{$region}") ?? $this->refreshToken($region);
     }
 
     public function refreshToken(string $region = 'eu'): string
     {
+        // Snapshot before locking so a *forced* refresh (the twice-daily job)
+        // still fetches — the old code short-circuited on any cached value,
+        // making the scheduled refresh a no-op. Concurrent callers still dedupe:
+        // whoever finds a token that changed during their wait reuses it. (P1.5)
+        $before = Cache::get("blizzard:token:{$region}");
         $lock = Cache::lock("blizzard:token:refresh:{$region}", 10);
 
-        return $lock->block(5, function () use ($region) {
-            // Double-check cache after acquiring lock
-            $cached = Cache::get("blizzard:token:{$region}");
-
-            if ($cached !== null) {
-                return $cached;
+        return $lock->block(5, function () use ($region, $before) {
+            $current = Cache::get("blizzard:token:{$region}");
+            if ($current !== null && $current !== $before) {
+                return $current;
             }
 
-            $token = $this->fetchToken($region);
+            $response = $this->authClient->getToken($region);
+            Cache::put("blizzard:token:{$region}", $response->access_token, $this->ttlFor($response));
 
-            Cache::put("blizzard:token:{$region}", $token, self::TTL);
-
-            return $token;
+            return $response->access_token;
         });
     }
 
-    private function fetchToken(string $region): string
+    /**
+     * Honor Blizzard's expires_in (minus a safety buffer) instead of assuming a
+     * full 24h, so a shorter-lived token is evicted before it 401s. (P1.5)
+     */
+    private function ttlFor(object $response): int
     {
-        $response = $this->authClient->getToken($region);
+        $expiresIn = isset($response->expires_in)
+            ? (int) $response->expires_in
+            : self::MAX_TTL + self::SAFETY_BUFFER;
 
-        return $response->access_token;
+        return max(60, min(self::MAX_TTL, $expiresIn - self::SAFETY_BUFFER));
     }
 }

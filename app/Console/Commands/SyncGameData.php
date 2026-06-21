@@ -105,29 +105,36 @@ class SyncGameData extends Command
         $bar = $this->output->createProgressBar(count($ids));
         $bar->start();
 
-        $upserted = 0;
         $skipped = 0;
 
-        DB::transaction(function () use ($client, $mapper, $ids, &$upserted, &$skipped, $bar) {
-            foreach ($ids as $id) {
-                try {
-                    $detail = $client->getFaction($id);
-                } catch (Throwable $e) {
-                    Log::warning("Faction sync skipped id={$id}: ".$e->getMessage());
-                    $skipped++;
-                    $bar->advance();
+        // Fetch all detail OUTSIDE any transaction — never hold a DB transaction
+        // open across hundreds of sequential HTTP calls. (P2.4)
+        $dtos = [];
+        foreach ($ids as $id) {
+            try {
+                $detail = $client->getFaction($id);
+            } catch (Throwable $e) {
+                Log::warning("Faction sync skipped id={$id}: ".$e->getMessage());
+                $skipped++;
+                $bar->advance();
 
-                    continue;
-                }
+                continue;
+            }
 
-                $dto = $mapper->mapDetail($detail);
-                if ($dto === null) {
-                    $skipped++;
-                    $bar->advance();
+            $dto = $mapper->mapDetail($detail);
+            if ($dto === null) {
+                $skipped++;
+                $bar->advance();
 
-                    continue;
-                }
+                continue;
+            }
 
+            $dtos[] = $dto;
+            $bar->advance();
+        }
+
+        DB::transaction(function () use ($dtos) {
+            foreach ($dtos as $dto) {
                 GameDataFaction::updateOrCreate(
                     ['id' => $dto->id],
                     [
@@ -136,14 +143,12 @@ class SyncGameData extends Command
                         'expansion_id' => $dto->expansionId,
                     ],
                 );
-                $upserted++;
-                $bar->advance();
             }
         });
 
         $bar->finish();
         $this->newLine();
-        $this->info("Factions synced: {$upserted} upserted, {$skipped} skipped.");
+        $this->info('Factions synced: '.count($dtos)." upserted, {$skipped} skipped.");
     }
 
     private function syncTitles(
@@ -165,29 +170,35 @@ class SyncGameData extends Command
         $bar = $this->output->createProgressBar(count($ids));
         $bar->start();
 
-        $upserted = 0;
         $skipped = 0;
 
-        DB::transaction(function () use ($client, $mapper, $ids, &$upserted, &$skipped, $bar) {
-            foreach ($ids as $id) {
-                try {
-                    $detail = $client->getTitle($id);
-                } catch (Throwable $e) {
-                    Log::warning("Title sync skipped id={$id}: ".$e->getMessage());
-                    $skipped++;
-                    $bar->advance();
+        // Fetch detail outside the transaction (P2.4).
+        $dtos = [];
+        foreach ($ids as $id) {
+            try {
+                $detail = $client->getTitle($id);
+            } catch (Throwable $e) {
+                Log::warning("Title sync skipped id={$id}: ".$e->getMessage());
+                $skipped++;
+                $bar->advance();
 
-                    continue;
-                }
+                continue;
+            }
 
-                $dto = $mapper->mapDetail($detail);
-                if ($dto === null) {
-                    $skipped++;
-                    $bar->advance();
+            $dto = $mapper->mapDetail($detail);
+            if ($dto === null) {
+                $skipped++;
+                $bar->advance();
 
-                    continue;
-                }
+                continue;
+            }
 
+            $dtos[] = $dto;
+            $bar->advance();
+        }
+
+        DB::transaction(function () use ($dtos) {
+            foreach ($dtos as $dto) {
                 GameDataTitle::updateOrCreate(
                     ['id' => $dto->id],
                     [
@@ -195,14 +206,12 @@ class SyncGameData extends Command
                         'name_female' => $dto->nameFemale,
                     ],
                 );
-                $upserted++;
-                $bar->advance();
             }
         });
 
         $bar->finish();
         $this->newLine();
-        $this->info("Titles synced: {$upserted} upserted, {$skipped} skipped.");
+        $this->info('Titles synced: '.count($dtos)." upserted, {$skipped} skipped.");
     }
 
     private function syncMounts(
@@ -224,29 +233,35 @@ class SyncGameData extends Command
         $bar = $this->output->createProgressBar(count($ids));
         $bar->start();
 
-        $upserted = 0;
         $skipped = 0;
 
-        DB::transaction(function () use ($client, $mapper, $ids, &$upserted, &$skipped, $bar) {
-            foreach ($ids as $id) {
-                try {
-                    $detail = $client->getMount($id);
-                } catch (Throwable $e) {
-                    Log::warning("Mount sync skipped id={$id}: ".$e->getMessage());
-                    $skipped++;
-                    $bar->advance();
+        // Fetch detail outside the transaction (P2.4).
+        $dtos = [];
+        foreach ($ids as $id) {
+            try {
+                $detail = $client->getMount($id);
+            } catch (Throwable $e) {
+                Log::warning("Mount sync skipped id={$id}: ".$e->getMessage());
+                $skipped++;
+                $bar->advance();
 
-                    continue;
-                }
+                continue;
+            }
 
-                $dto = $mapper->mapDetail($detail);
-                if ($dto === null) {
-                    $skipped++;
-                    $bar->advance();
+            $dto = $mapper->mapDetail($detail);
+            if ($dto === null) {
+                $skipped++;
+                $bar->advance();
 
-                    continue;
-                }
+                continue;
+            }
 
+            $dtos[] = $dto;
+            $bar->advance();
+        }
+
+        DB::transaction(function () use ($dtos) {
+            foreach ($dtos as $dto) {
                 GameDataMount::updateOrCreate(
                     ['id' => $dto->id],
                     [
@@ -257,14 +272,12 @@ class SyncGameData extends Command
                         'item_id' => $dto->itemId,
                     ],
                 );
-                $upserted++;
-                $bar->advance();
             }
         });
 
         $bar->finish();
         $this->newLine();
-        $this->info("Mounts synced: {$upserted} upserted, {$skipped} skipped.");
+        $this->info('Mounts synced: '.count($dtos)." upserted, {$skipped} skipped.");
     }
 
     /**
@@ -290,29 +303,35 @@ class SyncGameData extends Command
 
         $bar = $this->output->createProgressBar(count($catIds));
         $bar->start();
-        $catUpserted = 0;
         $catSkipped = 0;
 
-        DB::transaction(function () use ($client, $categoryMapper, $catIds, &$catUpserted, &$catSkipped, $bar) {
-            foreach ($catIds as $id) {
-                try {
-                    $detail = $client->getAchievementCategory($id);
-                } catch (Throwable $e) {
-                    Log::warning("Achievement-category sync skipped id={$id}: ".$e->getMessage());
-                    $catSkipped++;
-                    $bar->advance();
+        // Fetch category detail outside the transaction (P2.4).
+        $catDtos = [];
+        foreach ($catIds as $id) {
+            try {
+                $detail = $client->getAchievementCategory($id);
+            } catch (Throwable $e) {
+                Log::warning("Achievement-category sync skipped id={$id}: ".$e->getMessage());
+                $catSkipped++;
+                $bar->advance();
 
-                    continue;
-                }
+                continue;
+            }
 
-                $dto = $categoryMapper->mapDetail($detail);
-                if ($dto === null) {
-                    $catSkipped++;
-                    $bar->advance();
+            $dto = $categoryMapper->mapDetail($detail);
+            if ($dto === null) {
+                $catSkipped++;
+                $bar->advance();
 
-                    continue;
-                }
+                continue;
+            }
 
+            $catDtos[] = $dto;
+            $bar->advance();
+        }
+
+        DB::transaction(function () use ($catDtos) {
+            foreach ($catDtos as $dto) {
                 GameDataAchievementCategory::updateOrCreate(
                     ['id' => $dto->id],
                     [
@@ -321,14 +340,12 @@ class SyncGameData extends Command
                         'display_order' => $dto->displayOrder,
                     ],
                 );
-                $catUpserted++;
-                $bar->advance();
             }
         });
 
         $bar->finish();
         $this->newLine();
-        $this->info("Categories synced: {$catUpserted} upserted, {$catSkipped} skipped.");
+        $this->info('Categories synced: '.count($catDtos)." upserted, {$catSkipped} skipped.");
 
         // ---- Phase 2: achievements ----
         $this->info('Syncing achievements...');

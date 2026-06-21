@@ -21,14 +21,13 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class SyncGuildData implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
-
-    public int $tries = 15;
 
     public int $maxExceptions = 3;
 
@@ -68,9 +67,19 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
     /**
      * @return array<int, object>
      */
+    // Time-bound retries (mirrors SyncCharacterData): every middleware release()
+    // re-queues without burning a fixed $tries budget; only real exceptions
+    // (maxExceptions) cap the work, within a 6h window. (P1.10)
+    public function retryUntil(): \DateTime
+    {
+        return now()->addHours(6);
+    }
+
     public function middleware(): array
     {
-        return [new BlizzardRateLimiter, new BlizzardHealthCheck];
+        // Health check before rate limiter: don't spend a throttle slot (and up
+        // to a 30s block) only to discover the circuit is open. (P1.10)
+        return [new BlizzardHealthCheck, new BlizzardRateLimiter];
     }
 
     public function handle(
@@ -149,38 +158,51 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
             ];
         }
 
-        // Upsert guild members.
-        // character_id is intentionally OMITTED from the UPDATE column list:
-        // INSERT still seeds it from the pre-resolve snapshot, but on conflict
-        // we don't touch it. Otherwise a concurrent SyncCharacterData run that
-        // called linkGuildMembers between our pre-resolve and this upsert could
-        // have set character_id to a valid id, and our stale-snapshot null
-        // would silently overwrite it. The post-upsert backfill below restores
-        // any rows where pre-resolve missed but a Character now exists.
-        if (! empty($memberRecords)) {
-            GuildMember::upsert(
-                $memberRecords,
-                ['guild_id', 'name', 'realm'],
-                ['level', 'class_id', 'race_id', 'rank', 'display_name', 'display_realm'],
-            );
-        }
+        // Atomic roster swap: upsert + backfill + prune + timestamp in one
+        // transaction so a concurrent reader never sees a half-applied roster. (P1.4)
+        DB::transaction(function () use ($guild, $memberRecords, $members) {
+            // Upsert guild members.
+            // character_id is intentionally OMITTED from the UPDATE column list:
+            // INSERT still seeds it from the pre-resolve snapshot, but on conflict
+            // we don't touch it. Otherwise a concurrent SyncCharacterData run that
+            // called linkGuildMembers between our pre-resolve and this upsert could
+            // have set character_id to a valid id, and our stale-snapshot null
+            // would silently overwrite it. The post-upsert backfill below restores
+            // any rows where pre-resolve missed but a Character now exists.
+            if (! empty($memberRecords)) {
+                GuildMember::upsert(
+                    $memberRecords,
+                    ['guild_id', 'name', 'realm'],
+                    ['level', 'class_id', 'race_id', 'rank', 'display_name', 'display_realm'],
+                );
+            }
 
-        // Post-upsert backfill: catches (a) Characters that appeared between
-        // pre-resolve and the upsert above, and (b) Characters created since
-        // the previous SyncGuildData run (the "Character appeared later" path
-        // that the upsert update list used to cover, before that became
-        // race-prone). Same query is also called by GuildController before
-        // render — see Guild::backfillMemberCharacterIds().
-        $guild->backfillMemberCharacterIds();
+            // Post-upsert backfill: catches (a) Characters that appeared between
+            // pre-resolve and the upsert above, and (b) Characters created since
+            // the previous SyncGuildData run (the "Character appeared later" path
+            // that the upsert update list used to cover, before that became
+            // race-prone). Same query is also called by GuildController before
+            // render — see Guild::backfillMemberCharacterIds().
+            $guild->backfillMemberCharacterIds();
 
-        // Remove stale members not in roster
-        $currentMemberNames = array_map(fn ($m) => $m->name, $members);
-        $guild->members()
-            ->whereNotIn('name', $currentMemberNames)
-            ->delete();
+            // Remove stale members whose (name, realm) tuple is no longer in the
+            // roster. Comparing name alone leaves a realm-transferred member as a
+            // permanent duplicate (unique key is guild_id, name, realm). (P1.4)
+            $rosterTuples = [];
+            foreach ($members as $m) {
+                $rosterTuples[$m->name.'|'.$m->realm] = true;
+            }
+            $staleIds = $guild->members()
+                ->get(['id', 'name', 'realm'])
+                ->reject(fn ($row) => isset($rosterTuples[$row->name.'|'.$row->realm]))
+                ->pluck('id')
+                ->all();
+            if ($staleIds !== []) {
+                $guild->members()->whereIn('id', $staleIds)->delete();
+            }
 
-        // Update roster sync timestamp
-        $guild->update(['roster_synced_at' => now()]);
+            $guild->update(['roster_synced_at' => now()]);
+        });
 
         // Dispatch the roster job — drives Shallow Bus::batch for all members AND
         // (when raiderio.dispatch_roster_character_syncs is true) Full per-member

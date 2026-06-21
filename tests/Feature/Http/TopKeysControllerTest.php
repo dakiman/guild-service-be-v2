@@ -7,6 +7,7 @@ namespace Tests\Feature\Http;
 use App\Models\Character;
 use App\Models\DungeonRun;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class TopKeysControllerTest extends TestCase
@@ -113,6 +114,43 @@ class TopKeysControllerTest extends TestCase
         $dungeons = $response->json('dungeons');
         $this->assertCount(1, $dungeons);
         $this->assertEquals(15, $dungeons[0]['key_level']);
+    }
+
+    public function test_query_count_does_not_scale_with_dungeon_count(): void
+    {
+        // Top run per dungeon + eager-loaded members/characters must stay a small
+        // fixed number of queries regardless of how many dungeons exist. (P2.2)
+        $char = Character::factory()->create(['class_id' => 1]);
+        $pivot = [
+            'character_name' => $char->name,
+            'character_realm' => $char->realm,
+            'character_region' => $char->region,
+            'spec_id' => 71,
+            'spec_name' => 'Arms',
+            'equipped_item_level' => 630,
+        ];
+
+        foreach (range(1, 5) as $i) {
+            foreach ([20, 18] as $level) {
+                $run = DungeonRun::factory()->create([
+                    'dungeon_id' => 100 + $i,
+                    'keystone_level' => $level,
+                    'is_completed_on_time' => true,
+                ]);
+                $run->members()->attach($char->id, $pivot);
+            }
+        }
+
+        DB::flushQueryLog();
+        DB::enableQueryLog();
+        $response = $this->getJson('/api/v1/stats/characters/top-keys');
+        $count = count(DB::getQueryLog());
+        DB::disableQueryLog();
+
+        $response->assertOk();
+        $this->assertCount(5, $response->json('dungeons'));
+        // 1 (ranked top run/dungeon) + 1 (memberEntries) + 1 (characters) — never N per dungeon.
+        $this->assertLessThanOrEqual(4, $count, "Expected no N+1; ran {$count} queries.");
     }
 
     public function test_returns_empty_when_no_data(): void

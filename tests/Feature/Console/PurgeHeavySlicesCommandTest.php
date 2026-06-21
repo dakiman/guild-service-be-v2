@@ -6,6 +6,7 @@ namespace Tests\Feature\Console;
 
 use App\Models\Character;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -101,6 +102,33 @@ class PurgeHeavySlicesCommandTest extends TestCase
         $this->assertNull($character->achievements_synced_at);
         // collections_synced_at should NOT have been nulled
         $this->assertNotNull($character->collections_synced_at);
+    }
+
+    public function test_resetting_synced_at_does_not_bump_characters_updated_at(): void
+    {
+        // P1.1: nulling *_synced_at via Eloquent mass-update would bump the
+        // whole table's updated_at, making every character look freshly synced.
+        $synced = Carbon::parse('2026-06-01 12:00:00');
+        Carbon::setTestNow($synced);
+
+        $character = Character::factory()->create([
+            'collections_synced_at' => now(),
+            'achievements_synced_at' => now(),
+        ]);
+
+        Carbon::setTestNow($synced->copy()->addDays(5));
+
+        $exit = Artisan::call('blizzard:purge-heavy-slices', ['--all' => true]);
+
+        $this->assertSame(0, $exit);
+
+        $character->refresh();
+        $this->assertNull($character->collections_synced_at);
+        $this->assertNull($character->achievements_synced_at);
+        $this->assertTrue(
+            $character->updated_at->equalTo($synced),
+            "updated_at was bumped to {$character->updated_at}, expected {$synced}",
+        );
     }
 
     public function test_no_flag_exits_with_failure_and_error_message(): void

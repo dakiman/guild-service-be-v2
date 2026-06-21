@@ -55,4 +55,29 @@ class GuildControllerPaginationTest extends TestCase
 
         Bus::assertNotDispatched(SyncGuildData::class);
     }
+
+    public function test_roster_has_a_deterministic_order(): void
+    {
+        Bus::fake();
+
+        $guild = Guild::factory()->create([
+            'name' => 'echo',
+            'realm' => 'tarren-mill',
+            'region' => 'eu',
+            'roster_synced_at' => now(),
+        ]);
+        $guild->forceFill(['updated_at' => now()])->save();
+
+        // Insert in non-rank order. Without an ORDER BY, paginate() returns
+        // arbitrary order on Postgres and pages can repeat/skip rows. (P1.11)
+        GuildMember::factory()->create(['guild_id' => $guild->id, 'name' => 'cccc', 'rank' => 5]);
+        GuildMember::factory()->create(['guild_id' => $guild->id, 'name' => 'aaaa', 'rank' => 1]);
+        GuildMember::factory()->create(['guild_id' => $guild->id, 'name' => 'bbbb', 'rank' => 3]);
+
+        $response = $this->getJson('/api/v1/guilds/eu/tarren-mill/echo');
+        $response->assertOk();
+
+        $names = array_column($response->json('members.data'), 'name');
+        $this->assertSame(['aaaa', 'bbbb', 'cccc'], $names);
+    }
 }

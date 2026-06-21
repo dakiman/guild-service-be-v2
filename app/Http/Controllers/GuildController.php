@@ -47,11 +47,17 @@ class GuildController extends Controller
         // Self-heal any guild_members rows whose character_id is still NULL
         // but a matching Character now exists (e.g., synced via teammate
         // crawl after the last SyncGuildData run). Idempotent — once linked,
-        // the WHERE filters everything out and no rows are touched.
-        $result->backfillMemberCharacterIds();
+        // the WHERE filters everything out and no rows are touched. Throttled
+        // so the scan doesn't run on every page view. (P2.4)
+        $result->backfillMemberCharacterIds(throttled: true);
 
         $query = $result->members()
-            ->with(['character:id,equipped_item_level,mythic_plus_rating,mythic_plus_rating_color,active_specialization_id,updated_at']);
+            ->with(['character:id,equipped_item_level,mythic_plus_rating,mythic_plus_rating_color,active_specialization_id,updated_at'])
+            // Stable order: without it Postgres returns arbitrary order and
+            // pages can repeat or skip rows across requests. (P1.11)
+            ->orderBy('rank')
+            ->orderBy('name')
+            ->orderBy('id');
 
         if ($filter !== '') {
             // Names are stored canonical-lowercase; LIKE is case-correct on Postgres.

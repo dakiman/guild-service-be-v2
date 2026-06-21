@@ -13,6 +13,18 @@ class TopRunsControllerTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_per_page_is_clamped_to_at_least_one(): void
+    {
+        DungeonRun::factory()->count(3)->create(['is_completed_on_time' => true]);
+
+        // per_page=-1 used to bypass the cap (limit() ignores negatives) and
+        // return the whole table. (P1.11)
+        $response = $this->getJson('/api/v1/stats/characters/top-runs?per_page=-1');
+
+        $response->assertOk();
+        $this->assertSame(1, $response->json('per_page'));
+    }
+
     public function test_returns_paginated_top_runs(): void
     {
         $char = Character::factory()->create([

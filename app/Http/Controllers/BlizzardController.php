@@ -8,6 +8,7 @@ use App\Blizzard\Client\BlizzardAuthClient;
 use App\Blizzard\Jobs\SyncUserCharacters;
 use App\Http\Requests\BlizzardOAuthRequest;
 use App\Http\Requests\BlizzardOAuthStateRequest;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
@@ -48,11 +49,16 @@ class BlizzardController extends Controller
         /** @var BlizzardAuthClient $authClient */
         $authClient = app(BlizzardAuthClient::class);
 
-        $tokenResponse = $authClient->getOauthAccessToken(
-            $region,
-            $request->validated('code'),
-            $request->validated('redirectUri'),
-        );
+        try {
+            $tokenResponse = $authClient->getOauthAccessToken(
+                $region,
+                $request->validated('code'),
+                $request->validated('redirectUri'),
+            );
+        } catch (RequestException) {
+            // Invalid/expired authorization code — a client error, not a 500. (P1.11)
+            return response()->json(['message' => 'Could not exchange the Battle.net authorization code.'], 422);
+        }
 
         $user->update(['bnet_region' => $region, 'bnet_sync_status' => 'syncing']);
 

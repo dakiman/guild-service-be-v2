@@ -25,7 +25,11 @@ class CharacterService
             return null;
         }
 
-        $character->increment('num_of_searches', 1, ['last_searched_at' => now()]);
+        // withoutTimestamps: a search must not touch `updated_at` — that column
+        // is the profile-sync clock `isStale()` reads. (P1.1)
+        Character::withoutTimestamps(
+            fn () => $character->increment('num_of_searches', 1, ['last_searched_at' => now()]),
+        );
 
         $anySliceStale = $character->isMythicsStale()
             || $character->isPvpStale()

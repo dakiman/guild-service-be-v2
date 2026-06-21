@@ -40,7 +40,7 @@ Self-contained, registered via `BlizzardServiceProvider`.
 - `dynamic-{region}` → mythic-keystone seasons / leaderboards / dungeon detail.
 - `static-{region}` → game-data (achievements, mounts, titles, factions, talents, items, races, journal-instance, keystone-affix). `BlizzardGameDataClient::getTalentTree()` and `getFactionIndex/getFaction` bypass `request()` and call `Http` directly.
 
-**Jobs/** — `ShouldQueue` + `ShouldBeUnique` (60s). `$tries = 15` / `$maxExceptions = 3` with backoff [30, 120, 300]s. Middleware: `BlizzardRateLimiter` (Redis throttle 80 req/s, catches 429 → non-blocking `$job->release($retryAfter)`, auto-trips circuit breaker after 10 hits in 2 min) + `BlizzardHealthCheck` (pauses all jobs for 60s when `blizzard:unhealthy` is set). Full sync strategy: `docs/sync-strategy.md`.
+**Jobs/** — `ShouldQueue` + `ShouldBeUnique` (60s). `$tries = 15` / `$maxExceptions = 3` with backoff [30, 120, 300]s. Middleware (order matters): `BlizzardHealthCheck` (pauses all jobs for 60s when `blizzard:unhealthy` is set) **then** `BlizzardRateLimiter` (Redis throttle, catches 429 → non-blocking `$job->release($retryAfter)`, auto-trips circuit breaker after 10 hits in 2 min). The throttle counts **jobs, not HTTP requests** — a Full sync makes ~15-25 calls, so `rate_limit.per_second` is budgeted low (default **10**, env `BLIZZARD_RATE_LIMIT_PER_SECOND`); proper fix is to move throttling into the HTTP client (TODO). Full sync strategy: `docs/sync-strategy.md`.
 
 **Mappers/** — raw Blizzard JSON → readonly DTOs, one per data type. **DTOs** are readonly w/ constructor promotion; only fields we use.
 
@@ -59,7 +59,7 @@ Self-contained, registered via `BlizzardServiceProvider`.
 
 Plan 2 slices (mythic+, pvp, professions, raids) have `BLIZZARD_SYNC_{SLICE}_ENABLED` kill-switches (default true). Heavy slices (mounts, toys, achievements, pets) are also flag-gated (default false). Stats, titles, and reputations run unconditionally. Achievements alone ≈ 70% of total DB.
 
-**Delete-missing inside the slice's transaction** for: `character_pvp_brackets`, `character_professions`, `raid_encounter_kills`, `character_titles`, `character_reputations`. Empty/404 → wipe — required so dropped professions, unplayed brackets, reset lockouts, untrained titles, abandoned factions disappear.
+**Bulk upsert + delete-missing inside the slice's transaction** for: `character_pvp_brackets`, `character_professions`, `raid_encounter_kills`, `character_titles`, `character_reputations`. Writes go through the `BulkUpsertable` trait (`Model::upsertMany()` keyed on each model's `UNIQUE_KEY` const — one `INSERT … ON CONFLICT` instead of per-row `updateOrCreate`); composite-key slices then prune stale rows with a single id `whereIn`. Empty/404 → wipe — required so dropped professions, unplayed brackets, reset lockouts, untrained titles, abandoned factions disappear. (Eloquent `upsert()` manages timestamps + casts-via-instance; see `DungeonRun::upsertRun`.)
 
 Per-slice edge cases (PvP dynamic slugs, M+ team pivot, stats path, achievements DELETE-INSERT, collections pool): `docs/slice-gotchas.md`.
 

@@ -236,6 +236,34 @@ final class SyncCharacterDataTeammateCrawlTest extends TestCase
         );
     }
 
+    public function test_batched_freshness_lookup_resolves_multiple_existing_teammates(): void
+    {
+        // Two teammates already have Character rows of differing freshness; the
+        // batched single-query lookup must skip the fresh one and dispatch the
+        // stale one (plus the two with no row at all). (P2.1)
+        $seed = $this->makeSeedWithRun();
+
+        $fresh = Character::factory()->create([
+            'name' => 'mateone', 'realm' => 'twisting-nether', 'region' => 'eu', 'game_version' => 'retail',
+        ]);
+        DB::table('characters')->where('id', $fresh->id)->update(['updated_at' => now()->subSeconds(10)]);
+
+        $stale = Character::factory()->create([
+            'name' => 'matetwo', 'realm' => 'silvermoon', 'region' => 'eu', 'game_version' => 'retail',
+        ]);
+        DB::table('characters')->where('id', $stale->id)->update(['updated_at' => now()->subSeconds(99999)]);
+
+        Bus::fake();
+
+        $job = new SyncCharacterData('eu', 'the-maelstrom', 'seedy', SyncDepth::Full, null, 0);
+        $this->invokeCrawl($job, $seed);
+
+        // matetwo (stale) + matethree + matefour dispatched; mateone (fresh) skipped.
+        Bus::assertDispatchedTimes(SyncCharacterData::class, 3);
+        Bus::assertNotDispatched(SyncCharacterData::class, fn ($d) => $d->name === 'mateone');
+        Bus::assertDispatched(SyncCharacterData::class, fn ($d) => $d->name === 'matetwo');
+    }
+
     public function test_max_depth_clamped_to_2(): void
     {
         Config::set('blizzard.crawl.max_depth', 999);

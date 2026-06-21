@@ -32,6 +32,14 @@ class CharacterAchievementsController extends Controller
      */
     public function index(string $region, string $realm, string $name, Request $request): JsonResponse
     {
+        // Reject array-valued params up front — `?cursor[]=x` used to reach
+        // `(string) $array` → "Array to string conversion" → 500. (P1.11)
+        $request->validate([
+            'cursor' => ['nullable', 'string'],
+            'per_page' => ['nullable', 'integer'],
+            'include_feats' => ['nullable', 'boolean'],
+        ]);
+
         // Feature-gated: return empty payload when achievements sync is disabled.
         // Preserves response shape so bookmarked URLs do not crash the FE.
         if (! config('blizzard.sync.achievements_enabled')) {

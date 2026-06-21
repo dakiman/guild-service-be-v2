@@ -4,13 +4,18 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Models\Concerns\BulkUpsertable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CharacterReputation extends Model
 {
+    use BulkUpsertable;
     use HasFactory;
+
+    /** Columns of character_reputations_unique — upsert conflict target. */
+    public const UNIQUE_KEY = ['character_id', 'faction_id'];
 
     protected $fillable = [
         'character_id',

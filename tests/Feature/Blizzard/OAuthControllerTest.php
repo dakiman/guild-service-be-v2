@@ -6,7 +6,10 @@ namespace Tests\Feature\Blizzard;
 
 use App\Blizzard\Client\BlizzardAuthClient;
 use App\Models\User;
+use GuzzleHttp\Psr7\Response as GuzzleResponse;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
@@ -87,6 +90,32 @@ class OAuthControllerTest extends TestCase
             'redirectUri' => 'https://evil.example/callback',
             'state' => str_repeat('a', 64),
         ])->assertUnprocessable();
+    }
+
+    public function test_invalid_authorization_code_returns_422_not_500(): void
+    {
+        Bus::fake();
+
+        $user = User::factory()->create();
+        $state = str_repeat('b', 64);
+        Cache::put(
+            "blizzard:oauth-state:{$user->id}:eu:{$state}",
+            ['redirectUri' => 'http://localhost:5173/blizzard-oauth'],
+            600
+        );
+
+        // An invalid/expired code makes the auth client throw RequestException;
+        // it must surface as a 4xx, not an unhandled 500. (P1.11)
+        $authClient = \Mockery::mock(BlizzardAuthClient::class);
+        $authClient->shouldReceive('getOauthAccessToken')
+            ->andThrow(new RequestException(new Response(new GuzzleResponse(400))));
+        $this->app->instance(BlizzardAuthClient::class, $authClient);
+
+        $this->actingAs($user, 'sanctum')->postJson('/api/v1/eu/blizzard-oauth', [
+            'code' => 'bad-code',
+            'redirectUri' => 'http://localhost:5173/blizzard-oauth',
+            'state' => $state,
+        ])->assertStatus(422);
     }
 
     public function test_code_exchange_consumes_cached_state_once(): void

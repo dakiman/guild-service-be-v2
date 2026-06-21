@@ -25,7 +25,11 @@ class GuildService
             return null;
         }
 
-        $guild->increment('num_of_searches', 1, ['last_searched_at' => now()]);
+        // withoutTimestamps: a search must not touch `updated_at` — that column
+        // is the profile-sync clock `isStale()` reads. (P1.1)
+        Guild::withoutTimestamps(
+            fn () => $guild->increment('num_of_searches', 1, ['last_searched_at' => now()]),
+        );
 
         if ($guild->isStale() || $guild->isRosterStale()) {
             SyncGuildData::dispatch($region, $realm, $name, forceRosterFanout: false, forceCascade: true);

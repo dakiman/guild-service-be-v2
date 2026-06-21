@@ -171,14 +171,30 @@ class Character extends Model
             ->where('game_version', 'retail');
     }
 
+    /**
+     * Columns CharacterSummaryResource needs — scalar fields + the `media` JSONB
+     * (avatar) only. Excludes the heavy talents/equipment/stats/rating-by-spec
+     * blobs that the summary never reads. (P2.3)
+     *
+     * @var array<int, string>
+     */
+    private const SUMMARY_COLUMNS = [
+        'id', 'name', 'realm', 'region', 'display_name', 'display_realm',
+        'class_id', 'level', 'faction', 'active_specialization', 'media',
+        'num_of_searches', 'last_searched_at',
+    ];
+
     public function scopeMostPopular(Builder $query, int $limit = 5): Builder
     {
-        return $query->orderByDesc('num_of_searches')->limit($limit);
+        return $query->select(self::SUMMARY_COLUMNS)
+            ->orderByDesc('num_of_searches')
+            ->limit($limit);
     }
 
     public function scopeRecentlySearched(Builder $query, int $limit = 5): Builder
     {
-        return $query->whereNotNull('last_searched_at')
+        return $query->select(self::SUMMARY_COLUMNS)
+            ->whereNotNull('last_searched_at')
             ->orderByDesc('last_searched_at')
             ->limit($limit);
     }
@@ -196,6 +212,9 @@ class Character extends Model
         $substring = '%'.$needle.'%';
 
         return $query
+            // Only the columns CharacterSuggestionResource emits (+ ordering keys);
+            // never haul media/talents/equipment/stats JSONB on a per-keystroke query. (P2.3)
+            ->select(['id', 'region', 'realm', 'display_realm', 'name', 'display_name', 'class_id', 'level', 'faction', 'num_of_searches'])
             ->where('game_version', 'retail')
             ->where(function ($q) use ($prefix, $substring) {
                 $q->where('name', 'LIKE', $prefix)

@@ -54,6 +54,14 @@ class CharacterAchievementsControllerTest extends TestCase
         $this->getJson('/api/v1/characters/eu/azshara/ghost/achievements')->assertStatus(404);
     }
 
+    public function test_array_cursor_is_rejected_with_422(): void
+    {
+        // ?cursor[]=x used to reach `(string) $array` → "Array to string
+        // conversion" → 500. Must be rejected as a validation error. (P1.11)
+        $this->getJson('/api/v1/characters/eu/azshara/tester/achievements?cursor[]=x')
+            ->assertStatus(422);
+    }
+
     public function test_filters_feats_of_strength_by_default_and_orders_recent_first(): void
     {
         $resp = $this->getJson('/api/v1/characters/eu/azshara/tester/achievements');

@@ -115,4 +115,17 @@ class GuildStatsControllerTest extends TestCase
 
         $response->assertNotFound();
     }
+
+    public function test_resolves_guild_when_url_segments_are_not_normalized(): void
+    {
+        $guild = $this->createGuild(['realm' => 'test-realm', 'name' => 'test-guild']);
+        $this->createActiveGuildMember($guild, ['name' => 'memberchar', 'realm' => 'test-realm']);
+
+        // GuildController::show slugifies realm + guild; stats must apply the
+        // same normalization so a URL that works for the guild page resolves
+        // here too instead of 404ing. (P1.4)
+        $response = $this->getJson('/api/v1/guilds/eu/TEST-REALM/TEST-GUILD/stats');
+
+        $response->assertOk();
+    }
 }

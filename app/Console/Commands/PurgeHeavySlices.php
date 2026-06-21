@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Models\Character;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -56,16 +55,18 @@ class PurgeHeavySlices extends Command
         }
 
         if ($resetCollectionsSyncedAt) {
-            $nulled = Character::query()->whereNotNull('collections_synced_at')->count();
-            Character::query()->update(['collections_synced_at' => null]);
+            // DB::table, not Eloquent: a maintenance reset must not bump the whole
+            // table's updated_at (the profile-sync clock isStale() reads). (P1.1)
+            $nulled = DB::table('characters')->whereNotNull('collections_synced_at')->count();
+            DB::table('characters')->update(['collections_synced_at' => null]);
             $this->info("collections_synced_at reset on {$nulled} characters.");
         }
 
         if ($doAchievements) {
             $deleted = DB::table('character_achievements')->count();
             DB::table('character_achievements')->truncate();
-            $nulled = Character::query()->whereNotNull('achievements_synced_at')->count();
-            Character::query()->update(['achievements_synced_at' => null]);
+            $nulled = DB::table('characters')->whereNotNull('achievements_synced_at')->count();
+            DB::table('characters')->update(['achievements_synced_at' => null]);
             $this->info("achievements: {$deleted} rows deleted, {$nulled} characters reset.");
         }
 

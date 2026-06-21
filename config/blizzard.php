@@ -148,7 +148,14 @@ return [
     */
 
     'rate_limit' => [
-        'per_second' => 80,
+        // NOTE: BlizzardRateLimiter throttles JOBS, not HTTP requests, and one
+        // job makes many Blizzard calls (a Full character sync ≈ 15-25). Blizzard's
+        // ceiling is ~100 req/s, so the job rate must be budget ÷ avg-calls-per-job.
+        // The old default of 80 jobs/s allowed >1000 req/s worst case. 10 keeps the
+        // common Shallow/Standard mix comfortably under budget; tune via env for a
+        // Full-heavy workload. (P2.4 — proper fix is to move throttling into the
+        // HTTP client so it counts real requests.)
+        'per_second' => (int) env('BLIZZARD_RATE_LIMIT_PER_SECOND', 10),
         'per_hour' => 30000,
         'circuit_breaker' => [
             'threshold' => (int) env('BLIZZARD_CIRCUIT_BREAKER_THRESHOLD', 10),

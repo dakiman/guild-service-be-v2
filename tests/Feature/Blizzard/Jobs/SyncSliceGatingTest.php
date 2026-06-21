@@ -7,6 +7,7 @@ namespace Tests\Feature\Blizzard\Jobs;
 use App\Blizzard\Contracts\TokenManagerInterface;
 use App\Blizzard\Jobs\SyncCharacterData;
 use App\Enums\SyncDepth;
+use App\Models\Character;
 use App\Models\CharacterAchievement;
 use App\Models\CharacterMount;
 use App\Models\CharacterPet;
@@ -64,6 +65,28 @@ class SyncSliceGatingTest extends TestCase
 
         $this->assertSame(0, CharacterAchievement::count(), 'no achievement rows expected when flag is off');
         Http::assertNotSent(fn ($req) => str_contains((string) $req->url(), '/achievements'));
+    }
+
+    public function test_sync_achievements_stamps_synced_at_when_flag_off(): void
+    {
+        // Regression (P0.1): a disabled achievements slice must still advance
+        // achievements_synced_at — mirroring the collections slice. Otherwise
+        // isAchievementsStale() stays true forever and every character lookup
+        // re-dispatches a Full sync, burning the Blizzard rate budget.
+        Config::set('blizzard.sync.achievements_enabled', false);
+
+        Http::fake([
+            'eu.api.blizzard.com/*' => Http::response($this->minimalCharacterPoolResponse(), 200),
+        ]);
+
+        SyncCharacterData::dispatchSync('eu', 'tarren-mill', 'stamptest', SyncDepth::Full);
+
+        $character = Character::where('name', 'stamptest')->first();
+        $this->assertNotNull($character);
+        $this->assertNotNull(
+            $character->achievements_synced_at,
+            'achievements_synced_at must be stamped even when the achievements slice is disabled',
+        );
     }
 
     // -------------------------------------------------------------------------
@@ -164,6 +187,50 @@ class SyncSliceGatingTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // P0.3: a transient 5xx on a collections pool slot must NOT wipe real rows
+    // -------------------------------------------------------------------------
+
+    public function test_collections_5xx_does_not_wipe_existing_mounts_or_stamp_synced(): void
+    {
+        Config::set('blizzard.sync.mounts_enabled', true);
+
+        $character = Character::factory()->create([
+            'name' => 'wipetest',
+            'realm' => 'tarren-mill',
+            'region' => 'eu',
+            'game_version' => 'retail',
+            'level' => 90,
+            'collections_synced_at' => null,
+        ]);
+
+        CharacterMount::create([
+            'character_id' => $character->id,
+            'mount_id' => 1234,
+            'name' => 'Existing Mount',
+            'is_useable' => true,
+        ]);
+
+        Http::fake([
+            'eu.api.blizzard.com/profile/wow/character/tarren-mill/wipetest/collections/mounts*' => Http::response([], 500),
+            'eu.api.blizzard.com/profile/wow/character/tarren-mill/wipetest/collections/pets*' => Http::response(['pets' => []], 200),
+            'eu.api.blizzard.com/profile/wow/character/tarren-mill/wipetest/collections/toys*' => Http::response(['toys' => []], 200),
+            'eu.api.blizzard.com/*' => Http::response($this->minimalCharacterPoolResponse(), 200),
+        ]);
+
+        SyncCharacterData::dispatchSync('eu', 'tarren-mill', 'wipetest', SyncDepth::Full);
+
+        $this->assertSame(
+            1,
+            CharacterMount::where('character_id', $character->id)->count(),
+            'existing mounts must survive a transient 5xx on the mounts endpoint',
+        );
+        $this->assertNull(
+            $character->fresh()->collections_synced_at,
+            'collections_synced_at must not advance when the mounts fetch fails',
+        );
+    }
+
+    // -------------------------------------------------------------------------
     // Early M+ rating (from Standard sync pool)
     // -------------------------------------------------------------------------
 
@@ -181,7 +248,7 @@ class SyncSliceGatingTest extends TestCase
 
         SyncCharacterData::dispatchSync('eu', 'tarren-mill', 'ratingtest', SyncDepth::Standard);
 
-        $character = \App\Models\Character::where('name', 'ratingtest')->first();
+        $character = Character::where('name', 'ratingtest')->first();
         $this->assertNotNull($character);
         $this->assertSame(2501, $character->mythic_plus_rating);
         $this->assertSame('#ff8000', $character->mythic_plus_rating_color);
@@ -190,7 +257,7 @@ class SyncSliceGatingTest extends TestCase
 
     public function test_standard_sync_does_not_wipe_existing_rating_on_keystone_404(): void
     {
-        \App\Models\Character::forceCreate([
+        Character::forceCreate([
             'name' => 'existing',
             'realm' => 'tarren-mill',
             'region' => 'eu',
@@ -206,7 +273,7 @@ class SyncSliceGatingTest extends TestCase
 
         SyncCharacterData::dispatchSync('eu', 'tarren-mill', 'existing', SyncDepth::Standard);
 
-        $character = \App\Models\Character::where('name', 'existing')->first();
+        $character = Character::where('name', 'existing')->first();
         $this->assertSame(2000, $character->mythic_plus_rating);
         $this->assertSame('#aabbcc', $character->mythic_plus_rating_color);
     }

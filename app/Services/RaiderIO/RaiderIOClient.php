@@ -198,6 +198,19 @@ class RaiderIOClient
         return ! $this->backoffSleepEnabled();
     }
 
+    /**
+     * Seconds to wait after a 429. header() returns '' (not null) for a missing
+     * header, so the old `(int) ($header ?? 60)` collapsed to 0 — an instant
+     * re-send that hit a second 429 and threw. Default to 60s and cap at 90s so
+     * the wait can't blow past the Horizon job timeout. (P1.9)
+     */
+    protected function retryAfterSeconds(Response $response): int
+    {
+        $header = $response->header('Retry-After');
+
+        return min($header !== '' ? (int) $header : 60, 90);
+    }
+
     protected function backoffSleepEnabled(): bool
     {
         $value = $_SERVER['RAIDERIO_BACKOFF_SLEEP_ENABLED']
@@ -251,7 +264,7 @@ class RaiderIOClient
             $status = $response->status();
 
             if ($status === 429 && $attempt429 < 1) {
-                $retryAfter = (int) ($response->header('Retry-After') ?? 60);
+                $retryAfter = $this->retryAfterSeconds($response);
                 if ($retryAfter > 0 && ! $this->skipBackoffSleep()) {
                     sleep($retryAfter);
                 }

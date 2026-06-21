@@ -8,7 +8,9 @@ use App\Blizzard\Exceptions\BlizzardNotFoundException;
 use App\Support\BlizzardIdentity;
 use Illuminate\Http\Client\Pool;
 use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Throwable;
 
 class BlizzardProfileClient extends BlizzardClient
 {
@@ -76,6 +78,9 @@ class BlizzardProfileClient extends BlizzardClient
         ]);
 
         $basic = $responses['basic'];
+        if ($basic instanceof Throwable) {
+            throw $basic;
+        }
         if ($basic->status() === 404) {
             throw new BlizzardNotFoundException("character not found: {$this->region}/{$realm}/{$name}");
         }
@@ -83,10 +88,10 @@ class BlizzardProfileClient extends BlizzardClient
 
         return [
             'basic' => $basic->json(),
-            'media' => $responses['media']->successful() ? $responses['media']->json() : null,
-            'equipment' => $responses['equipment']->successful() ? $responses['equipment']->json() : null,
-            'specializations' => $responses['specializations']->successful() ? $responses['specializations']->json() : null,
-            'mythic_keystone' => $responses['mythic_keystone']->successful() ? $responses['mythic_keystone']->json() : null,
+            'media' => $this->poolJson($responses['media']),
+            'equipment' => $this->poolJson($responses['equipment']),
+            'specializations' => $this->poolJson($responses['specializations']),
+            'mythic_keystone' => $this->poolJson($responses['mythic_keystone']),
         ];
     }
 
@@ -123,8 +128,8 @@ class BlizzardProfileClient extends BlizzardClient
         ]);
 
         return [
-            'base' => $responses['base']->successful() ? $responses['base']->json() : null,
-            'season' => $responses['season']->successful() ? $responses['season']->json() : null,
+            'base' => $this->poolJson($responses['base']),
+            'season' => $this->poolJson($responses['season']),
         ];
     }
 
@@ -133,14 +138,16 @@ class BlizzardProfileClient extends BlizzardClient
         $realm = BlizzardIdentity::realm($realm);
         $name = BlizzardIdentity::name($name);
 
-        $response = $this->request()
-            ->get("/profile/wow/character/{$realm}/{$name}/pvp-summary");
+        try {
+            $response = $this->request()
+                ->get("/profile/wow/character/{$realm}/{$name}/pvp-summary");
+        } catch (RequestException $e) {
+            if ($e->response->status() === 404) {
+                return null;
+            }
 
-        if ($response->status() === 404) {
-            return null;
+            throw $e;
         }
-
-        $response->throw();
 
         return $response->json();
     }
@@ -186,8 +193,7 @@ class BlizzardProfileClient extends BlizzardClient
             });
 
             foreach ($chunk as $slug) {
-                $r = $responses[$slug] ?? null;
-                $out[$slug] = ($r && $r->successful()) ? $r->json() : null;
+                $out[$slug] = $this->poolJson($responses[$slug]);
             }
         }
 
@@ -199,14 +205,16 @@ class BlizzardProfileClient extends BlizzardClient
         $realm = BlizzardIdentity::realm($realm);
         $name = BlizzardIdentity::name($name);
 
-        $response = $this->request()
-            ->get("/profile/wow/character/{$realm}/{$name}/professions");
+        try {
+            $response = $this->request()
+                ->get("/profile/wow/character/{$realm}/{$name}/professions");
+        } catch (RequestException $e) {
+            if ($e->response->status() === 404) {
+                return null;
+            }
 
-        if ($response->status() === 404) {
-            return null;
+            throw $e;
         }
-
-        $response->throw();
 
         return $response->json();
     }
@@ -216,14 +224,16 @@ class BlizzardProfileClient extends BlizzardClient
         $realm = BlizzardIdentity::realm($realm);
         $name = BlizzardIdentity::name($name);
 
-        $response = $this->request()
-            ->get("/profile/wow/character/{$realm}/{$name}/encounters/raids");
+        try {
+            $response = $this->request()
+                ->get("/profile/wow/character/{$realm}/{$name}/encounters/raids");
+        } catch (RequestException $e) {
+            if ($e->response->status() === 404) {
+                return null;
+            }
 
-        if ($response->status() === 404) {
-            return null;
+            throw $e;
         }
-
-        $response->throw();
 
         return $response->json();
     }
@@ -233,14 +243,16 @@ class BlizzardProfileClient extends BlizzardClient
         $realm = BlizzardIdentity::realm($realm);
         $name = BlizzardIdentity::name($name);
 
-        $response = $this->request()
-            ->get("/profile/wow/character/{$realm}/{$name}/statistics");
+        try {
+            $response = $this->request()
+                ->get("/profile/wow/character/{$realm}/{$name}/statistics");
+        } catch (RequestException $e) {
+            if ($e->response->status() === 404) {
+                return null;
+            }
 
-        if ($response->status() === 404) {
-            return null;
+            throw $e;
         }
-
-        $response->throw();
 
         return $response->json();
     }
@@ -250,14 +262,16 @@ class BlizzardProfileClient extends BlizzardClient
         $realm = BlizzardIdentity::realm($realm);
         $name = BlizzardIdentity::name($name);
 
-        $response = $this->request()
-            ->get("/profile/wow/character/{$realm}/{$name}/titles");
+        try {
+            $response = $this->request()
+                ->get("/profile/wow/character/{$realm}/{$name}/titles");
+        } catch (RequestException $e) {
+            if ($e->response->status() === 404) {
+                return null;
+            }
 
-        if ($response->status() === 404) {
-            return null;
+            throw $e;
         }
-
-        $response->throw();
 
         return $response->json();
     }
@@ -343,10 +357,34 @@ class BlizzardProfileClient extends BlizzardClient
         ]);
 
         return [
-            'mounts' => $responses['mounts']->successful() ? $responses['mounts']->json() : null,
-            'pets' => $responses['pets']->successful() ? $responses['pets']->json() : null,
-            'toys' => $responses['toys']->successful() ? $responses['toys']->json() : null,
+            'mounts' => $this->poolJson($responses['mounts']),
+            'pets' => $this->poolJson($responses['pets']),
+            'toys' => $this->poolJson($responses['toys']),
         ];
+    }
+
+    /**
+     * Resolve a single Http::pool() slot into decoded JSON or null.
+     *
+     * Pool slots never throw on their own: a connection failure lands a
+     * Throwable in the slot, and a 4xx/5xx lands a failed Response. We must
+     * distinguish a legit "no data" (404 → null) from a transient failure
+     * (Throwable / 5xx / 429 → throw) so the caller records a slice failure
+     * instead of persisting empty data over real rows.
+     */
+    private function poolJson(Response|Throwable $slot): ?array
+    {
+        if ($slot instanceof Throwable) {
+            throw $slot;
+        }
+
+        if ($slot->status() === 404) {
+            return null;
+        }
+
+        $slot->throw();
+
+        return $slot->json();
     }
 
     public function getGuildData(string $realm, string $guild): array

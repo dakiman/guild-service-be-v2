@@ -106,7 +106,9 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
      */
     public function middleware(): array
     {
-        return [new BlizzardRateLimiter, new BlizzardHealthCheck];
+        // Health check before rate limiter: don't spend a throttle slot (and up
+        // to a 30s block) only to discover the circuit is open. (P1.10)
+        return [new BlizzardHealthCheck, new BlizzardRateLimiter];
     }
 
     public function handle(
@@ -291,6 +293,10 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             if ($guild->wasRecentlyCreated) {
                 SyncGuildData::dispatch($this->region, $profile->guildRealm, $guildName);
             }
+        } else {
+            // Character is guildless now — clear a stale link so ex-members stop
+            // counting toward their old guild's stats. (P1.4)
+            $character->update(['guild_id' => null]);
         }
 
         // Set user_id if provided
@@ -334,20 +340,16 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
 
             DB::transaction(function () use ($runs, $rating, $character) {
                 foreach ($runs as $run) {
-                    $dungeonRun = DungeonRun::updateOrCreate(
-                        [
-                            'season' => $run->season,
-                            'dungeon_id' => $run->dungeonId,
-                            'completed_timestamp' => $run->completedTimestamp,
-                        ],
-                        [
-                            'dungeon_name' => $run->dungeonName,
-                            'keystone_level' => $run->keystoneLevel,
-                            'duration' => $run->duration,
-                            'is_completed_on_time' => $run->isCompletedOnTime,
-                            'affixes' => $run->affixes,
-                        ],
-                    );
+                    $dungeonRun = DungeonRun::upsertRun([
+                        'season' => $run->season,
+                        'dungeon_id' => $run->dungeonId,
+                        'completed_timestamp' => $run->completedTimestamp,
+                        'duration' => $run->duration,
+                        'dungeon_name' => $run->dungeonName,
+                        'keystone_level' => $run->keystoneLevel,
+                        'is_completed_on_time' => $run->isCompletedOnTime,
+                        'affixes' => $run->affixes,
+                    ]);
 
                     $this->persistRunTeam($dungeonRun, $run->team);
                 }
@@ -415,24 +417,22 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             }
 
             DB::transaction(function () use ($character, $dtos) {
-                $keep = [];
-                foreach ($dtos as $dto) {
-                    CharacterPvpBracket::updateOrCreate(
-                        ['character_id' => $character->id, 'bracket' => $dto->bracket],
-                        [
-                            'rating' => $dto->rating,
-                            'season_won' => $dto->seasonWon,
-                            'season_lost' => $dto->seasonLost,
-                            'season_played' => $dto->seasonPlayed,
-                            'weekly_won' => $dto->weeklyWon,
-                            'weekly_lost' => $dto->weeklyLost,
-                            'weekly_played' => $dto->weeklyPlayed,
-                            'tier_name' => $dto->tierName,
-                        ],
-                    );
-                    $keep[] = $dto->bracket;
-                }
+                $rows = array_map(fn ($dto) => [
+                    'character_id' => $character->id,
+                    'bracket' => $dto->bracket,
+                    'rating' => $dto->rating,
+                    'season_won' => $dto->seasonWon,
+                    'season_lost' => $dto->seasonLost,
+                    'season_played' => $dto->seasonPlayed,
+                    'weekly_won' => $dto->weeklyWon,
+                    'weekly_lost' => $dto->weeklyLost,
+                    'weekly_played' => $dto->weeklyPlayed,
+                    'tier_name' => $dto->tierName,
+                ], $dtos);
 
+                CharacterPvpBracket::upsertMany($rows);
+
+                $keep = array_column($dtos, 'bracket');
                 CharacterPvpBracket::where('character_id', $character->id)
                     ->when($keep !== [], fn ($q) => $q->whereNotIn('bracket', $keep))
                     ->delete();
@@ -462,29 +462,32 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $dtos = $mapper->map($data);
 
             DB::transaction(function () use ($character, $dtos) {
+                $rows = array_map(fn ($dto) => [
+                    'character_id' => $character->id,
+                    'profession_id' => $dto->professionId,
+                    'tier_name' => $dto->tierName,
+                    'profession_name' => $dto->professionName,
+                    'skill_points' => $dto->skillPoints,
+                    'max_skill_points' => $dto->maxSkillPoints,
+                    'is_primary' => $dto->isPrimary,
+                    'expansion_id' => $dto->expansionId,
+                ], $dtos);
+
+                CharacterProfession::upsertMany($rows);
+
+                // Composite key — collect stale ids in one query, delete in one shot.
                 $keep = [];
                 foreach ($dtos as $dto) {
-                    CharacterProfession::updateOrCreate(
-                        [
-                            'character_id' => $character->id,
-                            'profession_id' => $dto->professionId,
-                            'tier_name' => $dto->tierName,
-                        ],
-                        [
-                            'profession_name' => $dto->professionName,
-                            'skill_points' => $dto->skillPoints,
-                            'max_skill_points' => $dto->maxSkillPoints,
-                            'is_primary' => $dto->isPrimary,
-                            'expansion_id' => $dto->expansionId,
-                        ],
-                    );
-                    $keep[] = $dto->professionId.'|'.$dto->tierName;
+                    $keep[$dto->professionId.'|'.$dto->tierName] = true;
                 }
-
-                CharacterProfession::where('character_id', $character->id)
+                $staleIds = CharacterProfession::where('character_id', $character->id)
                     ->get(['id', 'profession_id', 'tier_name'])
-                    ->reject(fn ($row) => in_array($row->profession_id.'|'.$row->tier_name, $keep, true))
-                    ->each(fn ($row) => CharacterProfession::whereKey($row->id)->delete());
+                    ->reject(fn ($row) => isset($keep[$row->profession_id.'|'.$row->tier_name]))
+                    ->pluck('id')
+                    ->all();
+                if ($staleIds !== []) {
+                    CharacterProfession::whereKey($staleIds)->delete();
+                }
 
                 $character->update(['professions_synced_at' => now()]);
             });
@@ -511,30 +514,33 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $dtos = $mapper->map($data);
 
             DB::transaction(function () use ($character, $dtos) {
+                $rows = array_map(fn ($dto) => [
+                    'character_id' => $character->id,
+                    'encounter_id' => $dto->encounterId,
+                    'difficulty' => $dto->difficulty,
+                    'expansion_name' => $dto->expansionName,
+                    'instance_id' => $dto->instanceId,
+                    'instance_name' => $dto->instanceName,
+                    'encounter_name' => $dto->encounterName,
+                    'completed_count' => $dto->completedCount,
+                    'last_kill_timestamp' => $dto->lastKillTimestamp,
+                ], $dtos);
+
+                RaidEncounterKill::upsertMany($rows);
+
+                // Composite key — collect stale ids in one query, delete in one shot.
                 $keep = [];
                 foreach ($dtos as $dto) {
-                    RaidEncounterKill::updateOrCreate(
-                        [
-                            'character_id' => $character->id,
-                            'encounter_id' => $dto->encounterId,
-                            'difficulty' => $dto->difficulty,
-                        ],
-                        [
-                            'expansion_name' => $dto->expansionName,
-                            'instance_id' => $dto->instanceId,
-                            'instance_name' => $dto->instanceName,
-                            'encounter_name' => $dto->encounterName,
-                            'completed_count' => $dto->completedCount,
-                            'last_kill_timestamp' => $dto->lastKillTimestamp,
-                        ],
-                    );
-                    $keep[] = $dto->encounterId.'|'.$dto->difficulty;
+                    $keep[$dto->encounterId.'|'.$dto->difficulty] = true;
                 }
-
-                RaidEncounterKill::where('character_id', $character->id)
+                $staleIds = RaidEncounterKill::where('character_id', $character->id)
                     ->get(['id', 'encounter_id', 'difficulty'])
-                    ->reject(fn ($row) => in_array($row->encounter_id.'|'.$row->difficulty, $keep, true))
-                    ->each(fn ($row) => RaidEncounterKill::whereKey($row->id)->delete());
+                    ->reject(fn ($row) => isset($keep[$row->encounter_id.'|'.$row->difficulty]))
+                    ->pluck('id')
+                    ->all();
+                if ($staleIds !== []) {
+                    RaidEncounterKill::whereKey($staleIds)->delete();
+                }
 
                 $character->update(['raids_synced_at' => now()]);
             });
@@ -582,13 +588,25 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $activeTitleId = $result['activeTitleId'];
 
             DB::transaction(function () use ($character, $dtos, $activeTitleId) {
+                $now = now();
                 $titleIds = [];
+                $rows = [];
                 foreach ($dtos as $dto) {
-                    GameDataTitle::firstOrCreate(
-                        ['id' => $dto->titleId],
-                        ['name_male' => $dto->name, 'name_female' => $dto->name],
-                    );
                     $titleIds[] = $dto->titleId;
+                    $rows[] = [
+                        'id' => $dto->titleId,
+                        'name_male' => $dto->name,
+                        'name_female' => $dto->name,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+
+                // insertOrIgnore (not upsert): create missing rows only, never
+                // clobber the richer gendered names written by blizzard:sync-game-data
+                // — mirrors the previous firstOrCreate semantics in one round-trip.
+                if ($rows !== []) {
+                    GameDataTitle::insertOrIgnore($rows);
                 }
 
                 $character->titles()->sync($titleIds);
@@ -619,23 +637,18 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $dtos = $mapper->map($data);
 
             DB::transaction(function () use ($character, $dtos) {
-                $keep = [];
-                foreach ($dtos as $dto) {
-                    CharacterReputation::updateOrCreate(
-                        [
-                            'character_id' => $character->id,
-                            'faction_id' => $dto->factionId,
-                        ],
-                        [
-                            'faction_name' => $dto->factionName,
-                            'standing' => $dto->standing,
-                            'value' => $dto->value,
-                            'max' => $dto->max,
-                        ],
-                    );
-                    $keep[] = $dto->factionId;
-                }
+                $rows = array_map(fn ($dto) => [
+                    'character_id' => $character->id,
+                    'faction_id' => $dto->factionId,
+                    'faction_name' => $dto->factionName,
+                    'standing' => $dto->standing,
+                    'value' => $dto->value,
+                    'max' => $dto->max,
+                ], $dtos);
 
+                CharacterReputation::upsertMany($rows);
+
+                $keep = array_column($dtos, 'factionId');
                 CharacterReputation::where('character_id', $character->id)
                     ->when($keep !== [], fn ($q) => $q->whereNotIn('faction_id', $keep))
                     ->delete();
@@ -741,7 +754,12 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         Character $character,
     ): void {
         // Feature-gated: achievements are expensive (≈70% of DB); off by default.
+        // Stamp the timestamp anyway (mirrors syncCollections): leaving it null
+        // keeps isAchievementsStale() true forever, so every lookup would
+        // re-dispatch a Full sync and burn the rate budget.
         if (! config('blizzard.sync.achievements_enabled')) {
+            $character->update(['achievements_synced_at' => now()]);
+
             return;
         }
 
@@ -836,19 +854,18 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
 
             $threshold = (int) config('blizzard.crawl.recent_threshold', 21600);
             $cutoff = now()->subSeconds($threshold);
-            $seen = [];
-            $dispatched = 0;
 
+            // First pass: dedupe and drop the seed / blank identities.
+            $targets = [];
             foreach ($rows as $row) {
                 $name = strtolower((string) $row->character_name);
                 $realm = (string) $row->character_realm;
                 $region = (string) $row->character_region;
                 $key = "{$region}:{$realm}:{$name}";
 
-                if (isset($seen[$key])) {
+                if (isset($targets[$key])) {
                     continue;
                 }
-                $seen[$key] = true;
 
                 // Skip the seed itself.
                 if ($name === strtolower($this->name)
@@ -862,18 +879,39 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                     continue;
                 }
 
-                // Skip if a Character row exists and is fresher than the threshold.
-                // Character has no synced_at column; isStale() consults updated_at,
-                // so we use updated_at as the freshness signal here too.
-                $existing = Character::byIdentity($name, $realm, $region)->first();
-                if ($existing && $existing->updated_at && $existing->updated_at->greaterThan($cutoff)) {
+                $targets[$key] = ['region' => $region, 'realm' => $realm, 'name' => $name];
+            }
+
+            // Batched freshness lookup: one query instead of one SELECT per teammate.
+            // Character has no synced_at column; isStale() consults updated_at, so we
+            // use updated_at as the freshness signal here too. The three-column
+            // whereIn may over-fetch unrelated rows, but the exact-key match below
+            // filters them out, and names are stored canonical-lowercase.
+            $freshKeys = [];
+            if ($targets !== []) {
+                Character::query()
+                    ->where('game_version', 'retail')
+                    ->whereIn('name', array_values(array_unique(array_column($targets, 'name'))))
+                    ->whereIn('realm', array_values(array_unique(array_column($targets, 'realm'))))
+                    ->whereIn('region', array_values(array_unique(array_column($targets, 'region'))))
+                    ->get(['name', 'realm', 'region', 'updated_at'])
+                    ->each(function ($c) use ($cutoff, &$freshKeys) {
+                        if ($c->updated_at && $c->updated_at->greaterThan($cutoff)) {
+                            $freshKeys["{$c->region}:{$c->realm}:{$c->name}"] = true;
+                        }
+                    });
+            }
+
+            $dispatched = 0;
+            foreach ($targets as $key => $t) {
+                if (isset($freshKeys[$key])) {
                     continue;
                 }
 
                 self::dispatch(
-                    $region,
-                    $realm,
-                    $name,
+                    $t['region'],
+                    $t['realm'],
+                    $t['name'],
                     SyncDepth::Full,
                     null,
                     $this->crawlDepth + 1,
@@ -885,7 +923,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 'seed' => "{$this->name}-{$this->realm}-{$this->region}",
                 'seed_crawl_depth' => $this->crawlDepth,
                 'teammates_dispatched' => $dispatched,
-                'teammates_skipped_fresh' => count($seen) - $dispatched,
+                'teammates_skipped_fresh' => count($targets) - $dispatched,
             ]);
         } catch (Throwable $e) {
             Log::warning('Failed to dispatch teammate crawl', [

@@ -46,7 +46,7 @@ class CharacterScopeNameSearchTest extends TestCase
     {
         for ($i = 0; $i < 12; $i++) {
             Character::factory()->create([
-                'name' => 'mel' . $i,
+                'name' => 'mel'.$i,
                 'realm' => 'r',
                 'region' => 'eu',
                 'num_of_searches' => $i,
@@ -69,5 +69,52 @@ class CharacterScopeNameSearchTest extends TestCase
         Character::factory()->create(['name' => 'xxmelyy', 'realm' => 'r', 'region' => 'eu']);
 
         $this->assertCount(1, Character::nameSearch('mel')->get());
+    }
+
+    public function test_name_search_does_not_load_heavy_jsonb_columns(): void
+    {
+        // suggest only renders 8 scalars — don't haul media/talents/equipment/stats. (P2.3)
+        Character::factory()->create([
+            'name' => 'melaniya', 'realm' => 'r', 'region' => 'eu',
+            'talents' => ['class' => [1, 2, 3]],
+            'equipment' => ['head' => ['id' => 1]],
+            'stats' => ['crit' => 30],
+            'mythic_plus_rating_by_spec' => ['250' => 1000],
+        ]);
+
+        $row = Character::nameSearch('mel')->first();
+        $attrs = $row->getAttributes();
+
+        $this->assertArrayNotHasKey('talents', $attrs);
+        $this->assertArrayNotHasKey('equipment', $attrs);
+        $this->assertArrayNotHasKey('stats', $attrs);
+        $this->assertArrayNotHasKey('mythic_plus_rating_by_spec', $attrs);
+
+        // Fields the suggestion resource needs survive.
+        $this->assertSame('melaniya', $row->name);
+        $this->assertArrayHasKey('class_id', $attrs);
+        $this->assertArrayHasKey('display_realm', $attrs);
+        $this->assertArrayHasKey('faction', $attrs);
+    }
+
+    public function test_most_popular_loads_media_but_not_other_jsonb(): void
+    {
+        // CharacterSummaryResource renders an avatar from media → keep media,
+        // drop the heavy talents/equipment/stats blobs. (P2.3)
+        Character::factory()->create([
+            'name' => 'melaniya', 'realm' => 'r', 'region' => 'eu', 'num_of_searches' => 99,
+            'media' => ['avatar' => 'https://example.test/a.jpg'],
+            'talents' => ['class' => [1, 2, 3]],
+            'equipment' => ['head' => ['id' => 1]],
+            'stats' => ['crit' => 30],
+        ]);
+
+        $row = Character::mostPopular(5)->first();
+        $attrs = $row->getAttributes();
+
+        $this->assertSame('https://example.test/a.jpg', $row->media['avatar']);
+        $this->assertArrayNotHasKey('talents', $attrs);
+        $this->assertArrayNotHasKey('equipment', $attrs);
+        $this->assertArrayNotHasKey('stats', $attrs);
     }
 }

@@ -23,8 +23,6 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 15;
-
     public int $maxExceptions = 3;
 
     public array $backoff = [30, 120, 300];
@@ -51,12 +49,22 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
         return "sync-guild-roster:{$this->guild->id}:{$mode}";
     }
 
+    // Time-bound retries (mirrors SyncCharacterData): every middleware release()
+    // re-queues without burning a fixed $tries budget; only real exceptions
+    // (maxExceptions) cap the work, within a 6h window. (P1.10)
+    public function retryUntil(): \DateTime
+    {
+        return now()->addHours(6);
+    }
+
     /**
      * @return array<int, object>
      */
     public function middleware(): array
     {
-        return [new BlizzardRateLimiter, new BlizzardHealthCheck];
+        // Health check before rate limiter: don't spend a throttle slot (and up
+        // to a 30s block) only to discover the circuit is open. (P1.10)
+        return [new BlizzardHealthCheck, new BlizzardRateLimiter];
     }
 
     public function handle(): void

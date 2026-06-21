@@ -53,23 +53,19 @@ class CrawlCharacterRuns implements ShouldBeUnique, ShouldQueue
         $runs = $mapper->mapCharacterProfileRuns($profileData, $this->season);
 
         foreach ($runs as $run) {
-            $dungeonRun = DungeonRun::updateOrCreate(
-                [
-                    'season' => $run->season,
-                    'dungeon_id' => $run->dungeonId,
-                    'completed_timestamp' => $run->completedTimestamp,
-                ],
-                [
-                    'keystone_run_id' => $run->keystoneRunId,
-                    'dungeon_name' => $run->dungeonName,
-                    'keystone_level' => $run->keystoneLevel,
-                    'duration' => $run->duration,
-                    'is_completed_on_time' => $run->isCompletedOnTime,
-                    'affixes' => $run->affixes,
-                    'raiderio_score' => $run->score,
-                    'raiderio_url' => $run->url,
-                ],
-            );
+            $dungeonRun = DungeonRun::upsertRun([
+                'season' => $run->season,
+                'dungeon_id' => $run->dungeonId,
+                'completed_timestamp' => $run->completedTimestamp,
+                'duration' => $run->duration,
+                'keystone_run_id' => $run->keystoneRunId,
+                'dungeon_name' => $run->dungeonName,
+                'keystone_level' => $run->keystoneLevel,
+                'is_completed_on_time' => $run->isCompletedOnTime,
+                'affixes' => $run->affixes,
+                'raiderio_score' => $run->score,
+                'raiderio_url' => $run->url,
+            ]);
 
             $this->addQueriedCharacterAsMember($dungeonRun, $profileData, $persister);
             $this->dispatchRosterFetchIfNeeded($dungeonRun, $run->keystoneRunId);
@@ -78,6 +74,14 @@ class CrawlCharacterRuns implements ShouldBeUnique, ShouldQueue
 
     private function addQueriedCharacterAsMember(DungeonRun $run, array $profileData, RunTeamPersister $persister): void
     {
+        // Skip if the roster fetch already seated this player (display-cased):
+        // re-adding the lowercase queried name would create a duplicate the
+        // case-sensitive unique index can't catch, and that 6th member would
+        // suppress the roster fetch that heals it. (P1.3)
+        if ($persister->hasMember($run, $this->name, $this->realm, $this->region)) {
+            return;
+        }
+
         $firstRun = ($profileData['mythic_plus_recent_runs'] ?? $profileData['mythic_plus_best_runs'] ?? $profileData['mythic_plus_highest_level_runs'] ?? [])[0] ?? null;
 
         $persister->upsertMember($run, [

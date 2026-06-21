@@ -12,7 +12,9 @@ class TopRunsController extends Controller
 {
     public function __invoke(Request $request): JsonResponse
     {
-        $perPage = min((int) $request->input('per_page', 20), 50);
+        // max(1, ...): a negative per_page used to bypass the cap and return
+        // the whole table (limit() ignores negatives → no LIMIT). (P1.11)
+        $perPage = max(1, min((int) $request->input('per_page', 20), 50));
 
         $query = DungeonRun::query()
             ->where('is_completed_on_time', true)

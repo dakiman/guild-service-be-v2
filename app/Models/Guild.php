@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Cache;
 
 class Guild extends Model
 {
@@ -52,8 +53,17 @@ class Guild extends Model
      * when SyncCharacterData::linkGuildMembers hasn't fired yet for that row.
      * Subquery form rather than UPDATE...FROM so it runs on Postgres + SQLite.
      */
-    public function backfillMemberCharacterIds(): void
+    public function backfillMemberCharacterIds(bool $throttled = false): void
     {
+        // Throttle the per-page-VIEW path only (GuildController): the correlated
+        // subquery scan is wasted once the roster is linked, yet runs on every
+        // view. Cache::add is atomic so concurrent views dedupe. The sync path
+        // (SyncGuildData) calls this unthrottled so a roster refresh always
+        // backfills members whose Character appeared since the last run. (P2.4)
+        if ($throttled && ! Cache::add("guild:{$this->id}:member-backfill", true, now()->addMinutes(10))) {
+            return;
+        }
+
         GuildMember::query()
             ->where('guild_id', $this->id)
             ->whereNull('character_id')
