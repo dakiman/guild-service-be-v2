@@ -40,6 +40,7 @@ class BackfillKeystoneDungeonIconsFromRaiderio extends Command
 
         if ($iconByChallengeModeId === []) {
             $this->error('No dungeons with icon_url found in the raider.io response.');
+
             return self::FAILURE;
         }
 
@@ -59,6 +60,7 @@ class BackfillKeystoneDungeonIconsFromRaiderio extends Command
             $dungeon = GameDataMythicKeystoneDungeon::find($id);
             if ($dungeon === null) {
                 $missing[] = $id;
+
                 continue;
             }
             $matched++;
@@ -71,6 +73,7 @@ class BackfillKeystoneDungeonIconsFromRaiderio extends Command
                     $downloaded++;
                 } else {
                     $this->warn("Failed to download icon for {$id} ({$dungeon->name}): HTTP {$response->status()}");
+
                     continue;
                 }
             }

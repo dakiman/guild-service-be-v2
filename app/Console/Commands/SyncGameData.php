@@ -483,13 +483,58 @@ class SyncGameData extends Command
                 continue;
             }
 
+            // Fetch this instance's encounter detail (+creature-display media)
+            // OUTSIDE any transaction — never hold a DB transaction open across
+            // sequential HTTP calls. (P2.4)
+            $encounterDtos = [];
+            foreach ($instanceDto->encounterIds as $i => $encounterId) {
+                try {
+                    $encDetail = $client->getJournalEncounter($encounterId);
+                } catch (Throwable $e) {
+                    Log::warning("Encounter sync skipped id={$encounterId}: ".$e->getMessage());
+                    $encSkipped++;
+
+                    continue;
+                }
+
+                $creatureDisplayId = isset($encDetail['creature_display']['id'])
+                    ? (int) $encDetail['creature_display']['id']
+                    : (isset($encDetail['creature_displays'][0]['id'])
+                        ? (int) $encDetail['creature_displays'][0]['id']
+                        : null);
+
+                $portraitUrl = null;
+                if ($creatureDisplayId !== null) {
+                    try {
+                        $cdMedia = $client->getCreatureDisplayMedia($creatureDisplayId);
+                        $portraitUrl = $encounterMapper->extractMediaUrl($cdMedia);
+                    } catch (Throwable $e) {
+                        Log::warning("Creature-display media skipped id={$creatureDisplayId}: ".$e->getMessage());
+                    }
+                }
+
+                $encDto = $encounterMapper->mapDetail(
+                    detail: $encDetail,
+                    portraitUrl: $portraitUrl,
+                    fallbackInstanceId: $instanceDto->id,
+                    fallbackOrder: $i,
+                );
+                if ($encDto === null) {
+                    $encSkipped++;
+
+                    continue;
+                }
+
+                $encounterDtos[] = $encDto;
+            }
+
+            // Short per-instance transaction: only the upserts. Keeps the
+            // per-instance transaction shape (one tx per raid) — see slice docs.
             DB::transaction(function () use (
-                $client,
-                $encounterMapper,
                 $instanceDto,
+                $encounterDtos,
                 &$instUpserted,
                 &$encUpserted,
-                &$encSkipped,
             ) {
                 GameDataRaidInstance::updateOrCreate(
                     ['id' => $instanceDto->id],
@@ -502,44 +547,7 @@ class SyncGameData extends Command
                 );
                 $instUpserted++;
 
-                foreach ($instanceDto->encounterIds as $i => $encounterId) {
-                    try {
-                        $encDetail = $client->getJournalEncounter($encounterId);
-                    } catch (Throwable $e) {
-                        Log::warning("Encounter sync skipped id={$encounterId}: ".$e->getMessage());
-                        $encSkipped++;
-
-                        continue;
-                    }
-
-                    $creatureDisplayId = isset($encDetail['creature_display']['id'])
-                        ? (int) $encDetail['creature_display']['id']
-                        : (isset($encDetail['creature_displays'][0]['id'])
-                            ? (int) $encDetail['creature_displays'][0]['id']
-                            : null);
-
-                    $portraitUrl = null;
-                    if ($creatureDisplayId !== null) {
-                        try {
-                            $cdMedia = $client->getCreatureDisplayMedia($creatureDisplayId);
-                            $portraitUrl = $encounterMapper->extractMediaUrl($cdMedia);
-                        } catch (Throwable $e) {
-                            Log::warning("Creature-display media skipped id={$creatureDisplayId}: ".$e->getMessage());
-                        }
-                    }
-
-                    $encDto = $encounterMapper->mapDetail(
-                        detail: $encDetail,
-                        portraitUrl: $portraitUrl,
-                        fallbackInstanceId: $instanceDto->id,
-                        fallbackOrder: $i,
-                    );
-                    if ($encDto === null) {
-                        $encSkipped++;
-
-                        continue;
-                    }
-
+                foreach ($encounterDtos as $encDto) {
                     GameDataRaidEncounter::updateOrCreate(
                         ['id' => $encDto->id],
                         [
@@ -603,29 +611,36 @@ class SyncGameData extends Command
         $upserted = 0;
         $skipped = 0;
 
-        DB::transaction(function () use ($client, $mapper, $dungeonIds, &$upserted, &$skipped, $bar) {
-            foreach ($dungeonIds as $id) {
-                try {
-                    $detail = $client->getMythicKeystoneDungeon($id);
-                } catch (Throwable $e) {
-                    Log::warning("Dungeon sync skipped id={$id}: ".$e->getMessage());
-                    $skipped++;
-                    $bar->advance();
+        // Fetch all dungeon detail OUTSIDE any transaction. (P2.4)
+        $dtos = [];
+        foreach ($dungeonIds as $id) {
+            try {
+                $detail = $client->getMythicKeystoneDungeon($id);
+            } catch (Throwable $e) {
+                Log::warning("Dungeon sync skipped id={$id}: ".$e->getMessage());
+                $skipped++;
+                $bar->advance();
 
-                    continue;
-                }
+                continue;
+            }
 
-                // Mythic-keystone dungeon details do not currently expose a
-                // `media` block, but the Blizzard API may add one — the mapper
-                // already supports it via extractMediaUrl(). Pass null today.
-                $dto = $mapper->mapDetail($detail, mediaUrl: null, journalInstanceId: null);
-                if ($dto === null) {
-                    $skipped++;
-                    $bar->advance();
+            // Mythic-keystone dungeon details do not currently expose a
+            // `media` block, but the Blizzard API may add one — the mapper
+            // already supports it via extractMediaUrl(). Pass null today.
+            $dto = $mapper->mapDetail($detail, mediaUrl: null, journalInstanceId: null);
+            if ($dto === null) {
+                $skipped++;
+                $bar->advance();
 
-                    continue;
-                }
+                continue;
+            }
 
+            $dtos[] = $dto;
+            $bar->advance();
+        }
+
+        DB::transaction(function () use ($dtos, &$upserted) {
+            foreach ($dtos as $dto) {
                 GameDataMythicKeystoneDungeon::updateOrCreate(
                     ['id' => $dto->id],
                     [
@@ -635,7 +650,6 @@ class SyncGameData extends Command
                     ],
                 );
                 $upserted++;
-                $bar->advance();
             }
         });
 
@@ -666,28 +680,35 @@ class SyncGameData extends Command
         $upserted = 0;
         $skipped = 0;
 
-        DB::transaction(function () use ($client, $mapper, $ids, &$upserted, &$skipped, $bar) {
-            foreach ($ids as $id) {
-                try {
-                    $detail = $client->getKeystoneAffix($id);
-                    $media = $client->getKeystoneAffixMedia($id);
-                } catch (Throwable $e) {
-                    Log::warning("Affix sync skipped id={$id}: ".$e->getMessage());
-                    $skipped++;
-                    $bar->advance();
+        // Fetch all affix detail + media OUTSIDE any transaction. (P2.4)
+        $dtos = [];
+        foreach ($ids as $id) {
+            try {
+                $detail = $client->getKeystoneAffix($id);
+                $media = $client->getKeystoneAffixMedia($id);
+            } catch (Throwable $e) {
+                Log::warning("Affix sync skipped id={$id}: ".$e->getMessage());
+                $skipped++;
+                $bar->advance();
 
-                    continue;
-                }
+                continue;
+            }
 
-                $iconUrl = $mapper->extractIconUrl($media);
-                $dto = $mapper->mapDetail($detail, $iconUrl);
-                if ($dto === null) {
-                    $skipped++;
-                    $bar->advance();
+            $iconUrl = $mapper->extractIconUrl($media);
+            $dto = $mapper->mapDetail($detail, $iconUrl);
+            if ($dto === null) {
+                $skipped++;
+                $bar->advance();
 
-                    continue;
-                }
+                continue;
+            }
 
+            $dtos[] = $dto;
+            $bar->advance();
+        }
+
+        DB::transaction(function () use ($dtos, &$upserted) {
+            foreach ($dtos as $dto) {
                 GameDataKeystoneAffix::updateOrCreate(
                     ['id' => $dto->id],
                     [
@@ -696,7 +717,6 @@ class SyncGameData extends Command
                     ],
                 );
                 $upserted++;
-                $bar->advance();
             }
         });
 

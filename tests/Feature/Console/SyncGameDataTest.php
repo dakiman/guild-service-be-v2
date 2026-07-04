@@ -16,6 +16,7 @@ use App\Models\GameDataRaidInstance;
 use App\Models\GameDataTitle;
 use Database\Seeders\GameDataExpansionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class SyncGameDataTest extends TestCase
@@ -641,5 +642,76 @@ class SyncGameDataTest extends TestCase
 
         $this->assertNull(GameDataRaidInstance::find(1296));
         $this->assertNotNull(GameDataRaidInstance::find(1273), 'second instance still upserted');
+    }
+
+    public function test_sync_pve_fetches_detail_outside_transactions(): void
+    {
+        $baseline = DB::transactionLevel();
+        $levels = [];
+        $record = function () use (&$levels): void {
+            $levels[] = DB::transactionLevel();
+        };
+
+        $mock = $this->createMock(BlizzardGameDataClient::class);
+
+        $mock->method('getJournalInstanceIndex')->willReturn([
+            'instances' => [['id' => 1296, 'name' => 'Liberation of Undermine']],
+        ]);
+        $mock->method('getJournalInstance')->willReturn([
+            'id' => 1296,
+            'name' => 'Liberation of Undermine',
+            'category' => ['type' => 'RAID'],
+            'expansion' => ['id' => 514],
+            'order_index' => 5,
+            'encounters' => [['id' => 2902, 'name' => 'Vexie']],
+        ]);
+        $mock->method('getJournalInstanceMedia')->willReturn([
+            'assets' => [['key' => 'tile', 'value' => 'https://example/lou.jpg']],
+        ]);
+
+        // Every per-detail HTTP method records the transaction level when called.
+        $mock->method('getJournalEncounter')->willReturnCallback(function (int $id) use ($record): array {
+            $record();
+
+            return ['id' => $id, 'name' => 'Vexie', 'creature_display' => ['id' => 109501], 'instance' => ['id' => 1296], 'order_index' => 0];
+        });
+        $mock->method('getCreatureDisplayMedia')->willReturnCallback(function (int $id) use ($record): array {
+            $record();
+
+            return ['assets' => [['key' => 'zoom', 'value' => "https://example/cd-{$id}.jpg"]]];
+        });
+
+        $mock->method('getCurrentMythicPlusSeason')->willReturn(14);
+        $mock->method('getMythicKeystoneSeason')->willReturn([
+            'id' => 14,
+            'dungeons' => [['id' => 503, 'name' => 'Ara-Kara']],
+        ]);
+        $mock->method('getMythicKeystoneDungeon')->willReturnCallback(function (int $id) use ($record): array {
+            $record();
+
+            return ['id' => $id, 'name' => 'Ara-Kara, City of Echoes'];
+        });
+
+        $mock->method('getKeystoneAffixIndex')->willReturn(['affixes' => [['id' => 9, 'name' => 'Tyrannical']]]);
+        $mock->method('getKeystoneAffix')->willReturnCallback(function (int $id) use ($record): array {
+            $record();
+
+            return ['id' => $id, 'name' => 'Tyrannical'];
+        });
+        $mock->method('getKeystoneAffixMedia')->willReturnCallback(function (int $id) use ($record): array {
+            $record();
+
+            return ['assets' => [['key' => 'icon', 'value' => "https://example/affix-{$id}.jpg"]]];
+        });
+
+        $this->app->instance(BlizzardGameDataClient::class, $mock);
+
+        $this->artisan('blizzard:sync-game-data', ['resource' => 'pve'])
+            ->assertExitCode(0);
+
+        $this->assertNotEmpty($levels, 'detail methods should have been called');
+        foreach ($levels as $level) {
+            $this->assertSame($baseline, $level, 'detail fetch must run outside any DB transaction');
+        }
     }
 }

@@ -54,7 +54,7 @@ class GuildSuggestEndpointTest extends TestCase
     public function test_caps_at_eight_results(): void
     {
         for ($i = 0; $i < 12; $i++) {
-            Guild::factory()->create(['name' => 'ech' . $i, 'realm' => 'r', 'region' => 'eu']);
+            Guild::factory()->create(['name' => 'ech'.$i, 'realm' => 'r', 'region' => 'eu']);
         }
 
         $res = $this->getJson('/api/v1/guilds/suggest?q=ech')->assertOk();

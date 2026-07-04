@@ -6,6 +6,7 @@ namespace Tests\Unit\Blizzard\Client;
 
 use App\Blizzard\Client\BlizzardGameDataClient;
 use App\Blizzard\Contracts\TokenManagerInterface;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -18,14 +19,14 @@ class BlizzardGameDataClientTest extends TestCase
         Cache::flush();
     }
 
-    private function client(): BlizzardGameDataClient
+    private function client(string $region = 'us'): BlizzardGameDataClient
     {
         $tokenManager = $this->createMock(TokenManagerInterface::class);
         $tokenManager->method('getToken')->willReturn('fake-token');
 
         // Region is a readonly constructor param on the parent BlizzardClient;
         // there is no setter. See BlizzardClient.php:16.
-        return new BlizzardGameDataClient($tokenManager, 'us');
+        return new BlizzardGameDataClient($tokenManager, $region);
     }
 
     public function test_get_faction_index_returns_response_in_static_namespace(): void
@@ -570,5 +571,140 @@ class BlizzardGameDataClientTest extends TestCase
 
         $result = $this->client()->getCreatureDisplayMedia(109501);
         $this->assertSame('https://example/zoom.jpg', $result['assets'][0]['value']);
+    }
+
+    /**
+     * B2.1 — negative caching. A 404 must be cached (via a sentinel) so a
+     * repeated lookup for a missing id does not re-hit Blizzard. Cache::remember
+     * treats a stored null as a miss, so today the second call re-fetches.
+     */
+    public function test_get_faction_negative_result_is_cached(): void
+    {
+        $callCount = 0;
+        Http::fake(function () use (&$callCount) {
+            $callCount++;
+
+            return Http::response(null, 404);
+        });
+
+        $client = $this->client();
+        $this->assertNull($client->getFaction(99999));
+        $this->assertNull($client->getFaction(99999));
+
+        $this->assertSame(1, $callCount, '404 should be cached, not re-fetched');
+    }
+
+    public function test_get_talent_tree_negative_result_is_cached(): void
+    {
+        $callCount = 0;
+        Http::fake(function () use (&$callCount) {
+            $callCount++;
+
+            return Http::response(null, 404);
+        });
+
+        $client = $this->client();
+        $this->assertNull($client->getTalentTree(123, 456));
+        $this->assertNull($client->getTalentTree(123, 456));
+
+        $this->assertSame(1, $callCount, '404 should be cached, not re-fetched');
+    }
+
+    public function test_get_journal_instance_index_negative_result_is_cached(): void
+    {
+        $callCount = 0;
+        Http::fake(function () use (&$callCount) {
+            $callCount++;
+
+            return Http::response(null, 404);
+        });
+
+        $client = $this->client();
+        $this->assertNull($client->getJournalInstanceIndex());
+        $this->assertNull($client->getJournalInstanceIndex());
+
+        $this->assertSame(1, $callCount, '404 should be cached, not re-fetched');
+    }
+
+    /**
+     * B2.2 — the current-season cache key must be region-scoped, otherwise a us
+     * client poisons the cache for an eu client (and vice-versa).
+     */
+    public function test_current_mythic_plus_season_is_cached_per_region(): void
+    {
+        Http::fake([
+            'us.api.blizzard.com/data/wow/mythic-keystone/season/index?*' => Http::response([
+                'seasons' => [['id' => 13], ['id' => 14]],
+            ], 200),
+            'eu.api.blizzard.com/data/wow/mythic-keystone/season/index?*' => Http::response([
+                'seasons' => [['id' => 14], ['id' => 15]],
+            ], 200),
+        ]);
+
+        $this->assertSame(14, $this->client('us')->getCurrentMythicPlusSeason());
+        $this->assertSame(15, $this->client('eu')->getCurrentMythicPlusSeason());
+    }
+
+    /**
+     * B2.3 — an empty seasons array must throw (not silently cache season 0 for
+     * 24h). Throwing inside the remember-closure means nothing is cached, so a
+     * later valid payload resolves correctly.
+     */
+    public function test_current_mythic_plus_season_throws_on_empty_seasons(): void
+    {
+        // First response is empty (must throw); the throw must prevent caching
+        // so the second response — a valid payload — resolves normally.
+        $callCount = 0;
+        Http::fake(function () use (&$callCount) {
+            $callCount++;
+
+            return $callCount === 1
+                ? Http::response(['seasons' => []], 200)
+                : Http::response(['seasons' => [['id' => 14]]], 200);
+        });
+
+        try {
+            $this->client('us')->getCurrentMythicPlusSeason();
+            $this->fail('expected a RuntimeException on empty seasons');
+        } catch (\RuntimeException $e) {
+            // expected
+        }
+
+        // Nothing was cached (the closure threw), so this re-fetches and resolves.
+        $this->assertSame(14, $this->client('us')->getCurrentMythicPlusSeason());
+    }
+
+    /**
+     * B6 — the retry backoff is now an array of intervals (config-driven), which
+     * must keep the total attempt count at 3.
+     */
+    public function test_retry_makes_three_attempts_on_persistent_500(): void
+    {
+        Http::fake([
+            'us.api.blizzard.com/data/wow/mythic-keystone/season/index?*' => Http::response([], 500),
+        ]);
+
+        try {
+            $this->client('us')->getCurrentMythicPlusSeason();
+            $this->fail('expected a RequestException on persistent 500');
+        } catch (RequestException) {
+            // expected
+        }
+
+        Http::assertSentCount(3);
+    }
+
+    public function test_retry_backoff_config_is_int_array_and_defaults_to_hundred_five_hundred(): void
+    {
+        // Mirrors the parse in config/blizzard.php for the unset-env default.
+        $this->assertSame([100, 500], array_map('intval', explode(',', '100,500')));
+
+        // Resolved config is always an int array (0,0 forced in the test env).
+        $configured = config('blizzard.http.retry_backoff_ms');
+        $this->assertIsArray($configured);
+        $this->assertNotEmpty($configured);
+        foreach ($configured as $ms) {
+            $this->assertIsInt($ms);
+        }
     }
 }

@@ -60,7 +60,7 @@ class CharacterController extends Controller
             $response->header('X-Data-Staleness', 'stale');
         }
 
-        if (in_array('never_synced', $response->getData(true)['meta']['freshness'] ?? [], true)) {
+        if ($result->isNeverSynced()) {
             $response->header('X-Sync-Status', 'syncing');
             $response->header('Retry-After', '30');
         }

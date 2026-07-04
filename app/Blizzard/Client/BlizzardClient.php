@@ -35,7 +35,7 @@ abstract class BlizzardClient
             ])
             ->timeout($this->timeout())
             ->connectTimeout(5)
-            ->retry(3, 0, function (\Exception $exception, PendingRequest $request) {
+            ->retry(config('blizzard.http.retry_backoff_ms', [100, 500]), 0, function (\Exception $exception, PendingRequest $request) {
                 if ($exception instanceof RequestException) {
                     $status = $exception->response->status();
 

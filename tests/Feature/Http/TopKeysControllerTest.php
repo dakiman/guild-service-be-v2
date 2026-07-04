@@ -7,6 +7,7 @@ namespace Tests\Feature\Http;
 use App\Models\Character;
 use App\Models\DungeonRun;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Defer\DeferredCallbackCollection;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -151,6 +152,53 @@ class TopKeysControllerTest extends TestCase
         $this->assertCount(5, $response->json('dungeons'));
         // 1 (ranked top run/dungeon) + 1 (memberEntries) + 1 (characters) — never N per dungeon.
         $this->assertLessThanOrEqual(4, $count, "Expected no N+1; ran {$count} queries.");
+    }
+
+    public function test_serves_stale_then_refreshes_within_grace_window(): void
+    {
+        $char = Character::factory()->create(['class_id' => 1]);
+        $pivot = [
+            'character_name' => $char->name,
+            'character_realm' => $char->realm,
+            'character_region' => $char->region,
+            'spec_id' => 71,
+            'spec_name' => 'Arms',
+            'equipped_item_level' => 630,
+        ];
+
+        $run = DungeonRun::factory()->create([
+            'dungeon_id' => 100, 'dungeon_name' => 'Mechagon City',
+            'keystone_level' => 20, 'is_completed_on_time' => true,
+        ]);
+        $run->members()->attach($char->id, $pivot);
+
+        // 1st request caches result A (top key = 20).
+        $first = $this->getJson('/api/v1/stats/characters/top-keys');
+        $first->assertOk();
+        $this->assertEquals(20, $first->json('dungeons.0.key_level'));
+
+        // A better run lands for the same dungeon.
+        $better = DungeonRun::factory()->create([
+            'dungeon_id' => 100, 'dungeon_name' => 'Mechagon City',
+            'keystone_level' => 30, 'is_completed_on_time' => true,
+        ]);
+        $better->members()->attach($char->id, $pivot);
+
+        // Advance into the stale grace window (270 < 280 < 300).
+        $this->travel(280)->seconds();
+
+        // 2nd request serves the STALE cached A (still 20) and schedules a refresh.
+        $second = $this->getJson('/api/v1/stats/characters/top-keys');
+        $second->assertOk();
+        $this->assertEquals(20, $second->json('dungeons.0.key_level'), 'stale value should still be served');
+
+        // Flush any deferred refresh callbacks that did not run on terminate.
+        app(DeferredCallbackCollection::class)->invoke();
+
+        // 3rd request serves the refreshed B (30).
+        $third = $this->getJson('/api/v1/stats/characters/top-keys');
+        $third->assertOk();
+        $this->assertEquals(30, $third->json('dungeons.0.key_level'), 'refreshed value should be served');
     }
 
     public function test_returns_empty_when_no_data(): void

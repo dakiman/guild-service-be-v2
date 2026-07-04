@@ -9,9 +9,28 @@ use Illuminate\Support\Facades\Http;
 
 class BlizzardGameDataClient extends BlizzardClient
 {
+    /**
+     * Stored in place of null so Cache::remember treats a 404 as a real hit
+     * (it otherwise re-evaluates the closure whenever a cached value is null),
+     * giving us negative caching for missing ids.
+     */
+    private const NULL_SENTINEL = '__none__';
+
     protected function namespace(): string
     {
         return "dynamic-{$this->region}";
+    }
+
+    /**
+     * Cache::remember wrapper for ?array getters whose closure returns null on
+     * 404. Persists a sentinel for null so the 404 is cached instead of
+     * re-fetched on every call.
+     */
+    private function rememberNullable(string $key, int $ttl, \Closure $fn): ?array
+    {
+        $value = Cache::remember($key, $ttl, fn () => $fn() ?? self::NULL_SENTINEL);
+
+        return $value === self::NULL_SENTINEL ? null : $value;
     }
 
     protected function timeout(): int
@@ -27,7 +46,7 @@ class BlizzardGameDataClient extends BlizzardClient
             return (int) $override;
         }
 
-        return (int) Cache::remember('blizzard:mythic-plus:current-season', 86400, function () {
+        return (int) Cache::remember("blizzard:mythic-plus:current-season:{$this->region}", 86400, function () {
             $response = $this->request()
                 ->get('/data/wow/mythic-keystone/season/index');
 
@@ -35,6 +54,11 @@ class BlizzardGameDataClient extends BlizzardClient
 
             $data = $response->json();
             $seasons = $data['seasons'] ?? [];
+
+            if ($seasons === []) {
+                throw new \RuntimeException('Blizzard season index returned no seasons');
+            }
+
             $lastSeason = end($seasons);
 
             return (int) $lastSeason['id'];
@@ -55,7 +79,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:talent-tree:{$this->region}:{$treeId}:{$specId}";
         $ttl = (int) config('blizzard.talent_tree_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function () use ($treeId, $specId): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function () use ($treeId, $specId): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
@@ -89,7 +113,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:faction-index:{$this->region}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function (): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function (): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
@@ -119,7 +143,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:faction:{$this->region}:{$id}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
@@ -150,7 +174,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:title-index:{$this->region}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function (): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function (): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
@@ -178,7 +202,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:title:{$this->region}:{$id}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
@@ -212,7 +236,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:mount-index:{$this->region}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function (): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function (): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
@@ -242,7 +266,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:mount:{$this->region}:{$id}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
@@ -274,7 +298,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:achievement-category-index:{$this->region}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function (): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function (): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
@@ -302,7 +326,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:achievement-category:{$this->region}:{$id}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
@@ -332,7 +356,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:achievement-index:{$this->region}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function (): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function (): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
@@ -359,7 +383,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:achievement:{$this->region}:{$id}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
@@ -390,7 +414,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:journal-instance-index:{$this->region}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function (): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function (): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
@@ -419,7 +443,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:journal-instance:{$this->region}:{$id}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
@@ -447,7 +471,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:journal-instance-media:{$this->region}:{$id}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
@@ -476,7 +500,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:journal-encounter:{$this->region}:{$id}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
@@ -503,7 +527,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:creature-display-media:{$this->region}:{$id}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
@@ -532,7 +556,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:mk-dungeon-index:{$this->region}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function (): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function (): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "dynamic-{$this->region}",
@@ -562,7 +586,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:mk-dungeon:{$this->region}:{$id}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "dynamic-{$this->region}",
@@ -591,7 +615,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:mk-season:{$this->region}:{$id}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "dynamic-{$this->region}",
@@ -624,7 +648,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:realm-index:{$this->region}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function (): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function (): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "dynamic-{$this->region}",
@@ -651,7 +675,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:keystone-affix-index:{$this->region}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function (): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function (): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
@@ -678,7 +702,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:keystone-affix:{$this->region}:{$id}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
@@ -705,7 +729,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:keystone-affix-media:{$this->region}:{$id}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function () use ($id): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
@@ -734,7 +758,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:playable-specialization-index:{$this->region}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function (): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function (): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",
@@ -763,7 +787,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $cacheKey = "blizzard:game-data:playable-specialization:{$this->region}:{$specId}";
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
-        return Cache::remember($cacheKey, $ttl, function () use ($specId): ?array {
+        return $this->rememberNullable($cacheKey, $ttl, function () use ($specId): ?array {
             $response = Http::withToken($this->tokenManager->getToken($this->region))
                 ->withQueryParameters([
                     'namespace' => "static-{$this->region}",

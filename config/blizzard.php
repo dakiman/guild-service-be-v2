@@ -15,6 +15,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | HTTP client
+    |--------------------------------------------------------------------------
+    | Retry backoff between attempts. An array of intervals keeps the total
+    | attempt count fixed (3) while spacing retries out — a comma-separated
+    | env string of milliseconds (e.g. "100,500"). Set "0,0" in tests to keep
+    | the suite fast.
+    */
+
+    'http' => [
+        'retry_backoff_ms' => array_map('intval', explode(',', (string) env('BLIZZARD_HTTP_RETRY_BACKOFF_MS', '100,500'))),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Supported Regions
     |--------------------------------------------------------------------------
     */

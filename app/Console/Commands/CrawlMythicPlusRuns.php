@@ -30,26 +30,34 @@ class CrawlMythicPlusRuns extends Command
 
         $query = Character::query()
             ->where('mythic_plus_rating', '>', 0)
-            ->where('game_version', 'retail');
+            ->where('game_version', 'retail')
+            // Deterministic order: highest-rated first, id as a stable tiebreak,
+            // so --limit always picks the same (highest-value) subset. (P2.5)
+            ->orderByDesc('mythic_plus_rating')
+            ->orderBy('id');
 
         if ($region = $this->option('region')) {
             $query->where('region', $region);
         }
 
-        if ($limit = $this->option('limit')) {
-            $query->limit((int) $limit);
+        $limit = $this->option('limit') !== null ? (int) $this->option('limit') : null;
+        if ($limit !== null) {
+            $query->limit($limit);
         }
 
-        $characters = $query->get(['region', 'realm', 'name']);
-
         if ($this->option('dry-run')) {
-            $this->info("Dry run: would dispatch {$characters->count()} CrawlCharacterRuns jobs (season {$season}).");
+            // count() aggregates to a single row, so the limit above does not
+            // constrain it — clamp the report to the limit ourselves.
+            $count = $query->count();
+            $toDispatch = $limit !== null ? min($count, $limit) : $count;
+            $this->info("Dry run: would dispatch {$toDispatch} CrawlCharacterRuns jobs (season {$season}).");
 
             return self::SUCCESS;
         }
 
+        // Stream matched rows instead of loading the whole table into memory.
         $dispatched = 0;
-        foreach ($characters as $character) {
+        foreach ($query->select(['region', 'realm', 'name'])->cursor() as $character) {
             CrawlCharacterRuns::dispatch(
                 $character->region,
                 $character->realm,

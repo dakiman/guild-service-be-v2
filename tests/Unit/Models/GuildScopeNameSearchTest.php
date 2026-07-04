@@ -45,7 +45,7 @@ class GuildScopeNameSearchTest extends TestCase
     {
         for ($i = 0; $i < 12; $i++) {
             Guild::factory()->create([
-                'name' => 'ech' . $i,
+                'name' => 'ech'.$i,
                 'realm' => 'r',
                 'region' => 'eu',
                 'num_of_searches' => $i,

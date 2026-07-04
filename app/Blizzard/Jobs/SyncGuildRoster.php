@@ -75,11 +75,17 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
             ->where('level', '>=', $minLevel)
             ->get();
 
+        // Per-member SyncCharacterData::Full fan-out is gated by either:
+        // 1. forceFanout=true on this specific job (set by the seeder via SyncGuildData,
+        //    or by the user-visit cascade via SyncGuildData::forceCascade).
+        // 2. raiderio.dispatch_roster_character_syncs config flag (default false).
+        $fullPathActive = $this->forceFanout || config('raiderio.dispatch_roster_character_syncs', false);
+
         // When forceFanout is true (user-visit cascade or seeder run), skip both
         // Shallow and Full dispatches for any member whose Character row is fresh
-        // (updated_at within $ttl). Cold + stale members get both Shallow and Full.
-        // When forceFanout is false (proactive path), Shallow fires unconditionally
-        // — same as today.
+        // (updated_at within $ttl). Cold + stale members get a Full.
+        // When forceFanout is false (proactive path), Shallow fires unless the
+        // member is a Full target (config path staleness gate).
         $freshTuples = [];
         if ($this->forceFanout) {
             $ttl = (int) config('raiderio.character_resync_ttl', 86400);
@@ -99,8 +105,19 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
                 ->all();
         }
 
+        // Members that will get a Full. Full is a strict superset of Shallow, so
+        // these are skipped in the Shallow loop below — dispatching both wastes
+        // API budget. (B1 behavior change: was "Shallow AND Full".)
+        $fullTargets = $this->resolveFullTargets($members, $freshTuples, $fullPathActive);
+
         foreach ($members as $member) {
-            if ($this->forceFanout && isset($freshTuples["{$member->name}|{$member->realm}"])) {
+            $key = "{$member->name}|{$member->realm}";
+
+            if ($this->forceFanout && isset($freshTuples[$key])) {
+                continue;
+            }
+
+            if (isset($fullTargets[$key])) {
                 continue;
             }
 
@@ -112,38 +129,62 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
             );
         }
 
-        // Per-member SyncCharacterData::Full fan-out is gated by either:
-        // 1. forceFanout=true on this specific job (set by the seeder via SyncGuildData,
-        //    or by the user-visit cascade via SyncGuildData::forceCascade).
-        // 2. raiderio.dispatch_roster_character_syncs config flag (default false).
-        if ($this->forceFanout || config('raiderio.dispatch_roster_character_syncs', false)) {
-            $this->dispatchFullSyncsForMembers($members, $freshTuples);
+        if ($fullPathActive) {
+            $this->dispatchFullSyncsForMembers($members, $fullTargets);
         }
     }
 
     /**
-     * @param  array<string, true>  $freshTuples  precomputed map of "name|realm" => true for members
-     *                                            whose Character is fresh under the unified TTL gate.
-     *                                            Empty when forceFanout was false (proactive path
-     *                                            uses its own self-contained TTL gate below).
+     * Resolve the "name|realm" => true set of members that will receive a Full
+     * sync. Empty when the full path is inactive.
+     *
+     * @param  array<string, true>  $freshTuples  force-path fresh-skip map (empty on the proactive path)
+     * @return array<string, true>
      */
-    protected function dispatchFullSyncsForMembers(Collection $members, array $freshTuples = []): void
+    protected function resolveFullTargets(Collection $members, array $freshTuples, bool $fullPathActive): array
     {
+        if (! $fullPathActive) {
+            return [];
+        }
+
+        $fullTargets = [];
+
+        if ($this->forceFanout) {
+            // Force path: every non-fresh member (fresh already skipped entirely).
+            foreach ($members as $member) {
+                $key = "{$member->name}|{$member->realm}";
+                if (! isset($freshTuples[$key])) {
+                    $fullTargets[$key] = true;
+                }
+            }
+
+            return $fullTargets;
+        }
+
+        // Proactive + config path: per-member staleness lookup, run once here
+        // (hoisted out of dispatchFullSyncsForMembers so it doesn't repeat).
         $ttl = (int) config('raiderio.character_resync_ttl', 86400);
         $cutoff = now()->subSeconds($ttl);
 
         foreach ($members as $member) {
-            // Unified gate (already computed) takes precedence when forceFanout was true.
-            if ($this->forceFanout && isset($freshTuples["{$member->name}|{$member->realm}"])) {
+            $existing = Character::byIdentity($member->name, $member->realm, $this->guild->region)->first();
+            if ($existing !== null && $existing->updated_at !== null && $existing->updated_at->isAfter($cutoff)) {
                 continue;
             }
+            $fullTargets["{$member->name}|{$member->realm}"] = true;
+        }
 
-            // Proactive path (forceFanout=false, config flag=true) falls back to per-member lookup.
-            if (! $this->forceFanout) {
-                $existing = Character::byIdentity($member->name, $member->realm, $this->guild->region)->first();
-                if ($existing !== null && $existing->updated_at !== null && $existing->updated_at->isAfter($cutoff)) {
-                    continue;
-                }
+        return $fullTargets;
+    }
+
+    /**
+     * @param  array<string, true>  $fullTargets  precomputed "name|realm" => true set of Full recipients
+     */
+    protected function dispatchFullSyncsForMembers(Collection $members, array $fullTargets): void
+    {
+        foreach ($members as $member) {
+            if (! isset($fullTargets["{$member->name}|{$member->realm}"])) {
+                continue;
             }
 
             SyncCharacterData::dispatch(

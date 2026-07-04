@@ -305,4 +305,50 @@ class Character extends Model
         return ! $this->achievements_synced_at
             || $this->achievements_synced_at->diffInSeconds(now()) > config('blizzard.staleness.character.achievements');
     }
+
+    /**
+     * Per-slice freshness map ('fresh' | 'stale' | 'never_synced'). Single
+     * source of truth shared by CharacterResource (meta.freshness in the body)
+     * and CharacterController (the X-Sync-Status header) — see isNeverSynced().
+     *
+     * @return array<string, string>
+     */
+    public function freshness(): array
+    {
+        $freshness = [
+            'profile' => $this->freshnessFor('updated_at', 'profile'),
+            'mythic_plus' => $this->freshnessFor('mythics_synced_at', 'mythic_plus'),
+            'pvp' => $this->freshnessFor('pvp_synced_at', 'pvp'),
+            'professions' => $this->freshnessFor('professions_synced_at', 'professions'),
+            'raids' => $this->freshnessFor('raids_synced_at', 'raids'),
+            'stats' => $this->freshnessFor('stats_synced_at', 'stats'),
+            'titles' => $this->freshnessFor('titles_synced_at', 'titles'),
+            'reputations' => $this->freshnessFor('reputations_synced_at', 'reputations'),
+            'collections' => $this->freshnessFor('collections_synced_at', 'collections'),
+        ];
+
+        // Drop achievements freshness key when flag is off — FE has nothing to filter on.
+        if (config('blizzard.sync.achievements_enabled')) {
+            $freshness['achievements'] = $this->freshnessFor('achievements_synced_at', 'achievements');
+        }
+
+        return $freshness;
+    }
+
+    public function isNeverSynced(): bool
+    {
+        return in_array('never_synced', $this->freshness(), true);
+    }
+
+    private function freshnessFor(string $timestampField, string $configKey): string
+    {
+        $ts = $this->{$timestampField} ?? null;
+        if ($ts === null) {
+            return 'never_synced';
+        }
+
+        $threshold = (int) config("blizzard.staleness.character.{$configKey}", 900);
+
+        return $ts->diffInSeconds(now()) > $threshold ? 'stale' : 'fresh';
+    }
 }

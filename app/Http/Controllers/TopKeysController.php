@@ -12,7 +12,10 @@ class TopKeysController extends Controller
 {
     public function __invoke(): JsonResponse
     {
-        $data = Cache::remember('stats:top-keys', 300, function () {
+        // SWR: serve the cached value for 270s, then serve stale (up to 300s)
+        // while a single deferred refresh recomputes — avoids a cache stampede
+        // where every request past expiry recomputes concurrently. (B7)
+        $data = Cache::flexible('stats:top-keys', [270, 300], function () {
             // One row per dungeon via a window function (portable DISTINCT ON)
             // instead of loading every timed run into memory and grouping in PHP.
             // memberEntries + their characters are eager-loaded — no per-dungeon N+1.
