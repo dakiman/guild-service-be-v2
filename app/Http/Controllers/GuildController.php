@@ -14,6 +14,7 @@ use App\Services\GuildService;
 use App\Support\BlizzardIdentity;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Queue;
 
 class GuildController extends Controller
 {
@@ -36,8 +37,14 @@ class GuildController extends Controller
         if ($result === null) {
             SyncGuildData::dispatch($region, $realm, $guild, forceRosterFanout: false, forceCascade: true);
 
-            return response()->json(['message' => 'Guild sync initiated'], 202)
-                ->header('Retry-After', '5');
+            // SyncGuildData runs on blizzard-user-sync — same lane the FE is
+            // effectively waiting on, so its depth is the honest signal here.
+            $queueDepth = (int) Queue::size('blizzard-user-sync');
+
+            return response()->json([
+                'message' => 'Guild sync initiated',
+                'queue_depth' => $queueDepth,
+            ], 202)->header('Retry-After', $queueDepth > 100 ? '30' : '5');
         }
 
         $perPage = min(100, (int) $request->query('per_page', '50'));

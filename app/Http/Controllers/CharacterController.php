@@ -38,7 +38,7 @@ class CharacterController extends Controller
             return response()->json([
                 'message' => 'Character sync initiated',
                 'queue_depth' => $queueDepth,
-            ], 202)->header('Retry-After', '10');
+            ], 202)->header('Retry-After', $queueDepth > 100 ? '30' : '10');
         }
 
         $relations = ['guild', 'dungeonRuns.memberEntries', 'pvpBrackets', 'professions.expansion', 'raidEncounterKills', 'titles', 'reputations.faction.expansion'];
