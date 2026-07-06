@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Blizzard\Middleware;
 
+use App\Blizzard\Exceptions\BlizzardThrottleTimeoutException;
 use App\Blizzard\Middleware\BlizzardRateLimiter;
+use GuzzleHttp\Psr7\Response as Psr7Response;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use ReflectionMethod;
@@ -59,11 +63,57 @@ class BlizzardRateLimiterBreakerTest extends TestCase
         $this->assertFalse(Cache::has('blizzard:429-count'));
     }
 
-    public function test_default_job_rate_accounts_for_calls_per_job(): void
+    private function fakeJob(): object
     {
-        // The throttle counts JOBS, not HTTP requests, and a Full sync makes
-        // ~15-25 calls. The old default of 80 jobs/s allowed >1000 req/s. The
-        // budgeted default must stay well below Blizzard's ~100 req/s ceiling. (P2.4)
-        $this->assertLessThanOrEqual(20, (int) config('blizzard.rate_limit.per_second'));
+        return new class
+        {
+            public array $released = [];
+
+            public function release(int $delay): void
+            {
+                $this->released[] = $delay;
+            }
+        };
+    }
+
+    public function test_passes_job_through_without_job_level_throttle(): void
+    {
+        $job = $this->fakeJob();
+        $ran = false;
+
+        (new BlizzardRateLimiter)->handle($job, function () use (&$ran) {
+            $ran = true;
+        });
+
+        $this->assertTrue($ran);
+        $this->assertSame([], $job->released);
+    }
+
+    public function test_429_releases_with_retry_after_and_records_hit(): void
+    {
+        Cache::flush();
+        $job = $this->fakeJob();
+
+        $exception = new RequestException(new Response(new Psr7Response(429, ['Retry-After' => '7'])));
+
+        (new BlizzardRateLimiter)->handle($job, function () use ($exception) {
+            throw $exception;
+        });
+
+        $this->assertSame([7], $job->released);
+        $this->assertSame(1, (int) Cache::get('blizzard:429-count'));
+    }
+
+    public function test_throttle_timeout_releases_job_without_burning_attempts(): void
+    {
+        // A request that can't get an HTTP slot within the block window bubbles
+        // up as BlizzardThrottleTimeoutException — re-queue, don't fail the job.
+        $job = $this->fakeJob();
+
+        (new BlizzardRateLimiter)->handle($job, function () {
+            throw new BlizzardThrottleTimeoutException('no slot');
+        });
+
+        $this->assertSame([10], $job->released);
     }
 }

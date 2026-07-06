@@ -9,8 +9,11 @@ use App\Blizzard\Client\BlizzardGameDataClient;
 use App\Blizzard\Client\BlizzardProfileClient;
 use App\Blizzard\Client\BlizzardUserClient;
 use App\Blizzard\Contracts\TokenManagerInterface;
+use App\Blizzard\Support\BlizzardHttpThrottle;
 use Illuminate\Cache\CacheManager;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\ServiceProvider;
+use Psr\Http\Message\RequestInterface;
 
 class BlizzardServiceProvider extends ServiceProvider
 {
@@ -49,6 +52,17 @@ class BlizzardServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        //
+        // Request-level rate limit: one throttle slot per real HTTP request to
+        // api.blizzard.com. Hooking the client factory covers everything —
+        // request()-built calls, Http::pool() fan-outs, the direct Http calls
+        // in BlizzardGameDataClient, and per-attempt 5xx retries — while OAuth
+        // traffic (battle.net host) passes untouched.
+        Http::globalRequestMiddleware(function (RequestInterface $request) {
+            if (str_ends_with($request->getUri()->getHost(), '.api.blizzard.com')) {
+                $this->app->make(BlizzardHttpThrottle::class)->acquire();
+            }
+
+            return $request;
+        });
     }
 }

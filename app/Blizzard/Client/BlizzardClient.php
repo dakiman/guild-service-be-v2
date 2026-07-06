@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Blizzard\Client;
 
 use App\Blizzard\Contracts\TokenManagerInterface;
+use App\Blizzard\Exceptions\BlizzardThrottleTimeoutException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Http;
@@ -36,6 +37,12 @@ abstract class BlizzardClient
             ->timeout($this->timeout())
             ->connectTimeout(5)
             ->retry(config('blizzard.http.retry_backoff_ms', [100, 500]), 0, function (\Exception $exception, PendingRequest $request) {
+                // A throttle-slot timeout already waited block_seconds; retrying
+                // would block again. Fail fast so the job middleware releases.
+                if ($exception instanceof BlizzardThrottleTimeoutException) {
+                    return false;
+                }
+
                 if ($exception instanceof RequestException) {
                     $status = $exception->response->status();
 

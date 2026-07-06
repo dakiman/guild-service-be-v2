@@ -921,9 +921,21 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                     });
             }
 
+            $cap = max(0, (int) config('blizzard.crawl.max_teammates_per_seed', 10));
+
             $dispatched = 0;
+            $skippedFresh = 0;
+            $skippedCap = 0;
             foreach ($targets as $key => $t) {
                 if (isset($freshKeys[$key])) {
+                    $skippedFresh++;
+
+                    continue;
+                }
+
+                if ($dispatched >= $cap) {
+                    $skippedCap++;
+
                     continue;
                 }
 
@@ -942,7 +954,8 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 'seed' => "{$this->name}-{$this->realm}-{$this->region}",
                 'seed_crawl_depth' => $this->crawlDepth,
                 'teammates_dispatched' => $dispatched,
-                'teammates_skipped_fresh' => count($targets) - $dispatched,
+                'teammates_skipped_fresh' => $skippedFresh,
+                'teammates_skipped_cap' => $skippedCap,
             ]);
         } catch (Throwable $e) {
             Log::warning('Failed to dispatch teammate crawl', [

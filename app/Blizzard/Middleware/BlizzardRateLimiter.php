@@ -4,39 +4,36 @@ declare(strict_types=1);
 
 namespace App\Blizzard\Middleware;
 
+use App\Blizzard\Exceptions\BlizzardThrottleTimeoutException;
 use Closure;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Redis;
 
+/**
+ * Rate limiting itself lives at the HTTP layer (BlizzardHttpThrottle — one
+ * slot per real request to api.blizzard.com). This middleware owns the
+ * failure handling: 429 → release + circuit-breaker accounting, and a
+ * throttle-slot timeout → plain release, neither burning an attempts budget.
+ */
 class BlizzardRateLimiter
 {
     public function handle(object $job, Closure $next): void
     {
-        Redis::throttle('blizzard-api')
-            ->allow((int) config('blizzard.rate_limit.per_second', 10))
-            ->every(1)
-            ->block(30)
-            ->then(
-                function () use ($job, $next) {
-                    try {
-                        $next($job);
-                    } catch (RequestException $e) {
-                        if ($e->response?->status() === 429) {
-                            $retryAfter = (int) ($e->response->header('Retry-After') ?: 10);
-                            $job->release($retryAfter);
+        try {
+            $next($job);
+        } catch (RequestException $e) {
+            if ($e->response?->status() === 429) {
+                $retryAfter = (int) ($e->response->header('Retry-After') ?: 10);
+                $job->release($retryAfter);
 
-                            $this->recordRateLimitHit();
+                $this->recordRateLimitHit();
 
-                            return;
-                        }
-                        throw $e;
-                    }
-                },
-                function () use ($job) {
-                    $job->release(10);
-                },
-            );
+                return;
+            }
+            throw $e;
+        } catch (BlizzardThrottleTimeoutException) {
+            $job->release(10);
+        }
     }
 
     private function recordRateLimitHit(): void

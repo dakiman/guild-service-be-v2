@@ -264,6 +264,22 @@ final class SyncCharacterDataTeammateCrawlTest extends TestCase
         Bus::assertDispatched(SyncCharacterData::class, fn ($d) => $d->name === 'matetwo');
     }
 
+    public function test_fanout_capped_at_max_teammates_per_seed(): void
+    {
+        // 2026-07-06 follow-up: uncapped crawl fan-out regenerated a 34k-job
+        // backlog in an hour. Each seed may dispatch at most N teammates.
+        Config::set('blizzard.crawl.max_teammates_per_seed', 2);
+
+        $seed = $this->makeSeedWithRun(); // 4 stale teammates available
+
+        Bus::fake();
+
+        $job = new SyncCharacterData('eu', 'the-maelstrom', 'seedy', SyncDepth::Full, null, 0);
+        $this->invokeCrawl($job, $seed);
+
+        Bus::assertDispatchedTimes(SyncCharacterData::class, 2);
+    }
+
     public function test_max_depth_clamped_to_2(): void
     {
         Config::set('blizzard.crawl.max_depth', 999);

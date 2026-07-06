@@ -112,11 +112,15 @@ return [
     | are clamped to 2 in the dispatch path; production should not exceed 1.
     | `recent_threshold` (seconds) skips teammates whose `updated_at` is fresher
     | than this window (same column `Character::isStale()` consults).
+    | `max_teammates_per_seed` caps dispatches per seed: uncapped, one Full seed
+    | fans out to every M+ teammate on record (dozens) — generation outran the
+    | API budget and regrew a 34k-job backlog within an hour (2026-07-06).
     */
 
     'crawl' => [
         'max_depth' => (int) env('BLIZZARD_CRAWL_MAX_DEPTH', 1),
         'recent_threshold' => (int) env('BLIZZARD_CRAWL_RECENT_THRESHOLD', 604800),
+        'max_teammates_per_seed' => (int) env('BLIZZARD_CRAWL_MAX_TEAMMATES_PER_SEED', 10),
     ],
 
     /*
@@ -162,15 +166,16 @@ return [
     */
 
     'rate_limit' => [
-        // NOTE: BlizzardRateLimiter throttles JOBS, not HTTP requests, and one
-        // job makes many Blizzard calls (a Full character sync ≈ 15-25). Blizzard's
-        // ceiling is ~100 req/s, so the job rate must be budget ÷ avg-calls-per-job.
-        // The old default of 80 jobs/s allowed >1000 req/s worst case. 10 keeps the
-        // common Shallow/Standard mix comfortably under budget; tune via env for a
-        // Full-heavy workload. (P2.4 — proper fix is to move throttling into the
-        // HTTP client so it counts real requests.)
-        'per_second' => (int) env('BLIZZARD_RATE_LIMIT_PER_SECOND', 10),
-        'per_hour' => 30000,
+        // Request-level throttle (BlizzardHttpThrottle): one slot per real HTTP
+        // request to api.blizzard.com, acquired via global request middleware —
+        // covers request()-built calls, Http::pool() fan-outs, direct Http calls,
+        // and 5xx retries alike. Blizzard allows ~100 req/s burst but only
+        // 36,000 req/hour (= 10/s sustained); the default stays under that.
+        // <= 0 disables the throttle (tests). Replaced the job-level throttle
+        // that counted jobs, not calls, and flapped the circuit (2026-07-06).
+        'requests_per_second' => (int) env('BLIZZARD_RATE_LIMIT_REQUESTS_PER_SECOND', 8),
+        // How long a request may wait for a slot before the job is released.
+        'block_seconds' => (int) env('BLIZZARD_RATE_LIMIT_BLOCK_SECONDS', 30),
         'circuit_breaker' => [
             'threshold' => (int) env('BLIZZARD_CIRCUIT_BREAKER_THRESHOLD', 10),
             'window' => 120,
