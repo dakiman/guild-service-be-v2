@@ -39,13 +39,17 @@ class GuildService
     }
 
     /**
-     * @return array{recently_searched: Collection, most_popular: Collection}
+     * Cached values must be plain arrays: cache.serializable_classes is false,
+     * so objects (e.g. Eloquent Collections) come back from Redis as
+     * __PHP_Incomplete_Class and 500 every cache-hit request.
+     *
+     * @return array{recently_searched: array, most_popular: array}
      */
     public function getPopular(): array
     {
         return Cache::remember('guilds:popular', 30, fn () => [
-            'recently_searched' => Guild::recentlySearched(5)->get(),
-            'most_popular' => Guild::mostPopular(5)->get(),
+            'recently_searched' => $this->summarize(Guild::recentlySearched(5)->get()),
+            'most_popular' => $this->summarize(Guild::mostPopular(5)->get()),
         ]);
     }
 

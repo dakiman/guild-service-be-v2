@@ -9,7 +9,6 @@ use App\Exceptions\EntityNotFoundException;
 use App\Http\Resources\GuildMemberResource;
 use App\Http\Resources\GuildResource;
 use App\Http\Resources\GuildSuggestionResource;
-use App\Http\Resources\GuildSummaryResource;
 use App\Models\Guild;
 use App\Services\GuildService;
 use App\Support\BlizzardIdentity;
@@ -81,12 +80,7 @@ class GuildController extends Controller
 
     public function popular(GuildService $service): JsonResponse
     {
-        $data = $service->getPopular();
-
-        return response()->json([
-            'recently_searched' => GuildSummaryResource::collection($data['recently_searched']),
-            'most_popular' => GuildSummaryResource::collection($data['most_popular']),
-        ]);
+        return response()->json($service->getPopular());
     }
 
     public function suggest(Request $request): JsonResponse

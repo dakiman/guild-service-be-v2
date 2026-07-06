@@ -9,7 +9,6 @@ use App\Enums\SyncDepth;
 use App\Exceptions\EntityNotFoundException;
 use App\Http\Resources\CharacterResource;
 use App\Http\Resources\CharacterSuggestionResource;
-use App\Http\Resources\CharacterSummaryResource;
 use App\Models\Character;
 use App\Services\CharacterService;
 use App\Support\BlizzardIdentity;
@@ -70,12 +69,7 @@ class CharacterController extends Controller
 
     public function popular(CharacterService $service): JsonResponse
     {
-        $data = $service->getPopular();
-
-        return response()->json([
-            'recently_searched' => CharacterSummaryResource::collection($data['recently_searched']),
-            'most_popular' => CharacterSummaryResource::collection($data['most_popular']),
-        ]);
+        return response()->json($service->getPopular());
     }
 
     public function suggest(Request $request): JsonResponse

@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Blizzard\Jobs\SyncCharacterData;
 use App\Enums\SyncDepth;
 use App\Exceptions\EntityNotFoundException;
+use App\Http\Resources\CharacterSummaryResource;
 use App\Models\Character;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -53,14 +54,25 @@ class CharacterService
     }
 
     /**
-     * @return array{recently_searched: Collection, most_popular: Collection}
+     * Cached values must be plain arrays: cache.serializable_classes is false,
+     * so objects (e.g. Eloquent Collections) come back from Redis as
+     * __PHP_Incomplete_Class and 500 every cache-hit request.
+     *
+     * @return array{recently_searched: array, most_popular: array}
      */
     public function getPopular(): array
     {
         return Cache::remember('characters:popular', 30, fn () => [
-            'recently_searched' => Character::recentlySearched(5)->get(),
-            'most_popular' => Character::mostPopular(5)->get(),
+            'recently_searched' => $this->summarize(Character::recentlySearched(5)->get()),
+            'most_popular' => $this->summarize(Character::mostPopular(5)->get()),
         ]);
+    }
+
+    private function summarize(Collection $characters): array
+    {
+        $request = request();
+
+        return $characters->map(fn (Character $c) => (new CharacterSummaryResource($c))->toArray($request))->all();
     }
 
     public function toggleRecruitment(Character $character): Character
