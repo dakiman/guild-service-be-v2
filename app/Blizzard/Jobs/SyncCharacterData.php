@@ -27,6 +27,7 @@ use App\Blizzard\Mappers\RaidEncounterKillMapper;
 use App\Blizzard\Middleware\BlizzardHealthCheck;
 use App\Blizzard\Middleware\BlizzardRateLimiter;
 use App\Enums\SyncDepth;
+use App\Enums\SyncOrigin;
 use App\Models\Character;
 use App\Models\CharacterAchievement;
 use App\Models\CharacterMount;
@@ -83,11 +84,14 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         // Readonly props can't have property-declaration defaults — only constructor
         // defaults — and constructors don't run on unserialize.
         public bool $forceTeammateCrawl = false,
+        // Same unserialize-safety pattern. Origin decides the queue lane —
+        // never infer routing from crawlDepth/depth (that inference is how
+        // roster fan-out flooded blizzard-user-sync on 2026-07-06). Old-shape
+        // jobs rehydrate as UserLookup, which is harmless: their queue was
+        // already fixed in the payload at dispatch time.
+        public SyncOrigin $origin = SyncOrigin::UserLookup,
     ) {
-        // Crawled teammate jobs (crawlDepth > 0) land on the lowest-priority queue
-        // so they cannot starve user-initiated lookups. Seed (crawlDepth=0) keeps
-        // the existing user-sync queue assignment.
-        $this->onQueue($crawlDepth > 0 ? 'blizzard-background' : 'blizzard-user-sync');
+        $this->onQueue($origin->queue());
     }
 
     public function uniqueId(): string
@@ -99,6 +103,20 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         $mode = $this->forceTeammateCrawl ? 'force' : 'auto';
 
         return "sync-char:{$this->region}:{$this->realm}:{$this->name}:{$this->depth->value}:{$mode}";
+    }
+
+    /**
+     * Horizon tags: make queue floods attributable to their origin in the
+     * dashboard (Monitoring → search "origin:roster-fanout").
+     *
+     * @return array<int, string>
+     */
+    public function tags(): array
+    {
+        return [
+            "origin:{$this->origin->value}",
+            "character:{$this->region}:{$this->realm}:{$this->name}",
+        ];
     }
 
     /**
@@ -260,6 +278,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 name: $this->name,
                 depth: SyncDepth::Full,
                 forceTeammateCrawl: true,
+                origin: $this->origin,
             );
         }
 
@@ -909,12 +928,12 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 }
 
                 self::dispatch(
-                    $t['region'],
-                    $t['realm'],
-                    $t['name'],
-                    SyncDepth::Full,
-                    null,
-                    $this->crawlDepth + 1,
+                    region: $t['region'],
+                    realm: $t['realm'],
+                    name: $t['name'],
+                    depth: SyncDepth::Full,
+                    crawlDepth: $this->crawlDepth + 1,
+                    origin: SyncOrigin::TeammateCrawl,
                 );
                 $dispatched++;
             }
