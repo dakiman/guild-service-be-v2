@@ -8,6 +8,7 @@ use App\Models\Character;
 use App\Models\RaidEncounterKill;
 use Database\Seeders\GameDataExpansionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Defer\DeferredCallbackCollection;
 use Tests\TestCase;
 
 class RaidKillStatsControllerTest extends TestCase
@@ -163,6 +164,55 @@ class RaidKillStatsControllerTest extends TestCase
     {
         $response = $this->getJson('/api/v1/stats/characters/raid-kills?difficulty=impossible');
         $response->assertUnprocessable();
+    }
+
+    public function test_serves_stale_then_refreshes_within_grace_window(): void
+    {
+        $character = Character::factory()->create(['class_id' => 1, 'level' => 90]);
+
+        RaidEncounterKill::factory()->create([
+            'character_id' => $character->id,
+            'expansion_name' => 'Midnight',
+            'instance_id' => 1234,
+            'instance_name' => 'The Voidspire',
+            'encounter_id' => 5678,
+            'encounter_name' => 'Voidlord Xareth',
+            'difficulty' => 'heroic',
+            'completed_count' => 10,
+        ]);
+
+        // 1st request caches result A (one boss).
+        $first = $this->getJson('/api/v1/stats/characters/raid-kills?difficulty=heroic');
+        $first->assertOk();
+        $this->assertCount(1, $first->json('raids.0.bosses'));
+
+        // A second boss kill lands.
+        RaidEncounterKill::factory()->create([
+            'character_id' => $character->id,
+            'expansion_name' => 'Midnight',
+            'instance_id' => 1234,
+            'instance_name' => 'The Voidspire',
+            'encounter_id' => 5679,
+            'encounter_name' => 'Shadow Weaver',
+            'difficulty' => 'heroic',
+            'completed_count' => 3,
+        ]);
+
+        // Advance into the stale grace window (3300 < 3400 < 3600).
+        $this->travel(3400)->seconds();
+
+        // 2nd request serves the STALE cached A and schedules a refresh.
+        $second = $this->getJson('/api/v1/stats/characters/raid-kills?difficulty=heroic');
+        $second->assertOk();
+        $this->assertCount(1, $second->json('raids.0.bosses'), 'stale value should still be served');
+
+        // Flush any deferred refresh callbacks that did not run on terminate.
+        app(DeferredCallbackCollection::class)->invoke();
+
+        // 3rd request serves the refreshed B (both bosses).
+        $third = $this->getJson('/api/v1/stats/characters/raid-kills?difficulty=heroic');
+        $third->assertOk();
+        $this->assertCount(2, $third->json('raids.0.bosses'), 'refreshed value should be served');
     }
 
     public function test_returns_empty_raids_when_no_data(): void

@@ -10,12 +10,30 @@ use Illuminate\Support\Facades\DB;
 
 class RaidKillStatsService
 {
+    /** Difficulties the FE heatmap offers — kept warm by WarmRaidKillStats. */
+    public const WARM_DIFFICULTIES = ['normal', 'heroic', 'mythic'];
+
     public function getByDifficulty(string $difficulty, string $expansion = 'current'): array
     {
         $resolvedExpansion = $this->resolveExpansion($expansion);
         $cacheKey = "stats:raid-kills:{$difficulty}:{$resolvedExpansion}";
 
-        return Cache::remember($cacheKey, 600, fn () => $this->compute($difficulty, $resolvedExpansion));
+        // SWR: fresh for 55 min, then stale-served (up to 60 min) while one
+        // deferred refresh recomputes — the ~5s aggregate over 96M-row
+        // raid_encounter_kills must never run inline in a user request.
+        return Cache::flexible($cacheKey, [3300, 3600], fn () => $this->compute($difficulty, $resolvedExpansion));
+    }
+
+    public function warm(): void
+    {
+        $resolvedExpansion = $this->resolveExpansion('current');
+
+        foreach (self::WARM_DIFFICULTIES as $difficulty) {
+            // forget() first so flexible() recomputes and restamps its
+            // created-at bookkeeping key instead of serving the old value.
+            Cache::forget("stats:raid-kills:{$difficulty}:{$resolvedExpansion}");
+            $this->getByDifficulty($difficulty);
+        }
     }
 
     private function resolveExpansion(string $expansion): string
@@ -34,13 +52,23 @@ class RaidKillStatsService
 
     private function getAvailableExpansions(): array
     {
-        return Cache::remember('stats:raid-kills:expansions', 600, function () {
-            return DB::table('raid_encounter_kills')
-                ->select('expansion_name')
-                ->distinct()
-                ->orderBy('expansion_name')
-                ->pluck('expansion_name')
-                ->all();
+        // Loose index scan: Postgres can't skip-scan a btree for DISTINCT, so
+        // a plain SELECT DISTINCT walks all ~96M rows (~20s). Chained MIN()
+        // probes on the (expansion_name, difficulty) index return the same
+        // list in milliseconds; the list only changes when a new expansion's
+        // kills first appear, hence the 24h TTL.
+        return Cache::remember('stats:raid-kills:expansions', 86400, function () {
+            $rows = DB::select(<<<'SQL'
+                WITH RECURSIVE exps(name) AS (
+                    SELECT MIN(expansion_name) FROM raid_encounter_kills
+                    UNION ALL
+                    SELECT (SELECT MIN(expansion_name) FROM raid_encounter_kills WHERE expansion_name > exps.name)
+                    FROM exps WHERE exps.name IS NOT NULL
+                )
+                SELECT name FROM exps WHERE name IS NOT NULL ORDER BY name
+            SQL);
+
+            return array_map(fn (object $row) => $row->name, $rows);
         });
     }
 

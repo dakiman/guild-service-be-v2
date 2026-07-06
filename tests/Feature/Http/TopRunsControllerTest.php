@@ -185,6 +185,60 @@ class TopRunsControllerTest extends TestCase
         $this->assertEquals(15, $data[0]['keystone_level']);
     }
 
+    public function test_second_identical_request_is_served_from_cache(): void
+    {
+        DungeonRun::factory()->create([
+            'keystone_level' => 15,
+            'is_completed_on_time' => true,
+        ]);
+
+        $first = $this->getJson('/api/v1/stats/characters/top-runs');
+        $first->assertOk();
+        $this->assertEquals(15, $first->json('data.0.keystone_level'));
+
+        // A better run lands; a fresh-cached response must not see it yet.
+        DungeonRun::factory()->create([
+            'keystone_level' => 30,
+            'is_completed_on_time' => true,
+        ]);
+
+        $second = $this->getJson('/api/v1/stats/characters/top-runs');
+        $second->assertOk();
+        $this->assertEquals(15, $second->json('data.0.keystone_level'), 'fresh cache hit should serve the cached page');
+    }
+
+    public function test_cache_key_varies_by_page_and_dungeon_filter(): void
+    {
+        DungeonRun::factory()->create([
+            'dungeon_id' => 100,
+            'dungeon_name' => 'Mechagon City',
+            'keystone_level' => 20,
+            'is_completed_on_time' => true,
+        ]);
+        DungeonRun::factory()->create([
+            'dungeon_id' => 200,
+            'dungeon_name' => 'City of Threads',
+            'keystone_level' => 22,
+            'is_completed_on_time' => true,
+        ]);
+
+        // Prime the unfiltered page-1 cache.
+        $unfiltered = $this->getJson('/api/v1/stats/characters/top-runs?per_page=1');
+        $unfiltered->assertOk();
+        $this->assertEquals(200, $unfiltered->json('data.0.dungeon_id'));
+
+        // Different dungeon filter must not be served the unfiltered payload.
+        $filtered = $this->getJson('/api/v1/stats/characters/top-runs?per_page=1&dungeon_id=100');
+        $filtered->assertOk();
+        $this->assertEquals(100, $filtered->json('data.0.dungeon_id'));
+
+        // Different page must not be served the page-1 payload.
+        $pageTwo = $this->getJson('/api/v1/stats/characters/top-runs?per_page=1&page=2');
+        $pageTwo->assertOk();
+        $this->assertEquals(100, $pageTwo->json('data.0.dungeon_id'));
+        $this->assertEquals(2, $pageTwo->json('current_page'));
+    }
+
     public function test_orders_by_keystone_level_desc_then_duration_asc(): void
     {
         $char = Character::factory()->create(['class_id' => 1]);

@@ -6,6 +6,7 @@ use App\Blizzard\Jobs\ProactiveSyncCharacters;
 use App\Blizzard\Jobs\ProactiveSyncGuilds;
 use App\Http\Middleware\ForceJsonResponse;
 use App\Jobs\WarmCharacterStats;
+use App\Jobs\WarmRaidKillStats;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -22,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('blizzard:token')->twiceDaily()->withoutOverlapping();
         $schedule->command('horizon:snapshot')->everyFiveMinutes();
         $schedule->job(new WarmCharacterStats)->everyFiveMinutes()->withoutOverlapping();
+        $schedule->job(new WarmRaidKillStats)->everyThirtyMinutes()->withoutOverlapping();
         $schedule->job(new ProactiveSyncCharacters(tier: 1))->dailyAt('05:00')->withoutOverlapping();
         $schedule->job(new ProactiveSyncCharacters(tier: 2))->weeklyOn(0, '06:00')->withoutOverlapping();
         $schedule->job(new ProactiveSyncGuilds)->weeklyOn(0, '04:00')->withoutOverlapping();
