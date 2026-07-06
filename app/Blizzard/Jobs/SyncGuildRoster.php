@@ -30,6 +30,9 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
 
     public int $uniqueFor = 60;
 
+    /** Running index across BOTH the Shallow and Full fan-out loops. */
+    private int $fanoutIndex = 0;
+
     public function __construct(
         public readonly Guild $guild,
         // Non-readonly with property-default so unserialize of old-shape queued
@@ -122,13 +125,17 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
                 continue;
             }
 
-            SyncCharacterData::dispatch(
+            $delay = $this->nextFanoutDelaySeconds();
+            $pending = SyncCharacterData::dispatch(
                 region: $this->guild->region,
                 realm: $member->realm,
                 name: $member->name,
                 depth: SyncDepth::Shallow,
                 origin: SyncOrigin::RosterFanout,
             );
+            if ($delay > 0) {
+                $pending->delay($delay);
+            }
         }
 
         if ($fullPathActive) {
@@ -189,7 +196,8 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
                 continue;
             }
 
-            SyncCharacterData::dispatch(
+            $delay = $this->nextFanoutDelaySeconds();
+            $pending = SyncCharacterData::dispatch(
                 region: $this->guild->region,
                 realm: $member->realm,
                 name: $member->name,
@@ -199,7 +207,23 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
                 forceTeammateCrawl: $this->forceFanout,
                 origin: SyncOrigin::RosterFanout,
             );
+            if ($delay > 0) {
+                $pending->delay($delay);
+            }
         }
+    }
+
+    /**
+     * Progressive delay (seconds) for the next fan-out dispatch: job i runs
+     * at ~i/jobs_per_minute minutes. retryUntil (6h) is stamped at dispatch,
+     * so the stagger must stay well under it — at the default 30/min even a
+     * 1000-member roster spreads over ~33 min.
+     */
+    private function nextFanoutDelaySeconds(): int
+    {
+        $perMinute = max(1, (int) config('blizzard.roster_fanout.jobs_per_minute', 30));
+
+        return intdiv($this->fanoutIndex++ * 60, $perMinute);
     }
 
     public function failed(Throwable $exception): void

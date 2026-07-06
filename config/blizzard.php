@@ -178,6 +178,14 @@ return [
         ],
     ],
 
+    'roster_fanout' => [
+        // Per-member fan-out dispatch rate. A 600-member cold guild spreads
+        // over ~20 min at the default instead of landing at once — bounds the
+        // burst so a guild visit can't monopolize the Blizzard rate budget or
+        // churn jobs into their 6h retryUntil ceiling (2026-07-06 die-off).
+        'jobs_per_minute' => (int) env('BLIZZARD_ROSTER_FANOUT_JOBS_PER_MINUTE', 30),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | OAuth (Battle.net)
