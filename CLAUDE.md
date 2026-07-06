@@ -40,7 +40,7 @@ Self-contained, registered via `BlizzardServiceProvider`.
 - `dynamic-{region}` → mythic-keystone seasons / leaderboards / dungeon detail.
 - `static-{region}` → game-data (achievements, mounts, titles, factions, talents, items, races, journal-instance, keystone-affix). `BlizzardGameDataClient::getTalentTree()` and `getFactionIndex/getFaction` bypass `request()` and call `Http` directly.
 
-**Jobs/** — `ShouldQueue` + `ShouldBeUnique` (60s). `$tries = 15` / `$maxExceptions = 3` with backoff [30, 120, 300]s. Middleware (order matters): `BlizzardHealthCheck` (pauses all jobs for 60s when `blizzard:unhealthy` is set) **then** `BlizzardRateLimiter` (Redis throttle, catches 429 → non-blocking `$job->release($retryAfter)`, auto-trips circuit breaker after 10 hits in 2 min). The throttle counts **jobs, not HTTP requests** — a Full sync makes ~15-25 calls, so `rate_limit.per_second` is budgeted low (default **10**, env `BLIZZARD_RATE_LIMIT_PER_SECOND`); proper fix is to move throttling into the HTTP client (TODO). Full sync strategy: `docs/sync-strategy.md`.
+**Jobs/** — `ShouldQueue` + `ShouldBeUnique` (60s). time-bounded retries (`retryUntil()` 6h + `$maxExceptions = 3`, backoff [30, 120, 300]s) — middleware `release()` re-queues without burning an attempts budget, but a flooded queue can still churn a job past its 6h window. Middleware (order matters): `BlizzardHealthCheck` (pauses all jobs for 60s when `blizzard:unhealthy` is set) **then** `BlizzardRateLimiter` (Redis throttle, catches 429 → non-blocking `$job->release($retryAfter)`, auto-trips circuit breaker after 10 hits in 2 min). The throttle counts **jobs, not HTTP requests** — a Full sync makes ~15-25 calls, so `rate_limit.per_second` is budgeted low (default **10**, env `BLIZZARD_RATE_LIMIT_PER_SECOND`); proper fix is to move throttling into the HTTP client (TODO). Full sync strategy: `docs/sync-strategy.md`.
 
 **Mappers/** — raw Blizzard JSON → readonly DTOs, one per data type. **DTOs** are readonly w/ constructor promotion; only fields we use.
 
@@ -102,6 +102,8 @@ Sanctum bearer tokens (issued on register/login, deleted on logout). Blizzard OA
 2. `blizzard-user-sync` — user-initiated lookups
 3. `blizzard-roster-sync` — guild roster fan-out
 4. `blizzard-background` — proactive sync
+
+`SyncCharacterData` routing is declared via the `SyncOrigin` enum (`app/Enums/SyncOrigin.php`) — UserLookup → user-sync, RosterFanout → roster-sync, TeammateCrawl/Proactive → background. Never infer lanes from `crawlDepth`/`depth`. Roster fan-out is staggered at `blizzard.roster_fanout.jobs_per_minute` (default 30) so a cold guild can't flood a lane or churn jobs into `retryUntil`.
 
 ### Staleness model
 
