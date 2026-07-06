@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Blizzard\Jobs;
 
 use App\Enums\SyncDepth;
+use App\Enums\SyncOrigin;
 use App\Models\Character;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -53,6 +54,7 @@ class ProactiveSyncCharacters implements ShouldBeUnique, ShouldQueue
                 realm: $character->realm,
                 name: $character->name,
                 depth: $this->tier === 1 ? SyncDepth::Full : SyncDepth::Standard,
+                origin: SyncOrigin::Proactive,
             );
         });
     }

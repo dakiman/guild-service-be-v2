@@ -7,6 +7,7 @@ namespace App\Blizzard\Jobs;
 use App\Blizzard\Middleware\BlizzardHealthCheck;
 use App\Blizzard\Middleware\BlizzardRateLimiter;
 use App\Enums\SyncDepth;
+use App\Enums\SyncOrigin;
 use App\Models\Character;
 use App\Models\Guild;
 use Illuminate\Bus\Queueable;
@@ -126,6 +127,7 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
                 realm: $member->realm,
                 name: $member->name,
                 depth: SyncDepth::Shallow,
+                origin: SyncOrigin::RosterFanout,
             );
         }
 
@@ -195,6 +197,7 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
                 userId: null,
                 crawlDepth: 0,
                 forceTeammateCrawl: $this->forceFanout,
+                origin: SyncOrigin::RosterFanout,
             );
         }
     }
