@@ -28,6 +28,10 @@ class PruneSubmaxSlicesTest extends TestCase
             'game_version' => 'retail',
             'level' => $level,
             'stats' => ['health' => 12345],
+            'title_ids' => [53],
+            'reputations' => [
+                ['faction_id' => 2570, 'faction_name' => 'Hallowfall Arathi', 'standing' => 'revered', 'value' => 9000, 'max' => 21000],
+            ],
             'mythics_synced_at' => $now,
             'pvp_synced_at' => $now,
             'professions_synced_at' => $now,
@@ -72,6 +76,8 @@ class PruneSubmaxSlicesTest extends TestCase
         $this->assertNull($fresh->mythics_synced_at);
         $this->assertNull($fresh->achievements_synced_at);
         $this->assertNull($fresh->stats);
+        $this->assertNull($fresh->title_ids);
+        $this->assertNull($fresh->reputations);
         // The profile-sync clock must not be bumped by the prune.
         $this->assertTrue($fresh->updated_at->equalTo($originalUpdatedAt));
 
@@ -79,6 +85,8 @@ class PruneSubmaxSlicesTest extends TestCase
         $this->assertSame(1, RaidEncounterKill::where('character_id', $main->id)->count());
         $this->assertSame(1, DB::table('character_pvp_brackets')->where('character_id', $main->id)->count());
         $this->assertNotNull($main->fresh()->mythics_synced_at);
+        $this->assertNotNull($main->fresh()->title_ids);
+        $this->assertNotNull($main->fresh()->reputations);
     }
 
     public function test_dry_run_deletes_nothing(): void

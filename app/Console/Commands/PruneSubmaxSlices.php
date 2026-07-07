@@ -19,8 +19,6 @@ class PruneSubmaxSlices extends Command
         'character_pvp_brackets',
         'character_professions',
         'raid_encounter_kills',
-        'character_titles',
-        'character_reputations',
         'character_mounts',
         'character_pets',
         'character_toys',
@@ -84,7 +82,8 @@ class PruneSubmaxSlices extends Command
 
             // DB::table update: never bumps updated_at, the profile-sync clock.
             DB::table('characters')->whereIn('id', $ids)->update(
-                array_fill_keys(self::SLICE_TIMESTAMPS, null) + ['stats' => null],
+                array_fill_keys(self::SLICE_TIMESTAMPS, null)
+                    + ['stats' => null, 'title_ids' => null, 'reputations' => null],
             );
 
             $pruned += count($ids);
