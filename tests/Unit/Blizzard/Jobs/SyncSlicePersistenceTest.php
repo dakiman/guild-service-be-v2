@@ -7,11 +7,13 @@ namespace Tests\Unit\Blizzard\Jobs;
 use App\Blizzard\Client\BlizzardProfileClient;
 use App\Blizzard\DTO\CharacterProfession;
 use App\Blizzard\DTO\CharacterReputation;
+use App\Blizzard\DTO\CharacterTitle;
 use App\Blizzard\DTO\PvpBracketStats;
 use App\Blizzard\DTO\RaidEncounterKill;
 use App\Blizzard\Jobs\SyncCharacterData;
 use App\Blizzard\Mappers\CharacterProfessionMapper;
 use App\Blizzard\Mappers\CharacterReputationMapper;
+use App\Blizzard\Mappers\CharacterTitleMapper;
 use App\Blizzard\Mappers\PvpBracketStatsMapper;
 use App\Blizzard\Mappers\RaidEncounterKillMapper;
 use App\Enums\SyncDepth;
@@ -214,17 +216,45 @@ final class SyncSlicePersistenceTest extends TestCase
             new CharacterReputation(2594, 'Hallowfall', 'Friendly', 3000, 6000),
         ]);
         $this->invoke('syncReputations', $client, $mapper, $character);
-        $this->assertSame(2, DB::table('character_reputations')->where('character_id', $character->id)->count());
+        $character->refresh();
+        $this->assertCount(2, $character->reputations);
 
         $mapper2 = $this->createMock(CharacterReputationMapper::class);
         $mapper2->method('map')->willReturn([
             new CharacterReputation(2570, 'Dornogal', 'Revered', 9000, 12000),
         ]);
         $this->invoke('syncReputations', $client, $mapper2, $character);
+        $character->refresh();
 
-        $this->assertSame(1, DB::table('character_reputations')->where('character_id', $character->id)->count());
-        $this->assertDatabaseMissing('character_reputations', ['character_id' => $character->id, 'faction_id' => 2594]);
-        $this->assertDatabaseHas('character_reputations', ['character_id' => $character->id, 'faction_id' => 2570, 'standing' => 'Revered', 'value' => 9000]);
+        $this->assertCount(1, $character->reputations);
+        $this->assertSame(2570, $character->reputations[0]['faction_id']);
+        $this->assertSame('Revered', $character->reputations[0]['standing']);
+        $this->assertSame(9000, $character->reputations[0]['value']);
+        $this->assertNotNull($character->reputations_synced_at);
+    }
+
+    public function test_titles_sync_writes_title_ids_jsonb_and_active_title(): void
+    {
+        $character = Character::factory()->create();
+        $client = $this->createStub(BlizzardProfileClient::class);
+        $client->method('getCharacterTitles')->willReturn([]);
+
+        $mapper = $this->createMock(CharacterTitleMapper::class);
+        $mapper->method('map')->willReturn([
+            'titles' => [
+                new CharacterTitle(53, 'Bloodsail Admiral', '%s, Bloodsail Admiral'),
+                new CharacterTitle(205, 'the Patient', '%s the Patient'),
+            ],
+            'activeTitleId' => 205,
+        ]);
+
+        $this->invoke('syncTitles', $client, $mapper, $character);
+        $character->refresh();
+
+        $this->assertSame([53, 205], $character->title_ids);
+        $this->assertSame(205, $character->active_title_id);
+        $this->assertNotNull($character->titles_synced_at);
+        $this->assertDatabaseHas('game_data_titles', ['id' => 53]);
     }
 
     public function test_pvp_resync_prunes_and_updates(): void

@@ -34,7 +34,6 @@ use App\Models\CharacterMount;
 use App\Models\CharacterPet;
 use App\Models\CharacterProfession;
 use App\Models\CharacterPvpBracket;
-use App\Models\CharacterReputation;
 use App\Models\CharacterToy;
 use App\Models\DungeonRun;
 use App\Models\GameDataTitle;
@@ -655,9 +654,8 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                     GameDataTitle::insertOrIgnore($rows);
                 }
 
-                $character->titles()->sync($titleIds);
-
                 $character->update([
+                    'title_ids' => array_values($titleIds),
                     'active_title_id' => $activeTitleId !== null && in_array($activeTitleId, $titleIds, true)
                         ? $activeTitleId
                         : null,
@@ -682,25 +680,16 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $data = $client->getCharacterReputations($this->realm, $this->name);
             $dtos = $mapper->map($data);
 
-            DB::transaction(function () use ($character, $dtos) {
-                $rows = array_map(fn ($dto) => [
-                    'character_id' => $character->id,
+            $character->update([
+                'reputations' => array_map(fn ($dto) => [
                     'faction_id' => $dto->factionId,
                     'faction_name' => $dto->factionName,
                     'standing' => $dto->standing,
                     'value' => $dto->value,
                     'max' => $dto->max,
-                ], $dtos);
-
-                CharacterReputation::upsertMany($rows);
-
-                $keep = array_column($dtos, 'factionId');
-                CharacterReputation::where('character_id', $character->id)
-                    ->when($keep !== [], fn ($q) => $q->whereNotIn('faction_id', $keep))
-                    ->delete();
-
-                $character->update(['reputations_synced_at' => now()]);
-            });
+                ], $dtos),
+                'reputations_synced_at' => now(),
+            ]);
         } catch (Throwable $e) {
             $this->rethrowIfRateLimited($e);
             Log::warning('Failed to sync reputations for character', [
