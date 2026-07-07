@@ -253,7 +253,7 @@ return [
                 'maxProcesses' => 2,
                 'memory' => 128,
                 'tries' => 3,
-                'timeout' => 60,
+                'timeout' => 150,
             ],
             'raiderio-crawl' => [
                 'connection' => 'redis',
@@ -316,7 +316,7 @@ return [
                 'maxProcesses' => 1,
                 'memory' => 128,
                 'tries' => 3,
-                'timeout' => 60,
+                'timeout' => 150,
             ],
             'raiderio-crawl' => [
                 'connection' => 'redis',

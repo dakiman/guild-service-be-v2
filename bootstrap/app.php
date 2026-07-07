@@ -22,7 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withSchedule(function (Schedule $schedule) {
         $schedule->command('blizzard:token')->twiceDaily()->withoutOverlapping();
         $schedule->command('horizon:snapshot')->everyFiveMinutes();
-        $schedule->job(new WarmCharacterStats)->everyFiveMinutes()->withoutOverlapping();
+        $schedule->job(new WarmCharacterStats)->hourly()->withoutOverlapping();
         $schedule->job(new WarmRaidKillStats)->everyThirtyMinutes()->withoutOverlapping();
         $schedule->job(new ProactiveSyncCharacters(tier: 1))->dailyAt('05:00')->withoutOverlapping();
         $schedule->job(new ProactiveSyncCharacters(tier: 2))->weeklyOn(0, '06:00')->withoutOverlapping();
