@@ -28,8 +28,8 @@ class SyncGuildRosterCharacterFanoutTest extends TestCase
     {
         config()->set('raiderio.dispatch_roster_character_syncs', true);
         config()->set('raiderio.character_resync_ttl', 3600);
-        // SyncGuildRoster reads min level from blizzard config; ensure factory level >= min.
-        config()->set('blizzard.min_level_for_character_lookup', 70);
+        // SyncGuildRoster fans out endgame members only; fixtures are level 90.
+        config()->set('blizzard.endgame_level', 90);
 
         $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill', 'name' => 'Echo']);
         GuildMember::create([
@@ -55,7 +55,7 @@ class SyncGuildRosterCharacterFanoutTest extends TestCase
     {
         config()->set('raiderio.dispatch_roster_character_syncs', true);
         config()->set('raiderio.character_resync_ttl', 3600);
-        config()->set('blizzard.min_level_for_character_lookup', 70);
+        config()->set('blizzard.endgame_level', 90);
 
         $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill', 'name' => 'Echo']);
         GuildMember::create([
@@ -83,7 +83,7 @@ class SyncGuildRosterCharacterFanoutTest extends TestCase
     {
         config()->set('raiderio.dispatch_roster_character_syncs', true);
         config()->set('raiderio.character_resync_ttl', 3600);  // 1h TTL
-        config()->set('blizzard.min_level_for_character_lookup', 70);
+        config()->set('blizzard.endgame_level', 90);
 
         $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill', 'name' => 'Echo']);
         GuildMember::create([
@@ -106,7 +106,7 @@ class SyncGuildRosterCharacterFanoutTest extends TestCase
     public function test_skips_all_full_dispatches_when_flag_disabled(): void
     {
         config()->set('raiderio.dispatch_roster_character_syncs', false);
-        config()->set('blizzard.min_level_for_character_lookup', 70);
+        config()->set('blizzard.endgame_level', 90);
 
         $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill', 'name' => 'Echo']);
         GuildMember::create([
@@ -123,7 +123,7 @@ class SyncGuildRosterCharacterFanoutTest extends TestCase
     {
         config()->set('raiderio.dispatch_roster_character_syncs', false);
         config()->set('raiderio.character_resync_ttl', 3600);
-        config()->set('blizzard.min_level_for_character_lookup', 70);
+        config()->set('blizzard.endgame_level', 90);
 
         $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill', 'name' => 'Echo']);
         GuildMember::create([
@@ -136,6 +136,25 @@ class SyncGuildRosterCharacterFanoutTest extends TestCase
         (new SyncGuildRoster($guild, forceFanout: true))->handle();
 
         Bus::assertDispatched(SyncCharacterData::class, fn ($job) => $job->depth === SyncDepth::Full && $job->name === 'Alpha');
+    }
+
+    public function test_sub_endgame_member_gets_no_dispatch_at_all(): void
+    {
+        config()->set('raiderio.dispatch_roster_character_syncs', true);
+        config()->set('raiderio.character_resync_ttl', 3600);
+        config()->set('blizzard.endgame_level', 90);
+
+        $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill', 'name' => 'Echo']);
+        GuildMember::create([
+            'guild_id' => $guild->id, 'name' => 'Leveler', 'realm' => 'tarren-mill', 'level' => 89,
+            'class_id' => 1, 'race_id' => 1, 'rank' => 2,
+        ]);
+
+        (new SyncGuildRoster($guild))->handle();
+
+        // Fan-out is endgame-only: no Shallow, no Full — the member stays a
+        // roster row until they hit max level.
+        Bus::assertNotDispatched(SyncCharacterData::class, fn ($job) => $job->name === 'Leveler');
     }
 
     public function test_unique_id_distinguishes_force_fanout_from_auto(): void

@@ -48,6 +48,9 @@ class ProactiveSyncCharacters implements ShouldBeUnique, ShouldQueue
                 ->orWhere('last_login_at', '>=', now()->subDays(30));
         });
 
+        // Endgame-only: popular sub-max alts refresh solely on user lookup.
+        $query->where('level', '>=', (int) config('blizzard.endgame_level', 90));
+
         $query->each(function (Character $character) {
             SyncCharacterData::dispatch(
                 region: $character->region,

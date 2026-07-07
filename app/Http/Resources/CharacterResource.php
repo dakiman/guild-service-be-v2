@@ -82,6 +82,9 @@ class CharacterResource extends JsonResource
             'game_version' => $this->game_version ?? 'retail',
             'forced_refresh' => false,
             'sync_status' => $isSyncing ? 'syncing' : 'complete',
+            // 'full' = endgame, slices tracked; 'basic' = sub-max, profile-only.
+            // FE keys the below-max-level notice and tab gating off this.
+            'profile_tier' => $this->resource->isEndgame() ? 'full' : 'basic',
             'freshness' => $freshness,
             'feature_flags' => [
                 'achievements' => (bool) config('blizzard.sync.achievements_enabled'),

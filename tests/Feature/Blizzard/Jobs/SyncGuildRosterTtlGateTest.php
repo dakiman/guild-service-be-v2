@@ -23,7 +23,7 @@ class SyncGuildRosterTtlGateTest extends TestCase
         parent::setUp();
         Bus::fake();
         config()->set('raiderio.character_resync_ttl', 86400);
-        config()->set('blizzard.min_level_for_character_lookup', 70);
+        config()->set('blizzard.endgame_level', 90);
     }
 
     public function test_skips_shallow_and_full_for_fresh_member_when_force_fanout(): void

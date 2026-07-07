@@ -24,7 +24,7 @@ class SyncFanoutLaneRoutingTest extends TestCase
         parent::setUp();
         Bus::fake();
         config()->set('raiderio.character_resync_ttl', 86400);
-        config()->set('blizzard.min_level_for_character_lookup', 70);
+        config()->set('blizzard.endgame_level', 90);
     }
 
     public function test_roster_fanout_never_touches_the_user_sync_lane(): void

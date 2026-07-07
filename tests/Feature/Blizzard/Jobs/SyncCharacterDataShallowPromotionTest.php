@@ -69,6 +69,72 @@ class SyncCharacterDataShallowPromotionTest extends TestCase
         });
     }
 
+    public function test_standard_sync_promotes_max_level_never_fully_synced(): void
+    {
+        // A tracked sub-max character that dinged 90 gets a Standard dispatch
+        // from the lookup lane (its row still said 89). The sync writes the new
+        // level and must escalate to Full in the same pass — not Shallow-only.
+        Http::fake([
+            'eu.api.blizzard.com/*' => Http::response($this->profileResponse(level: 90), 200),
+        ]);
+
+        $job = new SyncCharacterData(
+            region: 'eu',
+            realm: 'tarren-mill',
+            name: 'dinged',
+            depth: SyncDepth::Standard,
+        );
+
+        app()->call([$job, 'handle']);
+
+        Bus::assertDispatched(SyncCharacterData::class, function (SyncCharacterData $dispatched) {
+            return $dispatched->name === 'dinged'
+                && $dispatched->depth === SyncDepth::Full
+                && $dispatched->forceTeammateCrawl === true;
+        });
+    }
+
+    public function test_shallow_sync_promotes_above_endgame_level(): void
+    {
+        // >= comparison: a raised level cap must not silently stop promotions.
+        Http::fake([
+            'eu.api.blizzard.com/*' => Http::response($this->profileResponse(level: 91), 200),
+        ]);
+
+        $job = new SyncCharacterData(
+            region: 'eu',
+            realm: 'tarren-mill',
+            name: 'capraise',
+            depth: SyncDepth::Shallow,
+        );
+
+        app()->call([$job, 'handle']);
+
+        Bus::assertDispatched(SyncCharacterData::class, function (SyncCharacterData $dispatched) {
+            return $dispatched->name === 'capraise' && $dispatched->depth === SyncDepth::Full;
+        });
+    }
+
+    public function test_standard_sync_skips_promotion_for_below_max_level(): void
+    {
+        Http::fake([
+            'eu.api.blizzard.com/*' => Http::response($this->profileResponse(level: 89), 200),
+        ]);
+
+        $job = new SyncCharacterData(
+            region: 'eu',
+            realm: 'tarren-mill',
+            name: 'almostthere',
+            depth: SyncDepth::Standard,
+        );
+
+        app()->call([$job, 'handle']);
+
+        Bus::assertNotDispatched(SyncCharacterData::class, function (SyncCharacterData $dispatched) {
+            return $dispatched->depth === SyncDepth::Full;
+        });
+    }
+
     public function test_shallow_sync_skips_promotion_for_below_max_level(): void
     {
         Http::fake([

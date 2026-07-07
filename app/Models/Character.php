@@ -233,11 +233,21 @@ class Character extends Model
 
     public function scopeEndgameActive(Builder $query): Builder
     {
-        return $query->where('level', config('blizzard.endgame_level', 90))
+        return $query->where('level', '>=', config('blizzard.endgame_level', 90))
             ->where(function (Builder $q) {
                 $q->whereHas('raidEncounterKills')
                     ->orWhereHas('dungeonRuns');
             });
+    }
+
+    /**
+     * Endgame characters get the Full slice treatment; everything below only
+     * ever receives Shallow/Standard syncs and profile-only freshness. A null
+     * level (shell row) casts to 0 — not endgame until a sync writes the level.
+     */
+    public function isEndgame(): bool
+    {
+        return (int) $this->level >= (int) config('blizzard.endgame_level', 90);
     }
 
     public function isStale(): bool
@@ -315,6 +325,13 @@ class Character extends Model
      */
     public function freshness(): array
     {
+        // Sub-endgame characters never sync slices, so slice keys are omitted
+        // wholesale — otherwise their null timestamps would read never_synced
+        // forever and isNeverSynced() would keep the API in 'syncing' state.
+        if (! $this->isEndgame()) {
+            return ['profile' => $this->freshnessFor('updated_at', 'profile')];
+        }
+
         $freshness = [
             'profile' => $this->freshnessFor('updated_at', 'profile'),
             'mythic_plus' => $this->freshnessFor('mythics_synced_at', 'mythic_plus'),

@@ -73,10 +73,11 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
 
     public function handle(): void
     {
-        $minLevel = (int) config('blizzard.min_level_for_character_lookup', 70);
-
+        // Fan-out is endgame-only: sub-max members stay roster rows (the guild
+        // page reads guild_members directly) and get a Character row only if
+        // someone looks them up.
         $members = $this->guild->members()
-            ->where('level', '>=', $minLevel)
+            ->where('level', '>=', (int) config('blizzard.endgame_level', 90))
             ->get();
 
         // Per-member SyncCharacterData::Full fan-out is gated by either:

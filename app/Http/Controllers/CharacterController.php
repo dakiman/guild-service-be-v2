@@ -41,15 +41,20 @@ class CharacterController extends Controller
             ], 202)->header('Retry-After', $queueDepth > 100 ? '30' : '10');
         }
 
-        $relations = ['guild', 'dungeonRuns.memberEntries', 'pvpBrackets', 'professions.expansion', 'raidEncounterKills', 'titles', 'reputations.faction.expansion'];
-        if (config('blizzard.sync.mounts_enabled')) {
-            $relations[] = 'mounts.gameData';
-        }
-        if (config('blizzard.sync.pets_enabled')) {
-            $relations[] = 'pets';
-        }
-        if (config('blizzard.sync.toys_enabled')) {
-            $relations[] = 'toys';
+        // Basic-tier (sub-endgame) characters have no slice rows — skip the
+        // slice eager-loads; whenLoaded omits those keys from the payload.
+        $relations = ['guild'];
+        if ($result->isEndgame()) {
+            $relations = ['guild', 'dungeonRuns.memberEntries', 'pvpBrackets', 'professions.expansion', 'raidEncounterKills', 'titles', 'reputations.faction.expansion'];
+            if (config('blizzard.sync.mounts_enabled')) {
+                $relations[] = 'mounts.gameData';
+            }
+            if (config('blizzard.sync.pets_enabled')) {
+                $relations[] = 'pets';
+            }
+            if (config('blizzard.sync.toys_enabled')) {
+                $relations[] = 'toys';
+            }
         }
         $result->load($relations);
 

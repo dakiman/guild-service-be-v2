@@ -80,11 +80,16 @@ class SyncUserCharacters implements ShouldQueue
                     continue;
                 }
 
+                // Full slice fan-out only for endgame characters; alts get
+                // Standard. Missing level → Standard, the in-job promotion
+                // escalates if the profile turns out to be endgame.
+                $isEndgame = (int) ($character['level'] ?? 0) >= (int) config('blizzard.endgame_level', 90);
+
                 SyncCharacterData::dispatch(
                     region: $this->region,
                     realm: $realm,
                     name: $name,
-                    depth: SyncDepth::Full,
+                    depth: $isEndgame ? SyncDepth::Full : SyncDepth::Standard,
                     userId: $this->user->id,
                 );
             }

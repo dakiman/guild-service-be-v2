@@ -129,8 +129,6 @@ return [
     |--------------------------------------------------------------------------
     */
 
-    'min_level_for_character_lookup' => (int) env('BLIZZARD_MIN_LEVEL_FOR_LOOKUP', 70),
-
     'endgame_level' => (int) env('BLIZZARD_ENDGAME_LEVEL', 90),
 
     'mythic_plus' => [

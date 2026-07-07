@@ -32,6 +32,16 @@ class CharacterService
             fn () => $character->increment('num_of_searches', 1, ['last_searched_at' => now()]),
         );
 
+        // Sub-endgame: Standard is the ceiling. Slice staleness is skipped —
+        // those timestamps are null by design and would read stale forever.
+        if (! $character->isEndgame()) {
+            if ($forceRefresh || $character->isStale()) {
+                SyncCharacterData::dispatch($region, $realm, $name, SyncDepth::Standard);
+            }
+
+            return $character;
+        }
+
         $anySliceStale = $character->isMythicsStale()
             || $character->isPvpStale()
             || $character->isProfessionsStale()

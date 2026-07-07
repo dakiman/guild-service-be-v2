@@ -20,6 +20,9 @@ class BackfillSlices extends Command
         $limit = (int) $this->option('limit');
         $q = Character::query()
             ->where('game_version', 'retail')
+            // Sub-endgame characters have null slice timestamps by design —
+            // they are not backfill targets.
+            ->where('level', '>=', (int) config('blizzard.endgame_level', 90))
             ->where(function ($q) {
                 $q->whereNull('mythics_synced_at')
                     ->orWhereNull('pvp_synced_at')

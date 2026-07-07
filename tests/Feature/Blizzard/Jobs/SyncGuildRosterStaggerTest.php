@@ -21,7 +21,7 @@ class SyncGuildRosterStaggerTest extends TestCase
         parent::setUp();
         Bus::fake();
         config()->set('raiderio.character_resync_ttl', 86400);
-        config()->set('blizzard.min_level_for_character_lookup', 70);
+        config()->set('blizzard.endgame_level', 90);
         // 60/min → fan-out job i gets an i-second delay: easy math to assert.
         config()->set('blizzard.roster_fanout.jobs_per_minute', 60);
     }

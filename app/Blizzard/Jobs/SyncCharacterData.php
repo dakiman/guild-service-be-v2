@@ -269,8 +269,11 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
 
         self::linkGuildMembers($character);
 
-        if ($this->depth === SyncDepth::Shallow
-            && $character->level === (int) config('blizzard.endgame_level', 90)
+        // Promote from any sub-Full depth: covers the newly-dinged case where
+        // the lookup lane saw a sub-endgame row and dispatched Standard — this
+        // sync just wrote the real level, so escalate in the same pass.
+        if ($this->depth !== SyncDepth::Full
+            && $character->level >= (int) config('blizzard.endgame_level', 90)
             && $character->mythics_synced_at === null
         ) {
             self::dispatch(
@@ -324,8 +327,11 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $character->update(['user_id' => $this->userId]);
         }
 
-        // Full depth: also sync mythic+ data
-        if ($this->depth === SyncDepth::Full) {
+        // Full depth: also sync the nine slices — but only at endgame level.
+        // This is the invariant choke point: whatever lane dispatched Full
+        // (teammate crawl, seeder, a stale gate), a sub-endgame profile gets
+        // no slice fan-out. checked against the freshly fetched level.
+        if ($this->depth === SyncDepth::Full && $character->isEndgame()) {
             $this->syncMythicPlus($client, $gameDataClient, $mythicPlusMapper, $ratingMapper, $character);
             $this->syncPvpData($client, $pvpMapper, $character);
             $this->syncProfessions($client, $professionMapper, $character);

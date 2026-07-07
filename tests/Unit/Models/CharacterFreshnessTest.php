@@ -32,12 +32,48 @@ class CharacterFreshnessTest extends TestCase
     private function freshCharacter(): Character
     {
         $c = new Character;
+        $c->level = (int) config('blizzard.endgame_level', 90);
         $c->updated_at = now();
         foreach (self::SLICE_TIMESTAMPS as $f) {
             $c->{$f} = now();
         }
 
         return $c;
+    }
+
+    public function test_is_endgame_boundaries(): void
+    {
+        Config::set('blizzard.endgame_level', 90);
+
+        $c = new Character;
+
+        $c->level = 89;
+        $this->assertFalse($c->isEndgame());
+
+        $c->level = 90;
+        $this->assertTrue($c->isEndgame());
+
+        // >= so a level-cap raise can't silently demote everyone.
+        $c->level = 91;
+        $this->assertTrue($c->isEndgame());
+
+        // Shell rows without a synced level are not endgame.
+        $c->level = null;
+        $this->assertFalse($c->isEndgame());
+    }
+
+    public function test_submax_freshness_is_profile_only(): void
+    {
+        Config::set('blizzard.sync.achievements_enabled', true);
+
+        $c = $this->freshCharacter();
+        $c->level = 89;
+        foreach (self::SLICE_TIMESTAMPS as $f) {
+            $c->{$f} = null;
+        }
+
+        $this->assertSame(['profile'], array_keys($c->freshness()));
+        $this->assertFalse($c->isNeverSynced());
     }
 
     public function test_all_synced_and_fresh_is_not_never_synced(): void
