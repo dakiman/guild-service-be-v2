@@ -222,7 +222,7 @@ class RaidKillStatsControllerTest extends TestCase
         $response->assertOk()
             ->assertJson([
                 'raids' => [],
-                'expansions' => [],
+                'expansions' => ['Midnight'],
                 'current_expansion' => 'Midnight',
             ]);
     }
@@ -263,43 +263,7 @@ class RaidKillStatsControllerTest extends TestCase
         $this->assertEquals('The Voidspire', $raids[0]['name']);
     }
 
-    public function test_filters_by_specific_expansion(): void
-    {
-        $character = Character::factory()->create(['class_id' => 1, 'level' => 90]);
-
-        RaidEncounterKill::factory()->create([
-            'character_id' => $character->id,
-            'expansion_name' => 'Midnight',
-            'instance_id' => 1234,
-            'instance_name' => 'The Voidspire',
-            'encounter_id' => 5678,
-            'encounter_name' => 'Voidlord Xareth',
-            'difficulty' => 'heroic',
-            'completed_count' => 10,
-        ]);
-
-        RaidEncounterKill::factory()->create([
-            'character_id' => $character->id,
-            'expansion_name' => 'The War Within',
-            'instance_id' => 2345,
-            'instance_name' => 'Nerub-ar Palace',
-            'encounter_id' => 6789,
-            'encounter_name' => 'Queen Ansurek',
-            'difficulty' => 'heroic',
-            'completed_count' => 5,
-        ]);
-
-        // Request TWW — should only get TWW kills
-        $response = $this->getJson('/api/v1/stats/characters/raid-kills?difficulty=heroic&expansion=The+War+Within');
-        $response->assertOk();
-
-        $raids = $response->json('raids');
-        $this->assertCount(1, $raids);
-        $this->assertEquals(2345, $raids[0]['instance_id']);
-        $this->assertEquals('Nerub-ar Palace', $raids[0]['name']);
-    }
-
-    public function test_response_includes_expansion_list(): void
+    public function test_expansion_list_is_current_only_and_param_is_ignored(): void
     {
         $character = Character::factory()->create(['class_id' => 1, 'level' => 90]);
 
@@ -327,10 +291,12 @@ class RaidKillStatsControllerTest extends TestCase
 
         $response = $this->getJson('/api/v1/stats/characters/raid-kills?difficulty=heroic');
         $response->assertOk();
+        $this->assertSame(['Midnight'], $response->json('expansions'));
 
-        $expansions = $response->json('expansions');
-        $this->assertCount(2, $expansions);
-        $this->assertContains('Midnight', $expansions);
-        $this->assertContains('The War Within', $expansions);
+        // Legacy expansion param is ignored, not honored: still current data.
+        $legacy = $this->getJson('/api/v1/stats/characters/raid-kills?difficulty=heroic&expansion=The+War+Within');
+        $legacy->assertOk();
+        $this->assertSame('Midnight', $legacy->json('current_expansion'));
+        $this->assertSame(1234, $legacy->json('raids.0.instance_id'));
     }
 }
