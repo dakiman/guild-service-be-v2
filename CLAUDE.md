@@ -63,6 +63,8 @@ Plan 2 slices (mythic+, pvp, professions, raids) have `BLIZZARD_SYNC_{SLICE}_ENA
 
 Per-slice edge cases (PvP dynamic slugs, M+ team pivot, stats path, achievements DELETE-INSERT, collections pool): `docs/slice-gotchas.md`.
 
+- **Raids-slice retention (2026-07-07).** Background lanes (`SyncOrigin` ≠ `UserLookup`) persist only retained expansions — `RaidRetention::expansions()` = current (`display_order=1` in `game_data_expansions`) + `'Current Season'`; delete-missing is scoped to the same set so gated syncs never wipe a searched character's legacy rows. User-lane syncs persist all expansions (full history self-heals on first view). `raids:prune-legacy` (scheduled monthly, batched, `--dry-run`) deletes legacy rows of `num_of_searches = 0` characters; refuses to run when `game_data_expansions` is empty. The stats heatmap (`/stats/characters/raid-kills`) serves the current expansion only — the `expansion` query param is gone, `expansions` in the response is always `[<current>]`.
+
 ### Plan 5 game-data resolvers
 
 `/data/wow/...` in **`static-{region}`** namespace, synced by `php artisan blizzard:sync-game-data <slice>` (no-arg sweep runs weekly). Hydrate character-side rows via `belongsTo` eager-load in the relevant Resource. Resources expose joined fields via manual `relationLoaded` + null check — **NOT `whenLoaded`**, which emits `"key": null` when belongsTo is loaded-but-null instead of omitting the key. No feature flag; missing rows fall through.

@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Tests\Feature\Console;
 
 use App\Models\Character;
+use App\Models\GameDataExpansion;
 use App\Models\RaidEncounterKill;
 use Database\Seeders\GameDataExpansionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class PruneLegacyRaidKillsTest extends TestCase
@@ -65,8 +67,8 @@ class PruneLegacyRaidKillsTest extends TestCase
 
     public function test_refuses_to_run_when_current_expansion_unknown(): void
     {
-        \App\Models\GameDataExpansion::query()->delete();
-        \Illuminate\Support\Facades\Cache::forget('raids:current-expansion-name');
+        GameDataExpansion::query()->delete();
+        Cache::forget('raids:current-expansion-name');
 
         $unsearched = Character::factory()->create(['num_of_searches' => 0]);
         $this->seedKills($unsearched);
