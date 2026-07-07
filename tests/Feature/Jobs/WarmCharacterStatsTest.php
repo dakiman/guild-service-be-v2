@@ -83,4 +83,17 @@ class WarmCharacterStatsTest extends TestCase
         // ShouldBeUnique collapses the concurrent dispatches into one job.
         Queue::assertPushed(WarmCharacterStats::class, 1);
     }
+
+    public function test_empty_stats_shape_matches_compute_stats_on_an_empty_dataset(): void
+    {
+        $service = app(CharacterStatsService::class);
+
+        $service->warm();
+        $computed = Cache::get(CharacterStatsService::CACHE_KEY);
+
+        Cache::forget(CharacterStatsService::CACHE_KEY);
+        Queue::fake();
+
+        $this->assertSame($computed, $service->getStats());
+    }
 }

@@ -75,20 +75,30 @@ class CharacterStatsService
 
     private function computeStats(): array
     {
-        $this->materializeEndgameActive();
+        // Resolved first — the only network-capable step, so a Blizzard
+        // hiccup fails fast instead of after paying the ~7s materialization.
+        $currentSeason = $this->gameDataClient->getCurrentMythicPlusSeason();
 
-        $specDistribution = $this->getSpecDistribution();
+        try {
+            $this->materializeEndgameActive();
 
-        return [
-            'total_characters' => (int) DB::table(self::TEMP_TABLE)->count(),
-            'class_distribution' => $this->getClassDistribution(),
-            'spec_distribution' => $specDistribution,
-            'faction_distribution' => $this->getFactionDistribution(),
-            'race_distribution' => $this->getRaceDistribution(),
-            'top_performers' => $this->getTopPerformers(),
-            'avg_achievement_points' => $this->getAvgAchievementPoints(),
-            'most_popular_spec' => $specDistribution[0] ?? null,
-        ];
+            $specDistribution = $this->getSpecDistribution();
+
+            return [
+                'total_characters' => (int) DB::table(self::TEMP_TABLE)->count(),
+                'class_distribution' => $this->getClassDistribution(),
+                'spec_distribution' => $specDistribution,
+                'faction_distribution' => $this->getFactionDistribution(),
+                'race_distribution' => $this->getRaceDistribution(),
+                'top_performers' => $this->getTopPerformers($currentSeason),
+                'avg_achievement_points' => $this->getAvgAchievementPoints(),
+                'most_popular_spec' => $specDistribution[0] ?? null,
+            ];
+        } finally {
+            // Drop the temp table so ~532k rows don't park on this
+            // long-lived Horizon worker connection between hourly runs.
+            DB::statement('DROP TABLE IF EXISTS '.self::TEMP_TABLE);
+        }
     }
 
     private function materializeEndgameActive(): void
@@ -168,10 +178,8 @@ class CharacterStatsService
             ->all();
     }
 
-    private function getTopPerformers(int $limit = 5): array
+    private function getTopPerformers(int $currentSeason, int $limit = 5): array
     {
-        $currentSeason = $this->gameDataClient->getCurrentMythicPlusSeason();
-
         $mythicPlusQuery = DB::table(self::TEMP_TABLE.' as c')
             ->whereExists(function ($q) use ($currentSeason) {
                 $q->select(DB::raw(1))

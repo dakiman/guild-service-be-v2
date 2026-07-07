@@ -19,8 +19,9 @@ class RaidKillStatsService
         $cacheKey = "stats:raid-kills:{$difficulty}:{$expansion}";
 
         // SWR: fresh for 55 min, then stale-served (up to 24h) while one
-        // deferred refresh recomputes — the aggregate over raid_encounter_kills
-        // must never run inline in a user request.
+        // deferred refresh recomputes. The warm job + 24h stale window make
+        // an inline recompute rare — it only happens on a total cache miss
+        // past 24h with zero traffic, or right after a cache flush.
         return Cache::flexible($cacheKey, [3300, 86400], fn () => $this->compute($difficulty, $expansion));
     }
 
