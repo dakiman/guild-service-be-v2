@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Blizzard\Client\BlizzardGameDataClient;
+use App\Jobs\WarmCharacterStats;
 use App\Models\Character;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
@@ -13,20 +14,55 @@ class CharacterStatsService
 {
     public const CACHE_KEY = 'stats:characters';
 
-    public const CACHE_TTL = 600;
-
     public function __construct(
         private readonly BlizzardGameDataClient $gameDataClient,
     ) {}
 
+    /**
+     * Serve whatever is cached, however old — the hourly WarmCharacterStats
+     * job is the only writer. A completely empty cache (first deploy, Redis
+     * flush) dispatches one refresh job (ShouldBeUnique dedupes concurrent
+     * visitors) and serves an empty shape until the job lands — a web
+     * request never runs the ~10s computeStats() in-process.
+     */
     public function getStats(): array
     {
-        return Cache::remember(self::CACHE_KEY, self::CACHE_TTL, fn () => $this->computeStats());
+        $cached = Cache::get(self::CACHE_KEY);
+
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        WarmCharacterStats::dispatch();
+
+        return $this->emptyStats();
     }
 
     public function warm(): void
     {
-        Cache::put(self::CACHE_KEY, $this->computeStats(), self::CACHE_TTL);
+        Cache::forever(self::CACHE_KEY, $this->computeStats());
+    }
+
+    /**
+     * Must mirror exactly what computeStats() returns on an empty character
+     * set — the FE renders this as its normal empty state.
+     */
+    private function emptyStats(): array
+    {
+        return [
+            'total_characters' => 0,
+            'class_distribution' => [],
+            'spec_distribution' => [],
+            'faction_distribution' => ['horde' => 0, 'alliance' => 0],
+            'race_distribution' => [],
+            'top_performers' => [
+                'mythic_plus' => [],
+                'item_level' => [],
+                'achievement_points' => [],
+            ],
+            'avg_achievement_points' => 0,
+            'most_popular_spec' => null,
+        ];
     }
 
     private function computeStats(): array

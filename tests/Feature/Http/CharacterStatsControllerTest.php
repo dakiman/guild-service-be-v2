@@ -7,6 +7,7 @@ namespace Tests\Feature\Http;
 use App\Models\Character;
 use App\Models\DungeonRun;
 use App\Models\RaidEncounterKill;
+use App\Services\CharacterStatsService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Tests\TestCase;
@@ -50,6 +51,7 @@ class CharacterStatsControllerTest extends TestCase
             'achievement_points' => 30000,
         ]);
 
+        app(CharacterStatsService::class)->warm();
         $response = $this->getJson('/api/v1/stats/characters');
 
         $response->assertOk()
@@ -75,6 +77,7 @@ class CharacterStatsControllerTest extends TestCase
         $this->createActiveCharacter(['class_id' => 1, 'average_item_level' => 500, 'mythic_plus_rating' => 1000.0]);
         $this->createActiveCharacter(['class_id' => 2, 'average_item_level' => 650, 'mythic_plus_rating' => 3000.0]);
 
+        app(CharacterStatsService::class)->warm();
         $response = $this->getJson('/api/v1/stats/characters');
         $response->assertOk();
 
@@ -101,6 +104,7 @@ class CharacterStatsControllerTest extends TestCase
             $this->createActiveCharacter(['faction' => 'Alliance']);
         }
 
+        app(CharacterStatsService::class)->warm();
         $response = $this->getJson('/api/v1/stats/characters');
         $response->assertOk();
 
@@ -121,6 +125,7 @@ class CharacterStatsControllerTest extends TestCase
             ]);
         }
 
+        app(CharacterStatsService::class)->warm();
         $response = $this->getJson('/api/v1/stats/characters');
         $response->assertOk();
 
@@ -169,6 +174,7 @@ class CharacterStatsControllerTest extends TestCase
         }
         $this->createActiveCharacter(['active_specialization_id' => 70, 'class_id' => 2]);
 
+        app(CharacterStatsService::class)->warm();
         $response = $this->getJson('/api/v1/stats/characters');
         $response->assertOk();
 
@@ -190,6 +196,7 @@ class CharacterStatsControllerTest extends TestCase
         }
         $this->createActiveCharacter(['race_id' => 7]);
 
+        app(CharacterStatsService::class)->warm();
         $response = $this->getJson('/api/v1/stats/characters');
         $response->assertOk();
 
@@ -212,6 +219,7 @@ class CharacterStatsControllerTest extends TestCase
         $lowLevel = Character::factory()->create(['level' => 70, 'class_id' => 3]);
         RaidEncounterKill::factory()->create(['character_id' => $lowLevel->id]);
 
+        app(CharacterStatsService::class)->warm();
         $response = $this->getJson('/api/v1/stats/characters');
         $response->assertOk();
 
