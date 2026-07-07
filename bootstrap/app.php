@@ -37,6 +37,10 @@ return Application::configure(basePath: dirname(__DIR__))
             ->dailyAt('02:00')
             ->withoutOverlapping()
             ->onOneServer();
+        $schedule->command('raids:prune-legacy')
+            ->monthlyOn(1, '04:30')
+            ->withoutOverlapping()
+            ->onOneServer();
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->api(prepend: [
