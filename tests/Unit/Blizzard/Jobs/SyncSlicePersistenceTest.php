@@ -15,7 +15,10 @@ use App\Blizzard\Mappers\CharacterReputationMapper;
 use App\Blizzard\Mappers\PvpBracketStatsMapper;
 use App\Blizzard\Mappers\RaidEncounterKillMapper;
 use App\Enums\SyncDepth;
+use App\Enums\SyncOrigin;
 use App\Models\Character;
+use App\Support\RaidRetention;
+use Database\Seeders\GameDataExpansionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
@@ -39,19 +42,19 @@ final class SyncSlicePersistenceTest extends TestCase
         Config::set('blizzard.sync.pvp_enabled', true);
     }
 
-    private function job(): SyncCharacterData
+    private function job(SyncOrigin $origin = SyncOrigin::UserLookup): SyncCharacterData
     {
-        return new SyncCharacterData('eu', 'kazzak', 'tester', SyncDepth::Full);
+        return new SyncCharacterData('eu', 'kazzak', 'tester', SyncDepth::Full, origin: $origin);
     }
 
     /**
      * @param  array<int, object>  $dtos
      */
-    private function invoke(string $method, object $client, object $mapper, Character $character): void
+    private function invoke(string $method, object $client, object $mapper, Character $character, SyncOrigin $origin = SyncOrigin::UserLookup): void
     {
         $ref = new \ReflectionMethod(SyncCharacterData::class, $method);
         $ref->setAccessible(true);
-        $ref->invoke($this->job(), $client, $mapper, $character);
+        $ref->invoke($this->job($origin), $client, $mapper, $character);
     }
 
     public function test_professions_resync_prunes_stale_keeps_distinct_composite_rows(): void
@@ -115,6 +118,88 @@ final class SyncSlicePersistenceTest extends TestCase
         $this->assertSame(1, DB::table('raid_encounter_kills')->where('character_id', $character->id)->count());
         $this->assertDatabaseMissing('raid_encounter_kills', ['character_id' => $character->id, 'encounter_id' => 2902, 'difficulty' => 'Mythic']);
         $this->assertDatabaseHas('raid_encounter_kills', ['character_id' => $character->id, 'encounter_id' => 2902, 'difficulty' => 'Heroic', 'completed_count' => 5]);
+    }
+
+    public function test_background_origin_persists_only_retained_expansions(): void
+    {
+        $this->seed(GameDataExpansionSeeder::class);
+        $character = Character::factory()->create();
+        $client = $this->createStub(BlizzardProfileClient::class);
+        $client->method('getCharacterRaidEncounters')->willReturn([]);
+
+        $mapper = $this->createMock(RaidEncounterKillMapper::class);
+        $mapper->method('map')->willReturn([
+            new RaidEncounterKill('Midnight', 1300, 'Voidspire', 3001, 'Xareth', 'heroic', 4, 1700000000),
+            // Distinct encounter_id: (character_id, encounter_id, difficulty)
+            // is the upsert unique key, so a same-encounter duplicate would
+            // collapse into one row instead of proving both names survive.
+            new RaidEncounterKill(RaidRetention::CURRENT_SEASON, 1300, 'Voidspire', 3005, 'Season Boss', 'heroic', 4, 1700000000),
+            new RaidEncounterKill('Legion', 8025, 'Nighthold', 1866, 'Gul-dan', 'mythic', 12, 1500000000),
+        ]);
+        $this->invoke('syncRaidEncounters', $client, $mapper, $character, SyncOrigin::Proactive);
+
+        $this->assertSame(2, DB::table('raid_encounter_kills')->where('character_id', $character->id)->count());
+        $this->assertDatabaseMissing('raid_encounter_kills', ['character_id' => $character->id, 'expansion_name' => 'Legion']);
+    }
+
+    public function test_background_origin_delete_missing_spares_legacy_rows(): void
+    {
+        $this->seed(GameDataExpansionSeeder::class);
+        $character = Character::factory()->create();
+        $client = $this->createStub(BlizzardProfileClient::class);
+        $client->method('getCharacterRaidEncounters')->willReturn([]);
+
+        // Pre-existing rows: one legacy (from an earlier user-lane sync),
+        // one current-expansion row that the new payload no longer contains.
+        DB::table('raid_encounter_kills')->insert([
+            ['character_id' => $character->id, 'expansion_name' => 'Legion', 'instance_id' => 8025, 'instance_name' => 'Nighthold', 'encounter_id' => 1866, 'encounter_name' => 'Gul-dan', 'difficulty' => 'mythic', 'completed_count' => 12],
+            ['character_id' => $character->id, 'expansion_name' => 'Midnight', 'instance_id' => 1300, 'instance_name' => 'Voidspire', 'encounter_id' => 3002, 'encounter_name' => 'Old Boss', 'difficulty' => 'heroic', 'completed_count' => 1],
+        ]);
+
+        $mapper = $this->createMock(RaidEncounterKillMapper::class);
+        $mapper->method('map')->willReturn([
+            new RaidEncounterKill('Midnight', 1300, 'Voidspire', 3001, 'Xareth', 'heroic', 4, 1700000000),
+        ]);
+        $this->invoke('syncRaidEncounters', $client, $mapper, $character, SyncOrigin::TeammateCrawl);
+
+        // Legacy row untouched; stale current-expansion row pruned; new row written.
+        $this->assertDatabaseHas('raid_encounter_kills', ['character_id' => $character->id, 'expansion_name' => 'Legion', 'encounter_id' => 1866]);
+        $this->assertDatabaseMissing('raid_encounter_kills', ['character_id' => $character->id, 'encounter_id' => 3002]);
+        $this->assertDatabaseHas('raid_encounter_kills', ['character_id' => $character->id, 'encounter_id' => 3001]);
+    }
+
+    public function test_user_lookup_origin_persists_all_expansions(): void
+    {
+        $this->seed(GameDataExpansionSeeder::class);
+        $character = Character::factory()->create();
+        $client = $this->createStub(BlizzardProfileClient::class);
+        $client->method('getCharacterRaidEncounters')->willReturn([]);
+
+        $mapper = $this->createMock(RaidEncounterKillMapper::class);
+        $mapper->method('map')->willReturn([
+            new RaidEncounterKill('Midnight', 1300, 'Voidspire', 3001, 'Xareth', 'heroic', 4, 1700000000),
+            new RaidEncounterKill('Legion', 8025, 'Nighthold', 1866, 'Gul-dan', 'mythic', 12, 1500000000),
+        ]);
+        $this->invoke('syncRaidEncounters', $client, $mapper, $character, SyncOrigin::UserLookup);
+
+        $this->assertSame(2, DB::table('raid_encounter_kills')->where('character_id', $character->id)->count());
+        $this->assertDatabaseHas('raid_encounter_kills', ['character_id' => $character->id, 'expansion_name' => 'Legion']);
+    }
+
+    public function test_gating_fails_open_when_current_expansion_unknown(): void
+    {
+        // game_data_expansions NOT seeded -> RaidRetention::expansions() null.
+        $character = Character::factory()->create();
+        $client = $this->createStub(BlizzardProfileClient::class);
+        $client->method('getCharacterRaidEncounters')->willReturn([]);
+
+        $mapper = $this->createMock(RaidEncounterKillMapper::class);
+        $mapper->method('map')->willReturn([
+            new RaidEncounterKill('Legion', 8025, 'Nighthold', 1866, 'Gul-dan', 'mythic', 12, 1500000000),
+        ]);
+        $this->invoke('syncRaidEncounters', $client, $mapper, $character, SyncOrigin::Proactive);
+
+        $this->assertDatabaseHas('raid_encounter_kills', ['character_id' => $character->id, 'expansion_name' => 'Legion']);
     }
 
     public function test_reputations_resync_prunes_and_updates(): void

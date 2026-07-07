@@ -43,6 +43,7 @@ use App\Models\GuildMember;
 use App\Models\RaidEncounterKill;
 use App\Services\RunTeamPersister;
 use App\Support\BlizzardIdentity;
+use App\Support\RaidRetention;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -532,7 +533,20 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $data = $client->getCharacterRaidEncounters($this->realm, $this->name);
             $dtos = $mapper->map($data);
 
-            DB::transaction(function () use ($character, $dtos) {
+            // Background lanes only cache the current expansion (+ Current
+            // Season): 99.99% of characters are crawl-discovered and their
+            // legacy history exists only to bloat the table — it self-heals
+            // via a user-lane Full sync the first time someone views them.
+            // Null = current expansion unknown -> fail open, retain all.
+            $retained = $this->origin === SyncOrigin::UserLookup ? null : RaidRetention::expansions();
+            if ($retained !== null) {
+                $dtos = array_values(array_filter(
+                    $dtos,
+                    fn ($dto) => in_array($dto->expansionName, $retained, true),
+                ));
+            }
+
+            DB::transaction(function () use ($character, $dtos, $retained) {
                 $rows = array_map(fn ($dto) => [
                     'character_id' => $character->id,
                     'encounter_id' => $dto->encounterId,
@@ -552,7 +566,14 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 foreach ($dtos as $dto) {
                     $keep[$dto->encounterId.'|'.$dto->difficulty] = true;
                 }
-                $staleIds = RaidEncounterKill::where('character_id', $character->id)
+                // Delete-missing must never reach beyond what this lane
+                // persists: a gated sync scoped to retained expansions must
+                // not wipe a searched character's legacy rows.
+                $staleQuery = RaidEncounterKill::where('character_id', $character->id);
+                if ($retained !== null) {
+                    $staleQuery->whereIn('expansion_name', $retained);
+                }
+                $staleIds = $staleQuery
                     ->get(['id', 'encounter_id', 'difficulty'])
                     ->reject(fn ($row) => isset($keep[$row->encounter_id.'|'.$row->difficulty]))
                     ->pluck('id')
