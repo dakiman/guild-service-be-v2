@@ -27,7 +27,7 @@ class TopRunsController extends Controller
         // Page/per_page/dungeon_id are resolved outside the closure because
         // the deferred stale-refresh runs after the response, and the key
         // must pin exactly what the closure computes.
-        $payload = Cache::flexible($cacheKey, [270, 300], function () use ($perPage, $page, $dungeonId) {
+        $payload = Cache::flexible($cacheKey, [270, 86400], function () use ($perPage, $page, $dungeonId) {
             $query = DungeonRun::query()
                 ->where('is_completed_on_time', true)
                 ->orderByDesc('keystone_level')

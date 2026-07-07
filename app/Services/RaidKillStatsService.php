@@ -18,10 +18,10 @@ class RaidKillStatsService
         $expansion = RaidRetention::currentExpansionName() ?? '';
         $cacheKey = "stats:raid-kills:{$difficulty}:{$expansion}";
 
-        // SWR: fresh for 55 min, then stale-served (up to 60 min) while one
+        // SWR: fresh for 55 min, then stale-served (up to 24h) while one
         // deferred refresh recomputes — the aggregate over raid_encounter_kills
         // must never run inline in a user request.
-        return Cache::flexible($cacheKey, [3300, 3600], fn () => $this->compute($difficulty, $expansion));
+        return Cache::flexible($cacheKey, [3300, 86400], fn () => $this->compute($difficulty, $expansion));
     }
 
     public function warm(): void
