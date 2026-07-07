@@ -54,7 +54,9 @@ class Character extends Model
         'stats_synced_at',
         'titles_synced_at',
         'active_title_id',
+        'title_ids',
         'reputations_synced_at',
+        'reputations',
         'collections_synced_at',
         'achievements_synced_at',
         'last_login_at',
@@ -67,6 +69,8 @@ class Character extends Model
             'talents' => 'array',
             'equipment' => 'array',
             'stats' => 'array',
+            'title_ids' => 'array',
+            'reputations' => 'array',
             'mythic_plus_rating_by_spec' => 'array',
             'recruitment' => 'boolean',
             'mythics_synced_at' => 'datetime',
@@ -123,19 +127,73 @@ class Character extends Model
         return $this->hasMany(RaidEncounterKill::class);
     }
 
-    public function titles(): BelongsToMany
-    {
-        return $this->belongsToMany(GameDataTitle::class, 'character_titles', 'character_id', 'title_id');
-    }
-
     public function activeTitle(): BelongsTo
     {
         return $this->belongsTo(GameDataTitle::class, 'active_title_id');
     }
 
-    public function reputations(): HasMany
+    /** @return list<array{id: int, name_male: ?string, name_female: ?string}> */
+    public function resolvedTitles(): array
     {
-        return $this->hasMany(CharacterReputation::class);
+        $ids = $this->title_ids ?? [];
+        if ($ids === []) {
+            return [];
+        }
+
+        return GameDataTitle::query()
+            ->whereIn('id', $ids)
+            ->orderBy('id')
+            ->get(['id', 'name_male', 'name_female'])
+            ->map(fn (GameDataTitle $t) => [
+                'id' => (int) $t->id,
+                'name_male' => $t->name_male,
+                'name_female' => $t->name_female,
+            ])
+            ->all();
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function resolvedReputations(): array
+    {
+        $reps = $this->reputations ?? [];
+        if ($reps === []) {
+            return [];
+        }
+
+        $factions = GameDataFaction::query()
+            ->with('expansion')
+            ->whereIn('id', array_column($reps, 'faction_id'))
+            ->get()
+            ->keyBy('id');
+
+        return array_map(function (array $rep) use ($factions) {
+            $out = [
+                'faction_id' => (int) $rep['faction_id'],
+                'faction_name' => (string) $rep['faction_name'],
+                'standing' => (string) $rep['standing'],
+                'value' => (int) $rep['value'],
+                'max' => (int) $rep['max'],
+            ];
+
+            $faction = $factions->get((int) $rep['faction_id']);
+            if ($faction !== null) {
+                // faction key ABSENT (not null) when there's no game-data row — FE contract.
+                $out['faction'] = [
+                    'id' => $faction->id,
+                    'name' => $faction->name,
+                    'parent_faction_id' => $faction->parent_faction_id,
+                    'expansion' => $faction->expansion !== null
+                        ? [
+                            'id' => $faction->expansion->id,
+                            'name' => $faction->expansion->name,
+                            'display_order' => $faction->expansion->display_order,
+                        ]
+                        : null,
+                ];
+            }
+
+            return $out;
+        }, $reps);
     }
 
     public function mounts(): HasMany
