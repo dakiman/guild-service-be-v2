@@ -45,7 +45,7 @@ class CharacterController extends Controller
         // slice eager-loads; whenLoaded omits those keys from the payload.
         $relations = ['guild'];
         if ($result->isEndgame()) {
-            $relations = ['guild', 'dungeonRuns.memberEntries', 'pvpBrackets', 'professions.expansion', 'raidEncounterKills', 'titles', 'reputations.faction.expansion'];
+            $relations = ['guild', 'dungeonRuns.memberEntries', 'pvpBrackets', 'professions.expansion', 'raidEncounterKills'];
             if (config('blizzard.sync.mounts_enabled')) {
                 $relations[] = 'mounts.gameData';
             }

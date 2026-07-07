@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Tests\Feature\Endpoints;
 
 use App\Models\Character;
-use App\Models\CharacterReputation;
 use App\Models\GameDataExpansion;
 use App\Models\GameDataFaction;
 use App\Models\GameDataMount;
@@ -388,14 +387,9 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
             'reputations_synced_at' => $now,
             'collections_synced_at' => $now,
             'achievements_synced_at' => $now,
-        ]);
-        CharacterReputation::create([
-            'character_id' => $character->id,
-            'faction_id' => 2570,
-            'faction_name' => 'Council of Dornogal',
-            'standing' => 'exalted',
-            'value' => 21000,
-            'max' => 0,
+            'reputations' => [
+                ['faction_id' => 2570, 'faction_name' => 'Council of Dornogal', 'standing' => 'exalted', 'value' => 21000, 'max' => 0],
+            ],
         ]);
 
         $url = "/api/v1/characters/{$character->region}/{$character->realm}/{$character->name}";
@@ -423,14 +417,9 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
             'reputations_synced_at' => $now,
             'collections_synced_at' => $now,
             'achievements_synced_at' => $now,
-        ]);
-        CharacterReputation::create([
-            'character_id' => $character->id,
-            'faction_id' => 99999,
-            'faction_name' => 'Future Faction',
-            'standing' => 'neutral',
-            'value' => 0,
-            'max' => 0,
+            'reputations' => [
+                ['faction_id' => 99999, 'faction_name' => 'Future Faction', 'standing' => 'neutral', 'value' => 0, 'max' => 0],
+            ],
         ]);
 
         $url = "/api/v1/characters/{$character->region}/{$character->realm}/{$character->name}";
@@ -453,14 +442,9 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
             'reputations_synced_at' => $now,
             'collections_synced_at' => $now,
             'achievements_synced_at' => $now,
-        ]);
-        CharacterReputation::create([
-            'character_id' => $character->id,
-            'faction_id' => 88888,
-            'faction_name' => 'Unknown Faction',
-            'standing' => 'neutral',
-            'value' => 0,
-            'max' => 0,
+            'reputations' => [
+                ['faction_id' => 88888, 'faction_name' => 'Unknown Faction', 'standing' => 'neutral', 'value' => 0, 'max' => 0],
+            ],
         ]);
 
         $url = "/api/v1/characters/{$character->region}/{$character->realm}/{$character->name}";
@@ -481,6 +465,7 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
         $now = now();
         $character = Character::factory()->create([
             'active_title_id' => 414,
+            'title_ids' => [414],
             'mythics_synced_at' => $now,
             'pvp_synced_at' => $now,
             'professions_synced_at' => $now,
@@ -491,7 +476,6 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
             'collections_synced_at' => $now,
             'achievements_synced_at' => $now,
         ]);
-        $character->titles()->attach(414);
 
         $url = "/api/v1/characters/{$character->region}/{$character->realm}/{$character->name}";
         $response = $this->getJson($url)->assertOk();
@@ -513,6 +497,7 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
         $now = now();
         $character = Character::factory()->create([
             'active_title_id' => null,
+            'title_ids' => [88888],
             'mythics_synced_at' => $now,
             'pvp_synced_at' => $now,
             'professions_synced_at' => $now,
@@ -523,7 +508,6 @@ class RetailCharacterEndpointTest extends EndpointIntegrationTestCase
             'collections_synced_at' => $now,
             'achievements_synced_at' => $now,
         ]);
-        $character->titles()->attach(88888);
 
         $url = "/api/v1/characters/{$character->region}/{$character->realm}/{$character->name}";
         $response = $this->getJson($url)->assertOk();
