@@ -276,4 +276,79 @@ class TopRunsControllerTest extends TestCase
         $this->assertEquals(1500000, $data[0]['duration']);
         $this->assertEquals(2000000, $data[1]['duration']);
     }
+
+    public function test_total_and_last_page_cap_at_100(): void
+    {
+        DungeonRun::factory()->count(120)->create(['is_completed_on_time' => true]);
+
+        $response = $this->getJson('/api/v1/stats/characters/top-runs?per_page=20');
+
+        $response->assertOk();
+        $this->assertSame(100, $response->json('total'));
+        $this->assertSame(5, $response->json('last_page'));
+    }
+
+    public function test_page_beyond_cap_is_clamped_to_last_page(): void
+    {
+        DungeonRun::factory()->count(120)->create(['is_completed_on_time' => true]);
+
+        $response = $this->getJson('/api/v1/stats/characters/top-runs?per_page=20&page=6543');
+
+        $response->assertOk();
+        $this->assertSame(5, $response->json('current_page'));
+        $this->assertCount(20, $response->json('data'));
+    }
+
+    public function test_last_page_does_not_leak_past_rank_100_with_uneven_per_page(): void
+    {
+        DungeonRun::factory()->count(120)->create(['is_completed_on_time' => true]);
+
+        // ceil(100 / 30) = 4 pages; the last page must hold ranks 91-100 (10 rows), not 30.
+        $response = $this->getJson('/api/v1/stats/characters/top-runs?per_page=30&page=4');
+
+        $response->assertOk();
+        $this->assertSame(4, $response->json('current_page'));
+        $this->assertCount(10, $response->json('data'));
+        $this->assertSame(100, $response->json('total'));
+    }
+
+    public function test_runs_beyond_rank_100_never_appear(): void
+    {
+        // Keys 1..101: rank 1 = key 101, rank 100 = key 2, rank 101 = key 1 (cut off).
+        for ($i = 1; $i <= 101; $i++) {
+            DungeonRun::factory()->create([
+                'keystone_level' => $i,
+                'duration' => 1800000,
+                'is_completed_on_time' => true,
+            ]);
+        }
+
+        $lastPage = $this->getJson('/api/v1/stats/characters/top-runs?per_page=20&page=5');
+
+        $lastPage->assertOk();
+        $levels = array_column($lastPage->json('data'), 'keystone_level');
+        $this->assertSame(2, min($levels));
+        $this->assertSame(100, $lastPage->json('total'));
+    }
+
+    public function test_dungeon_filter_caps_independently(): void
+    {
+        DungeonRun::factory()->count(105)->create([
+            'dungeon_id' => 100,
+            'is_completed_on_time' => true,
+        ]);
+        DungeonRun::factory()->count(3)->create([
+            'dungeon_id' => 200,
+            'is_completed_on_time' => true,
+        ]);
+
+        $busy = $this->getJson('/api/v1/stats/characters/top-runs?dungeon_id=100');
+        $busy->assertOk();
+        $this->assertSame(100, $busy->json('total'));
+
+        $quiet = $this->getJson('/api/v1/stats/characters/top-runs?dungeon_id=200');
+        $quiet->assertOk();
+        $this->assertSame(3, $quiet->json('total'));
+        $this->assertSame(1, $quiet->json('last_page'));
+    }
 }
