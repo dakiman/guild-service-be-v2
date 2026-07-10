@@ -58,6 +58,9 @@ class TopRunsController extends Controller
             $runs = $base->clone()
                 ->orderByDesc('keystone_level')
                 ->orderBy('duration')
+                // `id` tiebreaker keeps page boundaries deterministic across
+                // separately-cached page queries when level+duration tie.
+                ->orderBy('id')
                 ->with('memberEntries.character:id,class_id')
                 ->skip($offset)
                 ->take($limit)
