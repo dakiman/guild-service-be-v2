@@ -11,7 +11,7 @@ class RaceFactionTest extends TestCase
 {
     public function test_alliance_races_resolve_to_alliance(): void
     {
-        $allianceRaceIds = [1, 3, 4, 7, 11, 22, 25, 29, 30, 32, 34, 37, 52, 85];
+        $allianceRaceIds = [1, 3, 4, 7, 11, 22, 25, 29, 30, 32, 34, 37, 52, 85, 86];
         foreach ($allianceRaceIds as $id) {
             $this->assertSame('Alliance', RaceFaction::for($id), "race_id {$id} should be Alliance");
         }
@@ -19,7 +19,7 @@ class RaceFactionTest extends TestCase
 
     public function test_horde_races_resolve_to_horde(): void
     {
-        $hordeRaceIds = [2, 5, 6, 8, 9, 10, 26, 27, 28, 31, 35, 36, 70, 84];
+        $hordeRaceIds = [2, 5, 6, 8, 9, 10, 26, 27, 28, 31, 35, 36, 70, 84, 91];
         foreach ($hordeRaceIds as $id) {
             $this->assertSame('Horde', RaceFaction::for($id), "race_id {$id} should be Horde");
         }

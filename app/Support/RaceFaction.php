@@ -27,6 +27,7 @@ final class RaceFaction
         37 => 'Alliance',  // Mechagnome
         52 => 'Alliance',  // Dracthyr (Alliance)
         85 => 'Alliance',  // Earthen (Alliance)
+        86 => 'Alliance',  // Haranir (Alliance)
 
         // Horde
         2 => 'Horde',      // Orc
@@ -43,6 +44,7 @@ final class RaceFaction
         36 => 'Horde',     // Mag'har Orc
         70 => 'Horde',     // Dracthyr (Horde)
         84 => 'Horde',     // Earthen (Horde)
+        91 => 'Horde',     // Haranir (Horde)
 
         // race_id 24 (neutral Pandaren during char creation) intentionally omitted -> null
     ];
