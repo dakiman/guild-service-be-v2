@@ -84,6 +84,7 @@ Per-slice edge cases (PvP dynamic slugs, M+ team pivot, stats path, achievements
 
 Both: no auth, no `data` envelope, `Cache-Control: max-age=3600, public`. FE caches with TanStack Query `staleTime: Infinity`. Empty table → `instances: []` / `dungeons: []`, not error.
 
+- `GET /api/v1/stats/characters` (+ `/top-runs`, `/top-keys`, `/raid-kills`) — site-wide stats for FE `/characters`, `/mythic-plus`, `/raids` pages. **Serve-stale-forever:** responses come from `Cache::forever` keys warmed by scheduled jobs (`WarmCharacterStats` hourly, `WarmRaidKillStats` every 30 min — `bootstrap/app.php`); `CharacterStatsService` materializes a temp table per warm (~18s). Endpoints never compute inline — empty cache serves an empty payload until first warm, by design. Top-runs is capped at 100.
 - `GET /api/v1/characters/{region}/{realm}/{name}/achievements` (`CharacterAchievementsController::index`) — cursor-paginated joined rows: `{achievement_id, completed_timestamp, name, category_name}` + `meta.{total, per_page, next_cursor}`. Default per_page=100, max=200. Order: `completed_timestamp DESC NULLS LAST`, tiebreaker `achievement_id DESC`; cursor is base64url JSON `{ts, id}` so NULL-timestamp rows paginate through their own tail. Default filters `Feats of Strength`; `?include_feats=1` re-includes. Character payload no longer carries achievements (`CharacterController` doesn't eager-load, `CharacterResource` doesn't emit). Missing-row fallback: join returns `name=null`/`category_name=null`, FE renders `Achievement {id}`.
 
 ### Sync orchestration
