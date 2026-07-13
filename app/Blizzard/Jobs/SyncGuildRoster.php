@@ -81,12 +81,12 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
             ->get();
 
         // Per-member SyncCharacterData::Full fan-out is gated by either:
-        // 1. forceFanout=true on this specific job (set by the seeder via SyncGuildData,
-        //    or by the user-visit cascade via SyncGuildData::forceCascade).
+        // 1. forceFanout=true on this specific job (set only by the raider.io
+        //    seeder path via SyncGuildData::forceRosterFanout).
         // 2. raiderio.dispatch_roster_character_syncs config flag (default false).
         $fullPathActive = $this->forceFanout || config('raiderio.dispatch_roster_character_syncs', false);
 
-        // When forceFanout is true (user-visit cascade or seeder run), skip both
+        // When forceFanout is true (seeder run), skip both
         // Shallow and Full dispatches for any member whose Character row is fresh
         // (updated_at within $ttl). Cold + stale members get a Full.
         // When forceFanout is false (proactive path), Shallow fires unless the
