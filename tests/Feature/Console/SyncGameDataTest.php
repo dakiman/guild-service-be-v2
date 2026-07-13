@@ -523,6 +523,61 @@ class SyncGameDataTest extends TestCase
         $this->assertSame('City of Threads', GameDataMythicKeystoneDungeon::find(504)->name);
     }
 
+    public function test_sync_pve_dungeon_resync_does_not_clobber_backfilled_media_url(): void
+    {
+        // Regression: Blizzard's keystone-dungeon detail carries no media doc,
+        // so mapDetail() is always called with mediaUrl: null. Icons are
+        // populated separately by dungeons:backfill-icons-from-raiderio — a
+        // pve resync must not null them back out.
+        GameDataMythicKeystoneDungeon::create([
+            'id' => 503,
+            'name' => 'Ara-Kara',
+            'media_url' => '/dungeons/503.jpg',
+            'keystone_upgrades' => null,
+            'journal_instance_id' => null,
+        ]);
+
+        $mock = $this->createMock(BlizzardGameDataClient::class);
+
+        $mock->method('getJournalInstanceIndex')->willReturn(['instances' => []]);
+
+        $mock->method('getCurrentMythicPlusSeason')->willReturn(14);
+        $mock->method('getMythicKeystoneSeason')->willReturn([
+            'id' => 14,
+            'dungeons' => [
+                ['id' => 503, 'name' => 'Ara-Kara'],
+            ],
+        ]);
+        $mock->method('getMythicKeystoneDungeon')->willReturn([
+            'id' => 503,
+            'name' => 'Ara-Kara, City of Echoes',
+            'keystone_upgrades' => [
+                ['upgrade_level' => 1, 'qualifying_duration' => 1800000],
+            ],
+        ]);
+
+        $mock->method('getKeystoneAffixIndex')->willReturn(['affixes' => []]);
+
+        $this->app->instance(BlizzardGameDataClient::class, $mock);
+
+        $this->artisan('blizzard:sync-game-data', ['resource' => 'pve'])
+            ->assertExitCode(0);
+
+        $dungeon = GameDataMythicKeystoneDungeon::find(503);
+        $this->assertNotNull($dungeon);
+        $this->assertSame('Ara-Kara, City of Echoes', $dungeon->name, 'name still updates from Blizzard');
+        $this->assertSame(
+            [['upgrade_level' => 1, 'qualifying_duration' => 1800000]],
+            $dungeon->keystone_upgrades,
+            'keystone_upgrades still updates from Blizzard',
+        );
+        $this->assertSame(
+            '/dungeons/503.jpg',
+            $dungeon->media_url,
+            'backfilled media_url must survive a resync where Blizzard has no media doc',
+        );
+    }
+
     public function test_sync_pve_upserts_keystone_affixes_with_icons(): void
     {
         $mock = $this->createMock(BlizzardGameDataClient::class);

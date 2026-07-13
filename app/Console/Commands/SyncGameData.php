@@ -648,15 +648,19 @@ class SyncGameData extends Command
 
         DB::transaction(function () use ($dtos, &$upserted) {
             foreach ($dtos as $dto) {
-                GameDataMythicKeystoneDungeon::updateOrCreate(
-                    ['id' => $dto->id],
-                    [
-                        'name' => $dto->name,
-                        'media_url' => $dto->mediaUrl,
-                        'keystone_upgrades' => $dto->keystoneUpgrades,
-                        'journal_instance_id' => $dto->journalInstanceId,
-                    ],
-                );
+                $attributes = [
+                    'name' => $dto->name,
+                    'keystone_upgrades' => $dto->keystoneUpgrades,
+                    'journal_instance_id' => $dto->journalInstanceId,
+                ];
+                // Blizzard emits no media doc for keystone dungeons (mediaUrl
+                // is null today) — icons come from dungeons:backfill-icons-
+                // from-raiderio. Never let a null overwrite a backfilled icon.
+                if ($dto->mediaUrl !== null) {
+                    $attributes['media_url'] = $dto->mediaUrl;
+                }
+
+                GameDataMythicKeystoneDungeon::updateOrCreate(['id' => $dto->id], $attributes);
                 $upserted++;
             }
         });
