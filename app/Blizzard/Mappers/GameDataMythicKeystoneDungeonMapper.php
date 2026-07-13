@@ -35,7 +35,9 @@ class GameDataMythicKeystoneDungeonMapper
             name: (string) ($detail['name'] ?? 'Unknown'),
             mediaUrl: $mediaUrl,
             journalInstanceId: $journalInstanceId,
-            keystoneUpgrades: $this->extractKeystoneUpgrades($detail['keystone_upgrades'] ?? null),
+            keystoneUpgrades: $this->extractKeystoneUpgrades(
+                is_array($detail['keystone_upgrades'] ?? null) ? $detail['keystone_upgrades'] : null,
+            ),
         );
     }
 

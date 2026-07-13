@@ -128,5 +128,12 @@ class GameDataMythicKeystoneDungeonMapperTest extends TestCase
             null,
         );
         $this->assertNull($malformed->keystoneUpgrades);
+
+        $scalar = $this->mapper->mapDetail(
+            ['id' => 1, 'name' => 'A', 'keystone_upgrades' => 'bogus'],
+            null,
+            null,
+        );
+        $this->assertNull($scalar->keystoneUpgrades);
     }
 }

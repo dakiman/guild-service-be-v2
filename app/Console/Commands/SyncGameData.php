@@ -26,6 +26,7 @@ use App\Models\GameDataRaidInstance;
 use App\Models\GameDataTalentTree;
 use App\Models\GameDataTitle;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -435,6 +436,12 @@ class SyncGameData extends Command
         $this->syncRaids($client, $raidInstanceMapper, $raidEncounterMapper);
         $this->syncMythicKeystoneDungeons($client, $dungeonMapper);
         $this->syncKeystoneAffixes($client, $affixMapper);
+
+        // The public /game-data/mythic-keystone-dungeons endpoint caches
+        // dungeons + affixes together (affixes ride along in the same
+        // response) — invalidate once here, after both slices have synced,
+        // so a re-sync of either never serves a stale payload for up to 1h.
+        Cache::forget('game-data:mythic-keystone-dungeons');
     }
 
     private function syncRaids(
