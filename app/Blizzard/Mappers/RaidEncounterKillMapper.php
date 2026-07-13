@@ -5,10 +5,17 @@ declare(strict_types=1);
 namespace App\Blizzard\Mappers;
 
 use App\Blizzard\DTO\RaidEncounterKill;
+use App\Support\RaidRetention;
 
 class RaidEncounterKillMapper
 {
     /**
+     * One DTO per (encounter, difficulty): Blizzard lists current raids under
+     * both the real expansion and the synthetic "Current Season" grouping, and
+     * a duplicate key would abort the slice's single ON CONFLICT upsert batch
+     * (SQLSTATE 21000). The real-expansion copy wins so the stats heatmap's
+     * expansion_name filter can see the rows.
+     *
      * @return RaidEncounterKill[]
      */
     public function map(?array $data): array
@@ -36,7 +43,12 @@ class RaidEncounterKillMapper
                             continue;
                         }
 
-                        $out[] = new RaidEncounterKill(
+                        $key = $encId.'|'.$difficulty;
+                        if (isset($out[$key]) && ($out[$key]->expansionName !== RaidRetention::CURRENT_SEASON || $expansionName === RaidRetention::CURRENT_SEASON)) {
+                            continue;
+                        }
+
+                        $out[$key] = new RaidEncounterKill(
                             expansionName: $expansionName,
                             instanceId: $instanceId,
                             instanceName: $instanceName,
@@ -51,6 +63,6 @@ class RaidEncounterKillMapper
             }
         }
 
-        return $out;
+        return array_values($out);
     }
 }
