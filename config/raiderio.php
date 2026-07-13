@@ -35,9 +35,9 @@ return [
     'teammate_crawl_during_seed' => (bool) env('RAIDERIO_SEED_TEAMMATE_CRAWL_ENABLED', false),
 
     // SyncGuildRoster's per-member SyncCharacterData::Full fan-out runs from EVERY
-    // SyncGuildData dispatch (including ProactiveSyncGuilds), not just seed-originated
-    // ones. Default is OFF so the scheduler doesn't unexpectedly Full-sync every roster
-    // every cycle. The seeder explicitly sets it via Config::set during a seed run.
+    // SyncGuildData dispatch (on-demand only after ProactiveSyncGuilds removal).
+    // Default is OFF to avoid unexpected Full-syncs on user-initiated lookups.
+    // The seeder explicitly sets it via Config::set during a seed run.
     'dispatch_roster_character_syncs' => (bool) env('RAIDERIO_DISPATCH_ROSTER_CHAR_SYNCS', false),
 
     'crawl' => [

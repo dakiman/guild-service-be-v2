@@ -3,7 +3,6 @@
 use App\Blizzard\Exceptions\BlizzardApiException;
 use App\Blizzard\Exceptions\BlizzardNotFoundException;
 use App\Blizzard\Jobs\ProactiveSyncCharacters;
-use App\Blizzard\Jobs\ProactiveSyncGuilds;
 use App\Http\Middleware\ForceJsonResponse;
 use App\Jobs\WarmCharacterStats;
 use App\Jobs\WarmRaidKillStats;
@@ -26,7 +25,6 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->job(new WarmRaidKillStats)->everyThirtyMinutes()->withoutOverlapping();
         $schedule->job(new ProactiveSyncCharacters(tier: 1))->dailyAt('05:00')->withoutOverlapping();
         $schedule->job(new ProactiveSyncCharacters(tier: 2))->weeklyOn(0, '06:00')->withoutOverlapping();
-        $schedule->job(new ProactiveSyncGuilds)->weeklyOn(0, '04:00')->withoutOverlapping();
         $schedule->command('queue:prune-batches --hours=48')->daily();
         $schedule->command('queue:prune-failed --hours=168')->daily();
         $schedule->command('blizzard:sync-game-data')
