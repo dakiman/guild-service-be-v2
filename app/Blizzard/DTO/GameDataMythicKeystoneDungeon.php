@@ -11,5 +11,7 @@ final readonly class GameDataMythicKeystoneDungeon
         public string $name,
         public ?string $mediaUrl,
         public ?int $journalInstanceId,
+        /** @var list<array{upgrade_level: int, qualifying_duration: int}>|null */
+        public ?array $keystoneUpgrades = null,
     ) {}
 }

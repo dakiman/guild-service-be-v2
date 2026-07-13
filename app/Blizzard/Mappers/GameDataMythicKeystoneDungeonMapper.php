@@ -35,6 +35,7 @@ class GameDataMythicKeystoneDungeonMapper
             name: (string) ($detail['name'] ?? 'Unknown'),
             mediaUrl: $mediaUrl,
             journalInstanceId: $journalInstanceId,
+            keystoneUpgrades: $this->extractKeystoneUpgrades($detail['keystone_upgrades'] ?? null),
         );
     }
 
@@ -78,5 +79,37 @@ class GameDataMythicKeystoneDungeonMapper
         }
 
         return null;
+    }
+
+    /**
+     * Normalize Blizzard's keystone_upgrades (par times per chest level:
+     * beat qualifying_duration ms → that many chests). Null when absent or
+     * unusable so the DB column stays NULL rather than '[]'.
+     *
+     * @return list<array{upgrade_level: int, qualifying_duration: int}>|null
+     */
+    private function extractKeystoneUpgrades(?array $raw): ?array
+    {
+        if ($raw === null) {
+            return null;
+        }
+
+        $out = [];
+        foreach ($raw as $entry) {
+            if (isset($entry['upgrade_level'], $entry['qualifying_duration'])) {
+                $out[] = [
+                    'upgrade_level' => (int) $entry['upgrade_level'],
+                    'qualifying_duration' => (int) $entry['qualifying_duration'],
+                ];
+            }
+        }
+
+        if ($out === []) {
+            return null;
+        }
+
+        usort($out, fn (array $a, array $b) => $a['upgrade_level'] <=> $b['upgrade_level']);
+
+        return $out;
     }
 }

@@ -86,4 +86,47 @@ class GameDataMythicKeystoneDungeonMapperTest extends TestCase
         );
         $this->assertNull($this->mapper->extractMediaUrl(null));
     }
+
+    public function test_maps_keystone_upgrades_normalized_and_sorted(): void
+    {
+        $dto = $this->mapper->mapDetail(
+            detail: [
+                'id' => 503,
+                'name' => 'Ara-Kara, City of Echoes',
+                'keystone_upgrades' => [
+                    ['upgrade_level' => 3, 'qualifying_duration' => 1080000],
+                    ['upgrade_level' => 1, 'qualifying_duration' => 1800000],
+                    ['upgrade_level' => 2, 'qualifying_duration' => 1440000],
+                ],
+            ],
+            mediaUrl: null,
+            journalInstanceId: null,
+        );
+
+        $this->assertSame([
+            ['upgrade_level' => 1, 'qualifying_duration' => 1800000],
+            ['upgrade_level' => 2, 'qualifying_duration' => 1440000],
+            ['upgrade_level' => 3, 'qualifying_duration' => 1080000],
+        ], $dto->keystoneUpgrades);
+    }
+
+    public function test_absent_empty_or_malformed_keystone_upgrades_map_to_null(): void
+    {
+        $absent = $this->mapper->mapDetail(['id' => 1, 'name' => 'A'], null, null);
+        $this->assertNull($absent->keystoneUpgrades);
+
+        $empty = $this->mapper->mapDetail(
+            ['id' => 1, 'name' => 'A', 'keystone_upgrades' => []],
+            null,
+            null,
+        );
+        $this->assertNull($empty->keystoneUpgrades);
+
+        $malformed = $this->mapper->mapDetail(
+            ['id' => 1, 'name' => 'A', 'keystone_upgrades' => [['upgrade_level' => 1]]],
+            null,
+            null,
+        );
+        $this->assertNull($malformed->keystoneUpgrades);
+    }
 }
