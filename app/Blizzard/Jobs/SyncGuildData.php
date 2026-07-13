@@ -11,6 +11,7 @@ use App\Blizzard\Mappers\GuildProfileMapper;
 use App\Blizzard\Mappers\GuildRosterMapper;
 use App\Blizzard\Middleware\BlizzardHealthCheck;
 use App\Blizzard\Middleware\BlizzardRateLimiter;
+use App\Enums\SyncOrigin;
 use App\Models\Character;
 use App\Models\Guild;
 use App\Models\GuildMember;
@@ -41,27 +42,42 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
         public readonly string $name,
         // Non-readonly with property-default so unserialize of old-shape queued
         // jobs gets `false` rather than "uninitialized" — see SyncCharacterData
-        // forceTeammateCrawl for the same pattern + rationale.
+        // forceTeammateCrawl for the same pattern + rationale. True only for the
+        // raider.io seeder: it opts in to the SyncGuildRoster fan-out.
         public bool $forceRosterFanout = false,
-        // Set true by user-visit dispatch sites (GuildController, GuildService)
-        // to force per-member Full fan-out + M+ teammate crawl on the resulting
-        // SyncGuildRoster. Default false so background ProactiveSyncGuilds stays
-        // Shallow-only.
-        public bool $forceCascade = false,
+        // Origin decides the queue lane — never infer routing from other params
+        // (see SyncOrigin docblock; 2026-07-06 + 2026-07-12 incidents). Old-shape
+        // payloads rehydrate as UserLookup, which is harmless: their queue was
+        // already fixed at dispatch time.
+        public SyncOrigin $origin = SyncOrigin::UserLookup,
     ) {
-        $this->onQueue('blizzard-user-sync');
+        $this->onQueue($origin->queue());
     }
 
     public function uniqueId(): string
     {
-        // Mode segment so a queued auto-mode job (proactive sweep) doesn't
-        // dedupe a force-mode job (user visit / seeder), which would silently
-        // skip the per-member Full fan-out + teammate crawl. Two parallel jobs
-        // for the same guild may run during a collision; both honor the rate
-        // limiter and the cost is one redundant API round-trip.
-        $mode = ($this->forceCascade || $this->forceRosterFanout) ? 'force' : 'auto';
+        // Mode segment so a queued auto-mode job (visit / auto-discover)
+        // doesn't dedupe a force-mode job (seeder), which would silently skip
+        // the per-member fan-out. Two parallel jobs for the same guild may run
+        // during a collision; both honor the rate limiter and the cost is one
+        // redundant API round-trip.
+        $mode = $this->forceRosterFanout ? 'force' : 'auto';
 
         return "sync-guild:{$this->region}:{$this->realm}:{$this->name}:{$mode}";
+    }
+
+    /**
+     * Horizon tags: make queue floods attributable to their origin in the
+     * dashboard — mirrors SyncCharacterData::tags().
+     *
+     * @return array<int, string>
+     */
+    public function tags(): array
+    {
+        return [
+            "origin:{$this->origin->value}",
+            "guild:{$this->region}:{$this->realm}:{$this->name}",
+        ];
     }
 
     /**
@@ -204,12 +220,14 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
             $guild->update(['roster_synced_at' => now()]);
         });
 
-        // Dispatch the roster job — drives Shallow Bus::batch for all members AND
-        // (when raiderio.dispatch_roster_character_syncs is true) Full per-member
-        // SyncCharacterData fan-out. Previously gated on isRosterStale(), which is
-        // always false here because we just set roster_synced_at to now() — the
-        // gate was dead code, and the roster job never fired.
-        SyncGuildRoster::dispatch($guild, $this->forceRosterFanout || $this->forceCascade);
+        // Roster fan-out is opt-in (raider.io seeder only). User visits and
+        // auto-discover stop at profile + roster rows: members become full
+        // characters when individually viewed. The unconditional dispatch here
+        // is what amplified the 2026-07-12 queue flood — see
+        // docs/superpowers/specs/2026-07-13-on-demand-guild-sync-design.md.
+        if ($this->forceRosterFanout) {
+            SyncGuildRoster::dispatch($guild, true);
+        }
     }
 
     public function failed(Throwable $exception): void

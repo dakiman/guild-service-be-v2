@@ -32,7 +32,7 @@ class GuildService
         );
 
         if ($guild->isStale() || $guild->isRosterStale()) {
-            SyncGuildData::dispatch($region, $realm, $name, forceRosterFanout: false, forceCascade: true);
+            SyncGuildData::dispatch($region, $realm, $name);
         }
 
         return $guild;

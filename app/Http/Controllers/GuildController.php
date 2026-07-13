@@ -35,7 +35,7 @@ class GuildController extends Controller
         }
 
         if ($result === null) {
-            SyncGuildData::dispatch($region, $realm, $guild, forceRosterFanout: false, forceCascade: true);
+            SyncGuildData::dispatch($region, $realm, $guild);
 
             // SyncGuildData runs on blizzard-user-sync — same lane the FE is
             // effectively waiting on, so its depth is the honest signal here.

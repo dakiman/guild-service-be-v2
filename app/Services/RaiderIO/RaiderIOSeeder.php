@@ -7,6 +7,7 @@ namespace App\Services\RaiderIO;
 use App\Blizzard\Jobs\SyncCharacterData;
 use App\Blizzard\Jobs\SyncGuildData;
 use App\Enums\SyncDepth;
+use App\Enums\SyncOrigin;
 use App\Models\Character;
 use App\Models\Guild;
 use App\Models\SeededRun;
@@ -52,6 +53,7 @@ class RaiderIOSeeder
                         $ref->realmSlug,
                         $ref->name,
                         forceRosterFanout: true,
+                        origin: SyncOrigin::Discovery,
                     );
                     $report->dispatched++;
                 }

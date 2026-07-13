@@ -307,13 +307,19 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $character->update(['guild_id' => $guild->id]);
 
             // Newly-discovered guild gets a SyncGuildData dispatch so the
-            // shell row populates profile + roster instead of waiting for the
+            // shell row populates profile + roster rows on the background
+            // lane — no per-member fan-out — instead of waiting for the
             // user's first click. ShouldBeUnique on SyncGuildData dedupes
             // bursts when many characters in the same guild are synced
             // concurrently. Only fires on first creation; later visits go
             // through the normal stale-and-refresh path.
             if ($guild->wasRecentlyCreated) {
-                SyncGuildData::dispatch($this->region, $profile->guildRealm, $guildName);
+                SyncGuildData::dispatch(
+                    $this->region,
+                    $profile->guildRealm,
+                    $guildName,
+                    origin: SyncOrigin::Discovery,
+                );
             }
         } else {
             // Character is guildless now — clear a stale link so ex-members stop
