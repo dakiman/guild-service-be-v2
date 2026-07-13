@@ -646,6 +646,7 @@ class SyncGameData extends Command
                     [
                         'name' => $dto->name,
                         'media_url' => $dto->mediaUrl,
+                        'keystone_upgrades' => $dto->keystoneUpgrades,
                         'journal_instance_id' => $dto->journalInstanceId,
                     ],
                 );

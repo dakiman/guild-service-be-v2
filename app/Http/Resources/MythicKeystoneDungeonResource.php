@@ -11,6 +11,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
  * @property int $id
  * @property string $name
  * @property ?string $media_url
+ * @property ?array $keystone_upgrades
  * @property ?int $journal_instance_id
  */
 class MythicKeystoneDungeonResource extends JsonResource
@@ -24,6 +25,7 @@ class MythicKeystoneDungeonResource extends JsonResource
             'id' => (int) $this->id,
             'name' => $this->name,
             'media_url' => $this->media_url,
+            'keystone_upgrades' => $this->keystone_upgrades,
             'journal_instance_id' => $this->journal_instance_id !== null
                 ? (int) $this->journal_instance_id
                 : null,

@@ -16,6 +16,7 @@ class GameDataMythicKeystoneDungeon extends Model
         'id',
         'name',
         'media_url',
+        'keystone_upgrades',
         'journal_instance_id',
     ];
 
@@ -27,6 +28,7 @@ class GameDataMythicKeystoneDungeon extends Model
     {
         return [
             'id' => 'integer',
+            'keystone_upgrades' => 'array',
             'journal_instance_id' => 'integer',
         ];
     }

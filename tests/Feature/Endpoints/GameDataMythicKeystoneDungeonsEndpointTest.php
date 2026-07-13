@@ -19,6 +19,11 @@ class GameDataMythicKeystoneDungeonsEndpointTest extends TestCase
             'id' => 503,
             'name' => 'Ara-Kara, City of Echoes',
             'media_url' => 'https://example/arak.jpg',
+            'keystone_upgrades' => [
+                ['upgrade_level' => 1, 'qualifying_duration' => 1800000],
+                ['upgrade_level' => 2, 'qualifying_duration' => 1440000],
+                ['upgrade_level' => 3, 'qualifying_duration' => 1080000],
+            ],
             'journal_instance_id' => 1271,
         ]);
         GameDataMythicKeystoneDungeon::create([
@@ -53,10 +58,14 @@ class GameDataMythicKeystoneDungeonsEndpointTest extends TestCase
         $response->assertJsonPath('dungeons.0.id', 503);
         $response->assertJsonPath('dungeons.0.name', 'Ara-Kara, City of Echoes');
         $response->assertJsonPath('dungeons.0.media_url', 'https://example/arak.jpg');
+        $response->assertJsonPath('dungeons.0.keystone_upgrades.0.upgrade_level', 1);
+        $response->assertJsonPath('dungeons.0.keystone_upgrades.0.qualifying_duration', 1800000);
+        $response->assertJsonPath('dungeons.0.keystone_upgrades.2.upgrade_level', 3);
         $response->assertJsonPath('dungeons.0.journal_instance_id', 1271);
 
         $response->assertJsonPath('dungeons.1.id', 504);
         $response->assertJsonPath('dungeons.1.media_url', null);
+        $response->assertJsonPath('dungeons.1.keystone_upgrades', null);
         $response->assertJsonPath('dungeons.1.journal_instance_id', null);
 
         // Affixes is a dictionary keyed by id (FE does O(1) lookup via affixes[id]).
