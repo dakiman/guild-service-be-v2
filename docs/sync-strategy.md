@@ -10,11 +10,10 @@ How characters, guilds, and game data get fetched and kept fresh.
 | User visits guild | On-demand | Profile + roster rows only | `blizzard-user-sync` | No member fan-out; fan-out is seeder-only via `forceRosterFanout` |
 | Proactive tier 1 | Every 30 min | Full | `blizzard-background` | Characters with 5+ searches in last 7 days, active login |
 | Proactive tier 2 | Every 2 hours | Standard | `blizzard-background` | Characters with 2+ searches in last 30 days |
-| Proactive guilds | Daily 04:00 UTC | Profile + roster only | `blizzard-user-sync` | No per-member Full fan-out |
 | OAuth login | On auth | Full per character | `blizzard-user-sync` | Via `SyncUserCharacters` |
-| RaiderIO seeder | Manual | Full | `blizzard-user-sync` | `raiderio:seed --phase=guilds\|runs` |
+| RaiderIO seeder | Manual | Full | `blizzard-background` | `raiderio:seed --phase=guilds\|runs`; guild jobs use `origin: Discovery` |
 | Backfill | Manual | Full | `blizzard-user-sync` | `blizzard:backfill-slices --limit=N` for null `*_synced_at` |
-| Auto-discover guild | During any character sync | Profile + roster | `blizzard-user-sync` | When character has a guild we don't have (`firstOrCreate`) |
+| Auto-discover guild | During any character sync | Profile + roster | `blizzard-background` | When character has a guild we don't have (`firstOrCreate`); `origin: Discovery` |
 | Game data | Weekly Sun 03:00 | Reference tables | `default` | Mounts, talents, raids, factions, etc. |
 | Token refresh | Twice daily | N/A | `blizzard-auth` | All regions |
 
@@ -37,10 +36,9 @@ User visits character
 
 Proactive tier 1
   └─ SyncCharacterData::Full (popular characters)
-
-Proactive guilds
-  └─ SyncGuildData → SyncGuildRoster → SyncCharacterData::Shallow only
 ```
+
+There is no proactive guild sweep — the weekly `ProactiveSyncGuilds` job was deleted after the 2026-07-12 queue-starvation incident. Guild syncs happen only on visit, auto-discover, or seeder run.
 
 ## Sync depths
 
