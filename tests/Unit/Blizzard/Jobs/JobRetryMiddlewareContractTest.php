@@ -26,14 +26,19 @@ class JobRetryMiddlewareContractTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_sync_character_data_retries_are_time_bounded(): void
+    {
+        $this->assertGreaterThan(now()->addHours(23), (new SyncCharacterData('eu', 'tarren-mill', 'x'))->retryUntil());
+    }
+
     public function test_sync_guild_data_retries_are_time_bounded(): void
     {
-        $this->assertGreaterThan(now()->addHours(5), (new SyncGuildData('eu', 'tarren-mill', 'echo'))->retryUntil());
+        $this->assertGreaterThan(now()->addHours(23), (new SyncGuildData('eu', 'tarren-mill', 'echo'))->retryUntil());
     }
 
     public function test_sync_guild_roster_retries_are_time_bounded(): void
     {
-        $this->assertGreaterThan(now()->addHours(5), (new SyncGuildRoster(Guild::factory()->create()))->retryUntil());
+        $this->assertGreaterThan(now()->addHours(23), (new SyncGuildRoster(Guild::factory()->create()))->retryUntil());
     }
 
     public function test_sync_user_characters_retries_are_time_bounded(): void

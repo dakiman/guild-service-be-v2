@@ -80,15 +80,13 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
         ];
     }
 
-    /**
-     * @return array<int, object>
-     */
-    // Time-bound retries (mirrors SyncCharacterData): every middleware release()
-    // re-queues without burning a fixed $tries budget; only real exceptions
-    // (maxExceptions) cap the work, within a 6h window. (P1.10)
+    // Time-bound retries: every middleware release() re-queues without burning
+    // a fixed $tries budget; only real exceptions (maxExceptions) cap the work.
+    // 24h window (was 6h): with background sweeps gone, expiry means the queue
+    // was genuinely wedged for a day — reaping is then the correct outcome.
     public function retryUntil(): \DateTime
     {
-        return now()->addHours(6);
+        return now()->addHours(24);
     }
 
     public function middleware(): array
