@@ -16,4 +16,15 @@ final class SyncOriginTest extends TestCase
         $this->assertSame('blizzard-background', SyncOrigin::TeammateCrawl->queue());
         $this->assertSame('blizzard-background', SyncOrigin::Proactive->queue());
     }
+
+    public function test_discovery_routes_to_background_queue(): void
+    {
+        $this->assertSame('blizzard-background', SyncOrigin::Discovery->queue());
+    }
+
+    public function test_discovery_value_is_stable(): void
+    {
+        // Serialized into queued payloads and Horizon tags — never change it.
+        $this->assertSame('discovery', SyncOrigin::Discovery->value);
+    }
 }
