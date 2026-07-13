@@ -96,8 +96,10 @@ name the new window.
 
 ### 4. Logging
 
-- `config/logging.php`: `stack` channel → `['stderr', 'daily']`, daily
-  retention 14 days.
+- No code change: stock `config/logging.php` already builds the `stack`
+  channel from `LOG_STACK` (default `single`) and daily retention from
+  `LOG_DAILY_DAYS` (default 14). Set `LOG_CHANNEL=stack`,
+  `LOG_STACK=stderr,daily` via env.
 - Deployment (`/srv/dakis`, separate commit, all three PHP containers —
   app/horizon/scheduler): `LOG_CHANNEL=stack` env; bind mount
   `data/guild-service-v2/logs` → `/var/www/html/storage/logs` (writable by
