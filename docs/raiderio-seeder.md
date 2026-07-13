@@ -18,7 +18,7 @@ Lean discovery layer for bootstrapping from raider.io top-lists (`app/Services/R
 
 ## Roster fan-out
 
-Opt-in per dispatch (default OFF globally). `SyncGuildRoster` dispatches per-member `SyncCharacterData::Full` only when (a) `forceFanout: true` was passed (seeder sets this), or (b) `RAIDERIO_DISPATCH_ROSTER_CHAR_SYNCS=true` globally. So routine `ProactiveSyncGuilds` and user-initiated `SyncGuildData` do NOT cascade per-member. Members above `BLIZZARD_MIN_LEVEL_FOR_LOOKUP` only.
+Opt-in per dispatch (default OFF globally). `SyncGuildRoster` dispatches per-member `SyncCharacterData::Full` only when (a) `forceFanout: true` was passed (seeder sets this), or (b) `RAIDERIO_DISPATCH_ROSTER_CHAR_SYNCS=true` globally. Guild syncs are on-demand only (the weekly `ProactiveSyncGuilds` sweep was deleted 2026-07-13); user-initiated `SyncGuildData` does NOT cascade per-member. Members above `BLIZZARD_MIN_LEVEL_FOR_LOOKUP` only.
 
 ## Teammate crawl override
 

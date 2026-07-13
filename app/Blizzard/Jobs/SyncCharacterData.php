@@ -82,17 +82,19 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         public readonly SyncDepth $depth = SyncDepth::Standard,
         public readonly ?int $userId = null,
         public readonly int $crawlDepth = 0,
-        // Non-readonly with a property-declaration default: when an OLD-shape job
-        // (queued before this param existed) is unserialized into the new class,
-        // PHP applies the default `false` rather than throwing "uninitialized".
-        // Readonly props can't have property-declaration defaults — only constructor
-        // defaults — and constructors don't run on unserialize.
+        // Non-readonly so unserialize of an OLD-shape job (queued before this
+        // param existed) doesn't fatal on a readonly write. NOTE: the
+        // promoted default does NOT apply on unserialize — an old payload
+        // leaves this property uninitialized (readonly props can't have
+        // property-declaration defaults, and constructors don't run on
+        // unserialize), so never read it post-rehydration.
         public bool $forceTeammateCrawl = false,
         // Same unserialize-safety pattern. Origin decides the queue lane —
         // never infer routing from crawlDepth/depth (that inference is how
-        // roster fan-out flooded blizzard-user-sync on 2026-07-06). Old-shape
-        // jobs rehydrate as UserLookup, which is harmless: their queue was
-        // already fixed in the payload at dispatch time.
+        // roster fan-out flooded blizzard-user-sync on 2026-07-06). Same
+        // caveat as $forceTeammateCrawl above: an old payload leaves this
+        // property uninitialized, so never read it post-rehydration; the
+        // queue lane was already fixed in the payload at dispatch time.
         public SyncOrigin $origin = SyncOrigin::UserLookup,
     ) {
         $this->onQueue($origin->queue());

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Services\RaiderIO;
 
 use App\Blizzard\Jobs\SyncGuildData;
+use App\Enums\SyncOrigin;
 use App\Models\Guild;
 use App\Services\RaiderIO\DTO\SeedGuildRef;
 use App\Services\RaiderIO\DTO\SeedOptions;
@@ -40,6 +41,11 @@ class RaiderIOSeederTest extends TestCase
         $report = $seeder->seedGuilds($opts);
 
         Queue::assertPushed(SyncGuildData::class, 3);
+        Queue::assertPushed(
+            SyncGuildData::class,
+            fn (SyncGuildData $job) => $job->forceRosterFanout === true
+                && $job->origin === SyncOrigin::Discovery,
+        );
         $this->assertSame(3, $report->considered);
         $this->assertSame(3, $report->dispatched);
         $this->assertSame(0, $report->skippedTtl);

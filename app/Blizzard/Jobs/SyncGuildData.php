@@ -40,15 +40,18 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
         public readonly string $region,
         public readonly string $realm,
         public readonly string $name,
-        // Non-readonly with property-default so unserialize of old-shape queued
-        // jobs gets `false` rather than "uninitialized" — see SyncCharacterData
-        // forceTeammateCrawl for the same pattern + rationale. True only for the
-        // raider.io seeder: it opts in to the SyncGuildRoster fan-out.
+        // Non-readonly so unserialize of old-shape payloads doesn't fatal on a
+        // readonly write. NOTE: the promoted default does NOT apply on
+        // unserialize — an old payload leaves this property uninitialized, so
+        // never read it in handle()/failed(); the queue lane was already fixed
+        // at dispatch time. True only for the raider.io seeder: it opts in to
+        // the SyncGuildRoster fan-out.
         public bool $forceRosterFanout = false,
         // Origin decides the queue lane — never infer routing from other params
-        // (see SyncOrigin docblock; 2026-07-06 + 2026-07-12 incidents). Old-shape
-        // payloads rehydrate as UserLookup, which is harmless: their queue was
-        // already fixed at dispatch time.
+        // (see SyncOrigin docblock; 2026-07-06 + 2026-07-12 incidents). Same
+        // unserialize caveat as $forceRosterFanout above: an old payload leaves
+        // this property uninitialized, so never read it post-rehydration; the
+        // queue lane was already fixed at dispatch time.
         public SyncOrigin $origin = SyncOrigin::UserLookup,
     ) {
         $this->onQueue($origin->queue());
@@ -89,6 +92,9 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
         return now()->addHours(24);
     }
 
+    /**
+     * @return array<int, object>
+     */
     public function middleware(): array
     {
         // Health check before rate limiter: don't spend a throttle slot (and up

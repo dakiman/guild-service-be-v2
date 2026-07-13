@@ -7,7 +7,7 @@ How characters, guilds, and game data get fetched and kept fresh.
 | Trigger | Frequency | Depth | Queue | Notes |
 |---|---|---|---|---|
 | User visits character | On-demand | Standard (Full if any slice stale) | `blizzard-user-sync` | Staleness checked per-slice |
-| User visits guild | On-demand | Full cascade (Shallow + Full per member) | `blizzard-user-sync` | `forceCascade: true` |
+| User visits guild | On-demand | Profile + roster rows only | `blizzard-user-sync` | No member fan-out; fan-out is seeder-only via `forceRosterFanout` |
 | Proactive tier 1 | Every 30 min | Full | `blizzard-background` | Characters with 5+ searches in last 7 days, active login |
 | Proactive tier 2 | Every 2 hours | Standard | `blizzard-background` | Characters with 2+ searches in last 30 days |
 | Proactive guilds | Daily 04:00 UTC | Profile + roster only | `blizzard-user-sync` | No per-member Full fan-out |
@@ -22,10 +22,13 @@ How characters, guilds, and game data get fetched and kept fresh.
 
 ```
 User visits guild
-  └─ SyncGuildData (profile + roster upsert)
+  └─ SyncGuildData (profile + roster upsert only — no member fan-out)
+
+RaiderIO seeder
+  └─ SyncGuildData (forceRosterFanout: true)
        └─ SyncGuildRoster
             ├─ SyncCharacterData::Shallow  (per member, unconditional)
-            └─ SyncCharacterData::Full     (per member, only if forceCascade or config flag)
+            └─ SyncCharacterData::Full     (per member, only if forceFanout or config flag)
                  └─ dispatchTeammateCrawl   (M+ teammates, depth-capped at 2)
 
 User visits character

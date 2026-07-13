@@ -35,8 +35,12 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
 
     public function __construct(
         public readonly Guild $guild,
-        // Non-readonly with property-default so unserialize of old-shape queued
-        // jobs gets `false` rather than "uninitialized".
+        // Non-readonly so unserialize of old-shape payloads doesn't fatal on a
+        // readonly write. Safe to read in handle() (unlike the "never read
+        // post-rehydration" caveat on SyncGuildData/SyncCharacterData's newer
+        // fields): $forceFanout predates this branch, so every payload still
+        // in the queue already carries it — only fields added *after* a job
+        // has queued instances in flight must not be read post-rehydration.
         public bool $forceFanout = false,
     ) {
         $this->onQueue('blizzard-roster-sync');
@@ -44,10 +48,11 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
 
     public function uniqueId(): string
     {
-        // Mode segment so a queued auto-fanout job (proactive sweep) doesn't
-        // dedupe a force-fanout job (user visit / seeder), which would silently
-        // skip the per-member Full SyncCharacterData fan-out + teammate crawl.
-        // Mirrors SyncGuildData::uniqueId(); see commit 2e61a22.
+        // Mode segment so a queued auto-mode job (Shallow-only, dispatched
+        // from a non-force SyncGuildData) doesn't dedupe a force-mode job
+        // (the raider.io seeder), which would silently skip the per-member
+        // Full SyncCharacterData fan-out + teammate crawl. Mirrors
+        // SyncGuildData::uniqueId(); see commit 2e61a22.
         $mode = $this->forceFanout ? 'force' : 'auto';
 
         return "sync-guild-roster:{$this->guild->id}:{$mode}";
@@ -87,11 +92,14 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
         // 2. raiderio.dispatch_roster_character_syncs config flag (default false).
         $fullPathActive = $this->forceFanout || config('raiderio.dispatch_roster_character_syncs', false);
 
-        // When forceFanout is true (seeder run), skip both
-        // Shallow and Full dispatches for any member whose Character row is fresh
-        // (updated_at within $ttl). Cold + stale members get a Full.
-        // When forceFanout is false (proactive path), Shallow fires unless the
-        // member is a Full target (config path staleness gate).
+        // When forceFanout is true (seeder run — currently the only caller
+        // that dispatches this job at all), skip both Shallow and Full
+        // dispatches for any member whose Character row is fresh (updated_at
+        // within $ttl). Cold + stale members get a Full.
+        // When forceFanout is false (non-force path — not currently
+        // dispatched in production, but still correct if ever wired in),
+        // Shallow fires unless the member is a Full target (config path
+        // staleness gate).
         $freshTuples = [];
         if ($this->forceFanout) {
             $ttl = (int) config('raiderio.character_resync_ttl', 86400);
@@ -217,7 +225,7 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
 
     /**
      * Progressive delay (seconds) for the next fan-out dispatch: job i runs
-     * at ~i/jobs_per_minute minutes. retryUntil (6h) is stamped at dispatch,
+     * at ~i/jobs_per_minute minutes. retryUntil (24h) is stamped at dispatch,
      * so the stagger must stay well under it — at the default 30/min even a
      * 1000-member roster spreads over ~33 min.
      */
