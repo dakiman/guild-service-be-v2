@@ -9,6 +9,7 @@ use App\Services\RaiderIO\DTO\SeedGuildRef;
 use App\Services\RaiderIO\DTO\SeedRunRef;
 use App\Services\RaiderIO\Exceptions\RaiderIOException;
 use App\Support\BlizzardIdentity;
+use App\Support\Seasons;
 use Generator;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
@@ -176,9 +177,7 @@ class RaiderIOClient
 
     protected function currentRaidSlug(): string
     {
-        // raider.io's raid-rankings endpoint keys raids by tier slug (e.g. "tier-mn-1"
-        // for Midnight tier 1), NOT by raid instance slug. Bump per tier rotation.
-        return (string) config('raiderio.current_raid_tier', 'tier-mn-1');
+        return Seasons::raiderioTierSlug();
     }
 
     protected function http(): PendingRequest

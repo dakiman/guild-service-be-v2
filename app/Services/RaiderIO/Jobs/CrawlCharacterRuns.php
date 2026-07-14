@@ -8,6 +8,7 @@ use App\Models\DungeonRun;
 use App\Services\RaiderIO\Mappers\RaiderIOMythicPlusMapper;
 use App\Services\RaiderIO\RaiderIOClient;
 use App\Services\RunTeamPersister;
+use App\Support\Seasons;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -103,7 +104,7 @@ class CrawlCharacterRuns implements ShouldBeUnique, ShouldQueue
         if ($memberCount < 5) {
             FetchRunRoster::dispatch(
                 $keystoneRunId,
-                (string) config('raiderio.season'),
+                Seasons::raiderioSeasonSlug(),
                 $this->region,
             );
         }

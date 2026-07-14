@@ -16,6 +16,7 @@ use App\Services\RaiderIO\DTO\SeedGuildRef;
 use App\Services\RaiderIO\DTO\SeedOptions;
 use App\Services\RaiderIO\DTO\SeedReport;
 use App\Services\RaiderIO\Exceptions\RaiderIOException;
+use App\Support\Seasons;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -75,7 +76,7 @@ class RaiderIOSeeder
     public function seedRuns(SeedOptions $opts): SeedReport
     {
         $report = new SeedReport(phase: 'runs', regions: $opts->regions);
-        $season = (string) config('raiderio.season');
+        $season = Seasons::raiderioSeasonSlug();
 
         Log::info('raiderio.seed.start', [
             'phase' => 'runs',
