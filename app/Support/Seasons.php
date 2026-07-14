@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Support;
 
 use App\Models\GameDataSeason;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
 
 class Seasons
@@ -28,20 +29,31 @@ class Seasons
      */
     public static function current(): ?array
     {
-        $cached = Cache::remember(self::CACHE_KEY, 3600, function () {
-            $row = GameDataSeason::where('is_current', true)->first();
-
-            return $row === null ? self::NULL_SENTINEL : [
-                'id' => (int) $row->id,
-                'slug' => (string) $row->slug,
-                'name' => (string) $row->name,
-                'raiderio_tier_slug' => (string) $row->raiderio_tier_slug,
-                'raiderio_expansion_id' => (int) $row->raiderio_expansion_id,
-                'expansion_id' => $row->expansion_id === null ? null : (int) $row->expansion_id,
-            ];
-        });
+        try {
+            $cached = Cache::remember(self::CACHE_KEY, 3600, fn () => self::load());
+        } catch (QueryException) {
+            // Registry table missing entirely (unmigrated test DBs, the
+            // deploy window before `php artisan migrate` runs) — same
+            // fail-open contract as an empty registry.
+            return null;
+        }
 
         return $cached === self::NULL_SENTINEL ? null : $cached;
+    }
+
+    /** @return array{id: int, slug: string, name: string, raiderio_tier_slug: string, raiderio_expansion_id: int, expansion_id: ?int}|string */
+    private static function load(): array|string
+    {
+        $row = GameDataSeason::where('is_current', true)->first();
+
+        return $row === null ? self::NULL_SENTINEL : [
+            'id' => (int) $row->id,
+            'slug' => (string) $row->slug,
+            'name' => (string) $row->name,
+            'raiderio_tier_slug' => (string) $row->raiderio_tier_slug,
+            'raiderio_expansion_id' => (int) $row->raiderio_expansion_id,
+            'expansion_id' => $row->expansion_id === null ? null : (int) $row->expansion_id,
+        ];
     }
 
     public static function currentId(): ?int

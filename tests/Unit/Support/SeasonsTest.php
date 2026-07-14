@@ -8,6 +8,7 @@ use App\Models\GameDataSeason;
 use App\Support\Seasons;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 use Tests\TestCase;
 
 class SeasonsTest extends TestCase
@@ -68,5 +69,16 @@ class SeasonsTest extends TestCase
 
         $this->assertSame('season-mn-1', Seasons::raiderioSeasonSlug());
         $this->assertSame('tier-mn-1', Seasons::raiderioTierSlug());
+    }
+
+    public function test_missing_registry_table_fails_open_to_null(): void
+    {
+        // Unit suites without RefreshDatabase (and the deploy window before
+        // migrate runs) have no game_data_seasons table at all — the reader
+        // must fail open exactly like an empty registry, not throw.
+        Schema::drop('game_data_seasons');
+
+        $this->assertNull(Seasons::current());
+        $this->assertNull(Seasons::currentId());
     }
 }
