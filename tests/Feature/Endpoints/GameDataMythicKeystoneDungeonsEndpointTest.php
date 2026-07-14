@@ -6,6 +6,7 @@ namespace Tests\Feature\Endpoints;
 
 use App\Models\GameDataKeystoneAffix;
 use App\Models\GameDataMythicKeystoneDungeon;
+use App\Models\GameDataSeason;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -124,5 +125,33 @@ class GameDataMythicKeystoneDungeonsEndpointTest extends TestCase
         $response = $this->getJson('/api/v1/game-data/mythic-keystone-dungeons?season=current');
 
         $response->assertOk();
+    }
+
+    public function test_season_is_populated_from_registry(): void
+    {
+        $this->seedFixtures();
+        GameDataSeason::create([
+            'id' => 17,
+            'slug' => 'season-mn-1',
+            'name' => 'Midnight Season 1',
+            'raiderio_tier_slug' => 'tier-mn-1',
+            'raiderio_expansion_id' => 11,
+            'is_current' => true,
+        ]);
+
+        $response = $this->getJson('/api/v1/game-data/mythic-keystone-dungeons');
+
+        $response->assertOk()
+            ->assertJsonPath('season.id', 17)
+            ->assertJsonPath('season.name', 'Midnight Season 1');
+    }
+
+    public function test_season_is_null_when_registry_empty(): void
+    {
+        $this->seedFixtures();
+
+        $response = $this->getJson('/api/v1/game-data/mythic-keystone-dungeons');
+
+        $response->assertOk()->assertJsonPath('season', null);
     }
 }

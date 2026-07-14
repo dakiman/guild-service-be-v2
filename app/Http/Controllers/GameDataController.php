@@ -13,6 +13,7 @@ use App\Models\GameDataMythicKeystoneDungeon;
 use App\Models\GameDataRaidInstance;
 use App\Models\GameDataTalentTree;
 use App\Services\RealmIndexService;
+use App\Support\Seasons;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -72,10 +73,7 @@ class GameDataController extends Controller
      * Response shape (no `data` envelope; affixes is a dict keyed by id so the
      * FE's `<AffixIcon :affixes="data.affixes" :affixId="..." />` can do an O(1)
      * lookup without scanning):
-     *   { dungeons: [...], affixes: { "<id>": { id, name, icon_url }, ... }, season: null }
-     *
-     * `season` is null today — Blizzard's mythic-keystone/season endpoint exposes
-     * an id but no display name; populating this is deferred to a follow-up.
+     *   { dungeons: [...], affixes: { "<id>": { id, name, icon_url }, ... }, season: {id, name} | null }
      *
      * Cache header per spec §2.6: `Cache-Control: public, max-age=3600`.
      */
@@ -95,10 +93,15 @@ class GameDataController extends Controller
                 $affixDict[(int) $affix->id] = (new KeystoneAffixResource($affix))->resolve();
             }
 
+            // Populated from the game_data_seasons registry; null only when
+            // the registry is empty. A non-null id activates the FE character
+            // page's per-season run filtering.
+            $current = Seasons::current();
+
             return [
                 'dungeons' => MythicKeystoneDungeonResource::collection($dungeons)->resolve(),
                 'affixes' => (object) $affixDict,
-                'season' => null,
+                'season' => $current === null ? null : ['id' => $current['id'], 'name' => $current['name']],
             ];
         });
 
