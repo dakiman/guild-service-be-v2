@@ -11,7 +11,9 @@ use App\Models\GameDataExpansion;
 use App\Models\GameDataKeystoneAffix;
 use App\Models\GameDataMythicKeystoneDungeon;
 use App\Models\GameDataRaidInstance;
+use App\Models\GameDataSeason;
 use App\Models\GameDataTalentTree;
+use App\Models\SeasonArchive;
 use App\Services\RealmIndexService;
 use App\Support\Seasons;
 use Illuminate\Http\JsonResponse;
@@ -102,6 +104,40 @@ class GameDataController extends Controller
                 'dungeons' => MythicKeystoneDungeonResource::collection($dungeons)->resolve(),
                 'affixes' => (object) $affixDict,
                 'season' => $current === null ? null : ['id' => $current['id'], 'name' => $current['name']],
+            ];
+        });
+
+        return response()->json($payload)
+            ->header('Cache-Control', 'public, max-age=3600');
+    }
+
+    /**
+     * GET /api/v1/game-data/seasons
+     *
+     * Full season registry, newest first. `has_archive` tells the FE which
+     * past seasons have a frozen /stats/archive payload to link to.
+     * Cache cleared by season:rollover.
+     */
+    public function seasons(): JsonResponse
+    {
+        $payload = Cache::remember('game-data:seasons', 3600, function () {
+            $archivedIds = SeasonArchive::query()->pluck('season_id')->all();
+
+            return [
+                'seasons' => GameDataSeason::query()
+                    ->orderByDesc('id')
+                    ->get()
+                    ->map(fn (GameDataSeason $s) => [
+                        'id' => (int) $s->id,
+                        'slug' => (string) $s->slug,
+                        'name' => (string) $s->name,
+                        'is_current' => (bool) $s->is_current,
+                        'has_archive' => in_array((int) $s->id, $archivedIds, true),
+                        'started_at' => $s->started_at?->toIso8601String(),
+                        'ended_at' => $s->ended_at?->toIso8601String(),
+                    ])
+                    ->values()
+                    ->all(),
             ];
         });
 

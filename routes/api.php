@@ -13,6 +13,7 @@ use App\Http\Controllers\GameDataController;
 use App\Http\Controllers\GuildController;
 use App\Http\Controllers\GuildStatsController;
 use App\Http\Controllers\RaidKillStatsController;
+use App\Http\Controllers\SeasonArchiveController;
 use App\Http\Controllers\TopKeysController;
 use App\Http\Controllers\TopRunsController;
 use Illuminate\Support\Facades\DB;
@@ -98,6 +99,9 @@ Route::get('/stats/characters/raid-kills', RaidKillStatsController::class)
 Route::get('/stats/characters', CharacterStatsController::class)
     ->middleware('throttle:30,1')
     ->name('stats.characters');
+Route::get('/stats/archive/seasons/{slug}', [SeasonArchiveController::class, 'show'])
+    ->middleware('throttle:30,1')
+    ->name('stats.archive.season');
 
 /*
 |--------------------------------------------------------------------------
@@ -129,6 +133,8 @@ Route::get('/game-data/raid-instances', [GameDataController::class, 'raidInstanc
     ->name('game-data.raid-instances');
 Route::get('/game-data/mythic-keystone-dungeons', [GameDataController::class, 'mythicKeystoneDungeons'])
     ->name('game-data.mythic-keystone-dungeons');
+Route::get('/game-data/seasons', [GameDataController::class, 'seasons'])
+    ->name('game-data.seasons');
 Route::get('/game-data/talent-trees/{treeId}/{specId}', [GameDataController::class, 'talentTree'])
     ->whereNumber(['treeId', 'specId'])
     ->name('game-data.talent-tree');
