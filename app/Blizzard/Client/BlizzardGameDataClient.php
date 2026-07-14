@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Blizzard\Client;
 
+use App\Support\Seasons;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
@@ -46,6 +47,14 @@ class BlizzardGameDataClient extends BlizzardClient
             return (int) $override;
         }
 
+        // game_data_seasons registry is the source of truth once seeded;
+        // the live-index path below survives only as the empty-registry
+        // fallback (fresh installs, tests).
+        $registry = Seasons::currentId();
+        if ($registry !== null) {
+            return $registry;
+        }
+
         return (int) Cache::remember("blizzard:mythic-plus:current-season:{$this->region}", 86400, function () {
             $response = $this->request()
                 ->get('/data/wow/mythic-keystone/season/index');
@@ -63,6 +72,22 @@ class BlizzardGameDataClient extends BlizzardClient
 
             return (int) $lastSeason['id'];
         });
+    }
+
+    /**
+     * Raw mythic-keystone season index, uncached — season:rollover uses it
+     * to validate the operator-supplied id against what Blizzard actually
+     * serves (including the `current_season` field the resolver above
+     * predates).
+     */
+    public function getMythicPlusSeasonIndex(): array
+    {
+        $response = $this->request()
+            ->get('/data/wow/mythic-keystone/season/index');
+
+        $response->throw();
+
+        return $response->json() ?? [];
     }
 
     /**
