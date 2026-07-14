@@ -35,6 +35,7 @@ class GameDataSeeder extends Seeder
     public function run(): void
     {
         $this->call(GameDataExpansionSeeder::class);
+        $this->call(GameDataSeasonSeeder::class);
 
         $path = base_path(self::SNAPSHOT_PATH);
 
