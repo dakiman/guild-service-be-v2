@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Services\RaiderIO;
 
 use App\Models\DungeonRun;
+use App\Services\RaiderIO\Exceptions\RaiderIOThrottledException;
 use App\Services\RaiderIO\Jobs\CrawlCharacterRuns;
 use App\Services\RaiderIO\Jobs\FetchRunRoster;
 use App\Services\RaiderIO\Mappers\RaiderIOMythicPlusMapper;
@@ -149,6 +150,20 @@ class CrawlCharacterRunsTest extends TestCase
             ->filter(fn ($m) => mb_strtolower($m->character_name) === 'testchar');
 
         $this->assertCount(1, $matches, 'queried char must not be duplicated under different casing');
+    }
+
+    public function test_propagates_throttled_exception_on_429_without_blocking_retry(): void
+    {
+        Http::fake(['raider.io/api/v1/characters/profile*' => Http::response('', 429, ['Retry-After' => '15'])]);
+
+        try {
+            $this->runJob();
+            $this->fail('Expected RaiderIOThrottledException');
+        } catch (RaiderIOThrottledException $e) {
+            $this->assertSame(15, $e->retryAfter);
+        }
+
+        Http::assertSentCount(1);
     }
 
     public function test_deduplicates_across_characters(): void

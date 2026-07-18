@@ -8,6 +8,7 @@ use App\Services\RaiderIO\DTO\SeedCharacterRef;
 use App\Services\RaiderIO\DTO\SeedGuildRef;
 use App\Services\RaiderIO\DTO\SeedRunRef;
 use App\Services\RaiderIO\Exceptions\RaiderIOException;
+use App\Services\RaiderIO\Exceptions\RaiderIOThrottledException;
 use App\Support\BlizzardIdentity;
 use App\Support\Seasons;
 use Generator;
@@ -236,7 +237,7 @@ class RaiderIOClient
             ->then(
                 fn () => $this->doGet($path, $query),
                 function () use ($path) {
-                    throw new RaiderIOException("raiderio: throttle timeout for $path");
+                    throw new RaiderIOThrottledException(10, "raiderio: throttle timeout for $path");
                 }
             );
     }
@@ -249,7 +250,6 @@ class RaiderIOClient
             $query['access_key'] = $accessKey;
         }
 
-        $attempt429 = 0;
         $attempt5xx = 0;
         $backoffSeconds = [1, 4, 10];
 
@@ -262,14 +262,11 @@ class RaiderIOClient
 
             $status = $response->status();
 
-            if ($status === 429 && $attempt429 < 1) {
-                $retryAfter = $this->retryAfterSeconds($response);
-                if ($retryAfter > 0 && ! $this->skipBackoffSleep()) {
-                    sleep($retryAfter);
-                }
-                $attempt429++;
-
-                continue;
+            if ($status === 429) {
+                // Typed + immediate: no in-process sleep. Job middleware
+                // (RaiderIORateLimiter) converts this into a non-blocking
+                // release() so a throttled crawl worker goes back to the pool.
+                throw new RaiderIOThrottledException($this->retryAfterSeconds($response));
             }
 
             if ($status >= 500 && $attempt5xx < count($backoffSeconds)) {

@@ -16,6 +16,7 @@ use App\Services\RaiderIO\DTO\SeedGuildRef;
 use App\Services\RaiderIO\DTO\SeedOptions;
 use App\Services\RaiderIO\DTO\SeedReport;
 use App\Services\RaiderIO\Exceptions\RaiderIOException;
+use App\Services\RaiderIO\Exceptions\RaiderIOThrottledException;
 use App\Support\Seasons;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -58,6 +59,12 @@ class RaiderIOSeeder
                     );
                     $report->dispatched++;
                 }
+            } catch (RaiderIOThrottledException $e) {
+                // Console context — blocking is fine here, unlike the crawl
+                // jobs where a 429 must release() instead of sleeping a worker.
+                sleep(min($e->retryAfter, 90));
+
+                continue;
             } catch (RaiderIOException $e) {
                 $report->errors++;
                 Log::warning('raiderio.seed.error', [
@@ -134,6 +141,12 @@ class RaiderIOSeeder
                         $report->dispatched++;
                     }
                 }
+            } catch (RaiderIOThrottledException $e) {
+                // Console context — blocking is fine here, unlike the crawl
+                // jobs where a 429 must release() instead of sleeping a worker.
+                sleep(min($e->retryAfter, 90));
+
+                continue;
             } catch (RaiderIOException $e) {
                 $report->errors++;
                 Log::warning('raiderio.seed.error', [

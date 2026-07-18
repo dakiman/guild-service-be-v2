@@ -6,6 +6,7 @@ namespace App\Services\RaiderIO\Jobs;
 
 use App\Models\DungeonRun;
 use App\Services\RaiderIO\Mappers\RaiderIOMythicPlusMapper;
+use App\Services\RaiderIO\Middleware\RaiderIORateLimiter;
 use App\Services\RaiderIO\RaiderIOClient;
 use App\Services\RunTeamPersister;
 use App\Support\Seasons;
@@ -22,8 +23,6 @@ use Throwable;
 class CrawlCharacterRuns implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
-
-    public int $tries = 5;
 
     public int $maxExceptions = 3;
 
@@ -43,6 +42,22 @@ class CrawlCharacterRuns implements ShouldBeUnique, ShouldQueue
     public function uniqueId(): string
     {
         return "raiderio-crawl:{$this->region}:{$this->realm}:{$this->name}";
+    }
+
+    // Time-bound retries: RaiderIORateLimiter's release() re-queues without
+    // burning a fixed $tries budget; only real exceptions ($maxExceptions)
+    // cap the work. (P8, mirrors the Blizzard jobs' retryUntil contract.)
+    public function retryUntil(): \DateTime
+    {
+        return now()->addHours(6);
+    }
+
+    /**
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [new RaiderIORateLimiter];
     }
 
     public function handle(

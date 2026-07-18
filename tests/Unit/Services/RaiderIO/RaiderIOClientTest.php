@@ -6,6 +6,7 @@ namespace Tests\Unit\Services\RaiderIO;
 
 use App\Services\RaiderIO\DTO\SeedGuildRef;
 use App\Services\RaiderIO\Exceptions\RaiderIOException;
+use App\Services\RaiderIO\Exceptions\RaiderIOThrottledException;
 use App\Services\RaiderIO\RaiderIOClient;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -56,36 +57,25 @@ class RaiderIOClientTest extends TestCase
         Http::assertSentCount(2);
     }
 
-    public function test_top_guilds_retries_once_after_429_with_retry_after(): void
+    /**
+     * P8: a 429 must throw immediately as a typed, catchable exception — not
+     * block the worker with an in-process sleep+retry. Job middleware
+     * (RaiderIORateLimiter) is what turns this into a release().
+     */
+    public function test_top_guilds_throws_throttled_exception_on_429_without_blocking_retry(): void
     {
-        $fixture = json_decode(file_get_contents(base_path('tests/fixtures/raiderio/top-guilds-eu.json')), true);
-
-        $calls = 0;
-        Http::fake(function () use ($fixture, &$calls) {
-            $calls++;
-            if ($calls === 1) {
-                return Http::response('', 429, ['Retry-After' => '0']);
-            }
-
-            return Http::response($fixture, 200);
-        });
+        Http::fake(fn () => Http::response('', 429, ['Retry-After' => '30']));
 
         $client = app(RaiderIOClient::class);
 
-        $refs = iterator_to_array($client->topGuilds('eu', 3), preserve_keys: false);
+        try {
+            iterator_to_array($client->topGuilds('eu', 3), preserve_keys: false);
+            $this->fail('Expected RaiderIOThrottledException');
+        } catch (RaiderIOThrottledException $e) {
+            $this->assertSame(30, $e->retryAfter);
+        }
 
-        $this->assertCount(3, $refs);
-        $this->assertSame(2, $calls);
-    }
-
-    public function test_top_guilds_throws_after_second_429(): void
-    {
-        Http::fake(fn () => Http::response('', 429, ['Retry-After' => '0']));
-
-        $client = app(RaiderIOClient::class);
-
-        $this->expectException(RaiderIOException::class);
-        iterator_to_array($client->topGuilds('eu', 3), preserve_keys: false);
+        Http::assertSentCount(1);
     }
 
     public function test_top_guilds_retries_on_5xx_up_to_three_times(): void
