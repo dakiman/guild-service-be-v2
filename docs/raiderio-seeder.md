@@ -18,7 +18,7 @@ Lean discovery layer for bootstrapping from raider.io top-lists (`app/Services/R
 
 ## Roster fan-out
 
-Opt-in per dispatch (default OFF globally). `SyncGuildRoster` dispatches per-member `SyncCharacterData::Full` only when (a) `forceFanout: true` was passed (seeder sets this), or (b) `RAIDERIO_DISPATCH_ROSTER_CHAR_SYNCS=true` globally. Guild syncs are on-demand only (the weekly `ProactiveSyncGuilds` sweep was deleted 2026-07-13); user-initiated `SyncGuildData` does NOT cascade per-member. Members above `BLIZZARD_MIN_LEVEL_FOR_LOOKUP` only.
+Opt-in per dispatch. `SyncGuildRoster` dispatches per-member `SyncCharacterData::Full` only when `forceFanout: true` was passed (seeder sets this) — the old `raiderio.dispatch_roster_character_syncs` global config flag is gone; `forceFanout` is the only switch. Guild syncs are on-demand only (the weekly `ProactiveSyncGuilds` sweep was deleted 2026-07-13); user-initiated `SyncGuildData` does NOT cascade per-member. Members above `BLIZZARD_MIN_LEVEL_FOR_LOOKUP` only.
 
 ## Teammate crawl override
 
@@ -26,7 +26,7 @@ Opt-in per dispatch (default OFF globally). `SyncGuildRoster` dispatches per-mem
 
 ## Rate limits
 
-raider.io 200/min public; `RAIDERIO_ACCESS_KEY` (registered apps) unlocks higher rates and is appended when set. 429 retried once with `Retry-After`; 5xx retried up to 3 with backoff [1, 4, 10]s. Phpunit sets `RAIDERIO_BACKOFF_SLEEP_ENABLED=0`. Blizzard side: existing 80/s, 30k/hr ceiling — ~1500 Full character syncs/hour; queue drains over hours.
+raider.io 200/min public; `RAIDERIO_ACCESS_KEY` (registered apps) unlocks higher rates and is appended when set. 429 throws a typed `RaiderIOThrottledException` (no in-process retry/sleep) — `retryAfter` comes from the `Retry-After` header, defaults to 60s absent, capped at 90s. `RaiderIORateLimiter` job middleware catches it and non-blockingly `release()`s the job for that many seconds; the seeder's own console loops (`seedGuilds`/`seedRuns`) catch it directly and `sleep(min(retryAfter, 90)); continue;`. 5xx still retried up to 3 with backoff [1, 4, 10]s. Phpunit sets `RAIDERIO_BACKOFF_SLEEP_ENABLED=0`. Blizzard side: existing 80/s, 30k/hr ceiling — ~1500 Full character syncs/hour; queue drains over hours.
 
 ## Future
 

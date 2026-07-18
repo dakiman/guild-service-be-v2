@@ -6,8 +6,9 @@ How characters, guilds, and game data get fetched and kept fresh.
 
 | Trigger | Frequency | Depth | Queue | Notes |
 |---|---|---|---|---|
-| User visits character | On-demand | Standard (Full if any slice stale) | `blizzard-user-sync` | Staleness checked per-slice |
+| User visits character | On-demand | Standard (StaleOnly if any slice stale) | `blizzard-user-sync` | Staleness checked per-slice; StaleOnly re-checks staleness at execution time and only re-fetches what's stale then |
 | User visits guild | On-demand | Profile + roster rows only | `blizzard-user-sync` | No member fan-out; fan-out is seeder-only via `forceRosterFanout` |
+| Force refresh (`?refresh=1`) | On-demand, 300s cooldown/entity | Full (endgame) / Standard (sub-endgame), nonced | `blizzard-user-sync` | Atomic cooldown via `RefreshCooldown` (`Cache::add`); nonce bypasses `ShouldBeUnique`; also clears a stale not-found marker |
 | Proactive tier 1 | Every 30 min | Full | `blizzard-background` | Characters with 5+ searches in last 7 days, active login |
 | Proactive tier 2 | Every 2 hours | Standard | `blizzard-background` | Characters with 2+ searches in last 30 days |
 | OAuth login | On auth | Full per character | `blizzard-user-sync` | Via `SyncUserCharacters` |
@@ -27,11 +28,11 @@ RaiderIO seeder
   └─ SyncGuildData (forceRosterFanout: true)
        └─ SyncGuildRoster
             ├─ SyncCharacterData::Shallow  (per member, unconditional)
-            └─ SyncCharacterData::Full     (per member, only if forceFanout or config flag)
+            └─ SyncCharacterData::Full     (per member, only if forceFanout)
                  └─ dispatchTeammateCrawl   (M+ teammates, depth-capped at 2)
 
 User visits character
-  └─ SyncCharacterData::Standard  (or Full if any slice stale)
+  └─ SyncCharacterData::Standard  (or StaleOnly if any slice stale)
        └─ may discover guild → SyncGuildData (if firstOrCreate)
 
 Proactive tier 1
@@ -44,7 +45,8 @@ There is no proactive guild sweep — the weekly `ProactiveSyncGuilds` job was d
 
 - **Shallow** — basic profile only (roster member discovery)
 - **Standard** — profile + media + equipment + specializations
-- **Full** — Standard + 9 slices: mythic+, pvp, professions, raids, stats, titles, reputations, collections, achievements
+- **Full** — Standard + 9 slices: mythic+, pvp, professions, raids, stats, titles, reputations, collections, achievements (unconditionally)
+- **StaleOnly** — Standard + only the slices whose `Character::is*Stale()` reads stale at execution time (never-synced slices have null `*_synced_at`, which always reads stale, so this is equivalent to Full on first sync). The on-view lane for endgame characters; teammate crawl fan-out stays Full-only
 
 Each slice has independent try/catch, its own `*_synced_at` column, and its own staleness threshold. One slice failing never aborts others.
 
@@ -74,7 +76,7 @@ Each slice has independent try/catch, its own `*_synced_at` column, and its own 
 
 **Circuit breaker:** After 10 rate-limit hits within a 2-minute window, the middleware sets `blizzard:unhealthy` in cache for 60 seconds. `BlizzardHealthCheck` middleware checks this flag and releases all Blizzard jobs during cooldown. Config: `BLIZZARD_CIRCUIT_BREAKER_THRESHOLD` (default 10).
 
-**Job retries:** All Blizzard jobs use `$tries = 15` / `$maxExceptions = 3` / `$backoff = [30, 120, 300]`. `$tries` counts both exceptions and releases; `$maxExceptions` only counts unhandled exceptions. This gives jobs room for multiple rate-limit releases without exhausting the failure budget.
+**Job retries:** Blizzard jobs don't use a fixed `$tries` — they're time-bound via `retryUntil()` (24h; `SyncUserCharacters` stays 6h) + `$maxExceptions = 3` / `$backoff = [30, 120, 300]`. Middleware `release()` re-queues without burning the exception budget; only unhandled exceptions count against `$maxExceptions`. This gives jobs room for many rate-limit releases without exhausting the failure budget. RaiderIO's crawl jobs (`CrawlCharacterRuns`, `FetchRunRoster`) follow the same release-not-block pattern via `RaiderIORateLimiter`, with their own 6h `retryUntil()`.
 
 ## Feature flags (heavy slices)
 

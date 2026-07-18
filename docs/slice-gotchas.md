@@ -4,7 +4,7 @@ Fragment extracted from `CLAUDE.md`. Primary reference: `../CLAUDE.md`.
 
 ---
 
-Per-slice edge cases for the nine Full-sync slices in `SyncCharacterData`.
+Per-slice edge cases for the nine slices synced under slice-syncing depths (Full/StaleOnly) in `SyncCharacterData`.
 
 - **PvP bracket slugs are dynamic.** `pvp-summary.brackets[].href` is source of truth. Current patch: `2v2`, `3v3`, `blitz-{class}-{spec}` (Blitz replaced solo-shuffle). `PvpBracketStatsMapper::extractSlug()` regex-parses — do **not** hardcode an enum. `getCharacterPvpBracketsChunked()` caps each `Http::pool()` at 3 parallel slugs so a Full-sync job can't burst past 80 req/s under Horizon max concurrency. `tier_name` persisted as NULL.
 - **Mythic+ per-spec is character-identity-filtered.** `mythic_plus_rating_by_spec` reads `specialization.id` from `best_runs[].members[]` **only for the member matching the synced character's name + realm slug** (else teammates' specs get credited with this character's rating). `mythic_plus_rating_color` is Blizzard's RGBA -> `#rrggbb`.
