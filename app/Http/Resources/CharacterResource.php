@@ -81,7 +81,14 @@ class CharacterResource extends JsonResource
             // rather than ->additional() — additional()'s array_merge_recursive
             // turns duplicate scalar meta keys into arrays on the wire.
             'forced_refresh' => (bool) $request->attributes->get('forced_refresh', false),
-            'refresh' => RefreshCooldown::status('character', $this->region, $this->realm, $this->name),
+            // Identity-less models (e.g. an in-memory Character built by a unit
+            // test without region/realm/name) have nothing to key a cooldown
+            // on — null out rather than fatal. Every real request path always
+            // has a fully-identified Character/Guild by the time it reaches
+            // here, so this is purely a defensive null-safety guard.
+            'refresh' => $this->region !== null && $this->realm !== null && $this->name !== null
+                ? RefreshCooldown::status('character', $this->region, $this->realm, $this->name)
+                : null,
             'sync_status' => $isSyncing ? 'syncing' : 'complete',
             // 'full' = endgame, slices tracked; 'basic' = sub-max, profile-only.
             // FE keys the below-max-level notice and tab gating off this.
