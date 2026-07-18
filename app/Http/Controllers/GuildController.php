@@ -82,6 +82,11 @@ class GuildController extends Controller
             $response->header('X-Data-Staleness', 'stale');
         }
 
+        if ($result->roster_synced_at === null) {
+            $response->header('X-Sync-Status', 'syncing');
+            $response->header('Retry-After', '30');
+        }
+
         return $response;
     }
 

@@ -8,6 +8,7 @@ use App\Models\Character;
 use App\Models\Guild;
 use App\Models\GuildMember;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Tests\TestCase;
 
 /**
@@ -184,5 +185,42 @@ class GuildShowEndpointTest extends TestCase
         $names = collect($response->json('members.data'))->pluck('name')->all();
         sort($names);
         $this->assertSame(['alpha', 'alphabeto'], $names);
+    }
+
+    public function test_endpoint_sends_sync_status_header_when_roster_never_synced(): void
+    {
+        Bus::fake();
+
+        $guild = Guild::factory()->create([
+            'name' => 'unsyncedguild',
+            'realm' => 'test-realm',
+            'region' => 'eu',
+            'roster_synced_at' => null,
+        ]);
+        $guild->forceFill(['updated_at' => now()])->save();
+
+        $response = $this->getJson('/api/v1/guilds/eu/test-realm/unsyncedguild');
+
+        $response->assertOk();
+        $response->assertHeader('X-Sync-Status', 'syncing');
+        $response->assertHeader('Retry-After', '30');
+    }
+
+    public function test_endpoint_omits_sync_status_header_when_roster_synced(): void
+    {
+        Bus::fake();
+
+        $guild = Guild::factory()->create([
+            'name' => 'syncedstatusguild',
+            'realm' => 'test-realm',
+            'region' => 'eu',
+            'roster_synced_at' => now(),
+        ]);
+        $guild->forceFill(['updated_at' => now()])->save();
+
+        $response = $this->getJson('/api/v1/guilds/eu/test-realm/syncedstatusguild');
+
+        $response->assertOk();
+        $response->assertHeaderMissing('X-Sync-Status');
     }
 }
