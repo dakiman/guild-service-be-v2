@@ -32,7 +32,6 @@ class GuildController extends Controller
         // Cooldown grant claimed here (atomic Cache::add) — same pattern as
         // CharacterController::show.
         $granted = $request->boolean('refresh') && RefreshCooldown::attempt('guild', $region, $realm, $guild);
-        $request->attributes->set('forced_refresh', $granted);
 
         try {
             $result = $service->getByIdentity($region, $realm, $guild, forceRefresh: $granted);
