@@ -10,15 +10,22 @@ use App\Http\Resources\GuildSummaryResource;
 use App\Models\Guild;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 class GuildService
 {
-    public function getByIdentity(string $region, string $realm, string $name): ?Guild
+    public function getByIdentity(string $region, string $realm, string $name, bool $forceRefresh = false): ?Guild
     {
+        if ($forceRefresh) {
+            // Mirrors CharacterService — a force-refresh recovers from a
+            // stale "not found" verdict too.
+            Cache::forget("blizzard:not-found:guild:{$region}:{$realm}:{$name}");
+        }
+
         $guild = Guild::byIdentity($name, $realm, $region)->first();
 
         if (! $guild) {
-            if (Cache::has("blizzard:not-found:guild:{$region}:{$realm}:{$name}")) {
+            if (! $forceRefresh && Cache::has("blizzard:not-found:guild:{$region}:{$realm}:{$name}")) {
                 throw new EntityNotFoundException;
             }
 
@@ -31,7 +38,14 @@ class GuildService
             fn () => $guild->increment('num_of_searches', 1, ['last_searched_at' => now()]),
         );
 
-        if ($guild->isStale() || $guild->isRosterStale()) {
+        // Force-refresh dispatches profile + roster via the same SyncGuildData
+        // job (forceRosterFanout stays false — that flag is member fan-out,
+        // reserved for the raider.io seeder), with a nonce that bypasses
+        // ShouldBeUnique so the dispatch isn't deduped against an in-flight
+        // regular sync.
+        if ($forceRefresh) {
+            SyncGuildData::dispatch($region, $realm, $name, refreshNonce: Str::random(8));
+        } elseif ($guild->isStale() || $guild->isRosterStale()) {
             SyncGuildData::dispatch($region, $realm, $name);
         }
 

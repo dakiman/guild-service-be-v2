@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature;
 
+use App\Blizzard\Jobs\SyncGuildData;
 use App\Models\Character;
 use App\Models\Guild;
 use App\Models\GuildMember;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 /**
@@ -222,5 +224,58 @@ class GuildShowEndpointTest extends TestCase
 
         $response->assertOk();
         $response->assertHeaderMissing('X-Sync-Status');
+    }
+
+    public function test_endpoint_force_refresh_dispatches_sync_guild_data_with_nonce_and_reports_meta(): void
+    {
+        Cache::flush();
+        Bus::fake();
+
+        $guild = Guild::factory()->create([
+            'name' => 'forcerefreshguild',
+            'realm' => 'test-realm',
+            'region' => 'eu',
+            'roster_synced_at' => now(),
+        ]);
+        $guild->forceFill(['updated_at' => now()])->save();
+
+        $response = $this->getJson('/api/v1/guilds/eu/test-realm/forcerefreshguild?refresh=1');
+
+        $response->assertOk();
+        $response->assertJsonPath('meta.forced_refresh', true);
+        $response->assertJsonPath('meta.refresh.available', false);
+        $response->assertJsonPath('meta.refresh.cooldown_seconds', 300);
+
+        Bus::assertDispatched(SyncGuildData::class, fn (SyncGuildData $job) => $job->refreshNonce !== null
+            && $job->forceRosterFanout === false);
+
+        // Immediate second force-refresh is cooled down: no second dispatch,
+        // forced_refresh flips false.
+        $second = $this->getJson('/api/v1/guilds/eu/test-realm/forcerefreshguild?refresh=1');
+        $second->assertOk();
+        $second->assertJsonPath('meta.forced_refresh', false);
+
+        Bus::assertDispatchedTimes(SyncGuildData::class, 1);
+    }
+
+    public function test_endpoint_plain_get_reports_refresh_available(): void
+    {
+        Cache::flush();
+        Bus::fake();
+
+        $guild = Guild::factory()->create([
+            'name' => 'plaingetguild',
+            'realm' => 'test-realm',
+            'region' => 'eu',
+            'roster_synced_at' => now(),
+        ]);
+        $guild->forceFill(['updated_at' => now()])->save();
+
+        $response = $this->getJson('/api/v1/guilds/eu/test-realm/plaingetguild');
+
+        $response->assertOk();
+        $response->assertJsonPath('meta.forced_refresh', false);
+        $response->assertJsonPath('meta.refresh.available', true);
+        $response->assertJsonPath('meta.refresh.available_at', null);
     }
 }

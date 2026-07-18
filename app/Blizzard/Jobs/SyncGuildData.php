@@ -53,6 +53,11 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
         // this property uninitialized, so never read it post-rehydration; the
         // queue lane was already fixed at dispatch time.
         public SyncOrigin $origin = SyncOrigin::UserLookup,
+        // Force-refresh dedupe bypass (Plan 3) — mirrors SyncCharacterData's
+        // $refreshNonce exactly, including the unserialize-safety and
+        // never-generate-inside-uniqueId() caveats. See that class for the
+        // full rationale.
+        public ?string $refreshNonce = null,
     ) {
         $this->onQueue($origin->queue());
     }
@@ -66,7 +71,16 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
         // redundant API round-trip.
         $mode = $this->forceRosterFanout ? 'force' : 'auto';
 
-        return "sync-guild:{$this->region}:{$this->realm}:{$this->name}:{$mode}";
+        $id = "sync-guild:{$this->region}:{$this->realm}:{$this->name}:{$mode}";
+
+        // isset() (not a null check) so an old-shape unserialized payload —
+        // where $refreshNonce is uninitialized rather than null — falls
+        // through to the exact legacy key instead of fataling on read.
+        if (isset($this->refreshNonce)) {
+            $id .= ":{$this->refreshNonce}";
+        }
+
+        return $id;
     }
 
     /**

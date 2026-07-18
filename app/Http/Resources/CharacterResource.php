@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Resources;
 
+use App\Support\RefreshCooldown;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Queue;
@@ -76,7 +77,11 @@ class CharacterResource extends JsonResource
 
         $meta = [
             'game_version' => $this->game_version ?? 'retail',
-            'forced_refresh' => false,
+            // Plumbed via $request->attributes (set in CharacterController::show)
+            // rather than ->additional() — additional()'s array_merge_recursive
+            // turns duplicate scalar meta keys into arrays on the wire.
+            'forced_refresh' => (bool) $request->attributes->get('forced_refresh', false),
+            'refresh' => RefreshCooldown::status('character', $this->region, $this->realm, $this->name),
             'sync_status' => $isSyncing ? 'syncing' : 'complete',
             // 'full' = endgame, slices tracked; 'basic' = sub-max, profile-only.
             // FE keys the below-max-level notice and tab gating off this.

@@ -96,6 +96,16 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         // property uninitialized, so never read it post-rehydration; the
         // queue lane was already fixed in the payload at dispatch time.
         public SyncOrigin $origin = SyncOrigin::UserLookup,
+        // Force-refresh dedupe bypass (Plan 3): a caller-minted random token
+        // that becomes part of uniqueId() below, so a `?refresh=1` dispatch is
+        // never silently swallowed by ShouldBeUnique when an identical-shape
+        // job is already in flight/uniqueFor window. Same unserialize-safety
+        // pattern as $forceTeammateCrawl/$origin above — non-readonly,
+        // uninitialized (not the promoted default) on an old-shape payload.
+        // Never generate this value inside uniqueId() itself: that would mint
+        // a different key on every call (Laravel calls uniqueId() again post
+        // unserialize to release the lock) and leak the acquired lock.
+        public ?string $refreshNonce = null,
     ) {
         $this->onQueue($origin->queue());
     }
@@ -108,7 +118,16 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         // SyncGuildRoster — see commit 2e61a22.
         $mode = $this->forceTeammateCrawl ? 'force' : 'auto';
 
-        return "sync-char:{$this->region}:{$this->realm}:{$this->name}:{$this->depth->value}:{$mode}";
+        $id = "sync-char:{$this->region}:{$this->realm}:{$this->name}:{$this->depth->value}:{$mode}";
+
+        // isset() (not a null check) so an old-shape unserialized payload —
+        // where $refreshNonce is uninitialized rather than null — falls
+        // through to the exact legacy key instead of fataling on read.
+        if (isset($this->refreshNonce)) {
+            $id .= ":{$this->refreshNonce}";
+        }
+
+        return $id;
     }
 
     /**

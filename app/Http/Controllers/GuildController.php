@@ -12,6 +12,7 @@ use App\Http\Resources\GuildSuggestionResource;
 use App\Models\Guild;
 use App\Services\GuildService;
 use App\Support\BlizzardIdentity;
+use App\Support\RefreshCooldown;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Queue;
@@ -28,8 +29,13 @@ class GuildController extends Controller
         $realm = BlizzardIdentity::realm($realm);
         $guild = BlizzardIdentity::realm($guild);
 
+        // Cooldown grant claimed here (atomic Cache::add) — same pattern as
+        // CharacterController::show.
+        $granted = $request->boolean('refresh') && RefreshCooldown::attempt('guild', $region, $realm, $guild);
+        $request->attributes->set('forced_refresh', $granted);
+
         try {
-            $result = $service->getByIdentity($region, $realm, $guild);
+            $result = $service->getByIdentity($region, $realm, $guild, forceRefresh: $granted);
         } catch (EntityNotFoundException) {
             return response()->json(['message' => 'Guild not found'], 404);
         }
@@ -76,6 +82,10 @@ class GuildController extends Controller
         $response = response()->json([
             'guild' => new GuildResource($result),
             'members' => $members,
+            'meta' => [
+                'forced_refresh' => $granted,
+                'refresh' => RefreshCooldown::status('guild', $region, $realm, $guild),
+            ],
         ]);
 
         if ($result->isStale()) {

@@ -83,6 +83,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Force-Refresh Cooldown (seconds)
+    |--------------------------------------------------------------------------
+    | `?refresh=1` grants a nonced, dedupe-bypassing sync at most once per this
+    | window per entity (character or guild). Grant is claimed atomically via
+    | Cache::add() in the controller (see App\Support\RefreshCooldown).
+    */
+
+    'refresh_cooldown' => (int) env('BLIZZARD_REFRESH_COOLDOWN', 300),
+
+    /*
+    |--------------------------------------------------------------------------
     | Per-Slice Sync Feature Flags
     |--------------------------------------------------------------------------
     | Plan 2 retail slices (mythic+, pvp, professions, raids) keep individual

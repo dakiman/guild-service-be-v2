@@ -11,15 +11,23 @@ use App\Http\Resources\CharacterSummaryResource;
 use App\Models\Character;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 class CharacterService
 {
     public function getByIdentity(string $region, string $realm, string $name, bool $forceRefresh = false): ?Character
     {
+        if ($forceRefresh) {
+            // A force-refresh recovers from a stale "not found" verdict too —
+            // Blizzard 404s are re-tried, not permanently trusted, once the
+            // user explicitly asks for fresh data.
+            Cache::forget("blizzard:not-found:character:{$region}:{$realm}:{$name}");
+        }
+
         $character = Character::byIdentity($name, $realm, $region)->first();
 
         if (! $character) {
-            if (Cache::has("blizzard:not-found:character:{$region}:{$realm}:{$name}")) {
+            if (! $forceRefresh && Cache::has("blizzard:not-found:character:{$region}:{$realm}:{$name}")) {
                 throw new EntityNotFoundException;
             }
 
@@ -35,7 +43,9 @@ class CharacterService
         // Sub-endgame: Standard is the ceiling. Slice staleness is skipped —
         // those timestamps are null by design and would read stale forever.
         if (! $character->isEndgame()) {
-            if ($forceRefresh || $character->isStale()) {
+            if ($forceRefresh) {
+                SyncCharacterData::dispatch($region, $realm, $name, SyncDepth::Standard, refreshNonce: Str::random(8));
+            } elseif ($character->isStale()) {
                 SyncCharacterData::dispatch($region, $realm, $name, SyncDepth::Standard);
             }
 
@@ -52,14 +62,15 @@ class CharacterService
             || $character->isCollectionsStale()
             || $character->isAchievementsStale();
 
-        // TODO(Plan 3): $forceRefresh must also bypass SyncCharacterData::$uniqueFor
-        //               (nonced uniqueId) or back-to-back dispatches get dedup'd.
         // StaleOnly (was Full): the job consults Character::is*Stale() at
         // execution time and only re-fetches slices that read stale then, so
         // an on-view dispatch never burns a full 9-slice fan-out for a single
-        // stale slice. Phase 3 builds real force-refresh on top of
-        // SyncDepth::syncsSlices().
-        if ($forceRefresh || $anySliceStale) {
+        // stale slice. $forceRefresh escalates to a nonced Full sync — the
+        // nonce bypasses ShouldBeUnique so a `?refresh=1` immediately after a
+        // regular dispatch isn't silently deduped away.
+        if ($forceRefresh) {
+            SyncCharacterData::dispatch($region, $realm, $name, SyncDepth::Full, refreshNonce: Str::random(8));
+        } elseif ($anySliceStale) {
             SyncCharacterData::dispatch($region, $realm, $name, SyncDepth::StaleOnly);
         } elseif ($character->isStale()) {
             SyncCharacterData::dispatch($region, $realm, $name, SyncDepth::Standard);

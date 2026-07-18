@@ -70,7 +70,37 @@ class CharacterServiceDispatchGateTest extends TestCase
         app(CharacterService::class)->getByIdentity('eu', 'the-maelstrom', 'cirna', forceRefresh: true);
 
         Queue::assertPushed(SyncCharacterData::class, 1);
-        Queue::assertPushed(SyncCharacterData::class, fn (SyncCharacterData $job) => $job->depth === SyncDepth::Standard);
+        Queue::assertPushed(SyncCharacterData::class, fn (SyncCharacterData $job) => $job->depth === SyncDepth::Standard
+            && $job->refreshNonce !== null);
+    }
+
+    public function test_endgame_all_fresh_force_refresh_dispatches_full_with_nonce(): void
+    {
+        // Force-refresh must escalate to Full even when nothing reads stale —
+        // that's the whole point of "force". The nonce is what lets this
+        // dispatch survive ShouldBeUnique dedupe against a concurrent/recent
+        // regular sync of the same character.
+        Queue::fake();
+
+        $character = $this->makeCharacter(90);
+        $now = now();
+        $character->forceFill([
+            'mythics_synced_at' => $now,
+            'pvp_synced_at' => $now,
+            'professions_synced_at' => $now,
+            'raids_synced_at' => $now,
+            'stats_synced_at' => $now,
+            'titles_synced_at' => $now,
+            'reputations_synced_at' => $now,
+            'collections_synced_at' => $now,
+            'achievements_synced_at' => $now,
+        ])->save();
+
+        app(CharacterService::class)->getByIdentity('eu', 'the-maelstrom', 'cirna', forceRefresh: true);
+
+        Queue::assertPushed(SyncCharacterData::class, 1);
+        Queue::assertPushed(SyncCharacterData::class, fn (SyncCharacterData $job) => $job->depth === SyncDepth::Full
+            && $job->refreshNonce !== null);
     }
 
     public function test_endgame_with_stale_slice_dispatches_stale_only(): void

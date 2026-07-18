@@ -12,6 +12,7 @@ use App\Http\Resources\CharacterSuggestionResource;
 use App\Models\Character;
 use App\Services\CharacterService;
 use App\Support\BlizzardIdentity;
+use App\Support\RefreshCooldown;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -24,8 +25,15 @@ class CharacterController extends Controller
         $realm = BlizzardIdentity::realm($realm);
         $character = BlizzardIdentity::name($character);
 
+        // Cooldown grant is claimed here (not in the service) because the
+        // controller needs the boolean result for meta.forced_refresh, and
+        // Cache::add() is atomic — only one concurrent `?refresh=1` request
+        // per entity within the window ever gets $granted === true.
+        $granted = $request->boolean('refresh') && RefreshCooldown::attempt('character', $region, $realm, $character);
+        $request->attributes->set('forced_refresh', $granted);
+
         try {
-            $result = $service->getByIdentity($region, $realm, $character);
+            $result = $service->getByIdentity($region, $realm, $character, forceRefresh: $granted);
         } catch (EntityNotFoundException) {
             return response()->json(['message' => 'Character not found'], 404);
         }
