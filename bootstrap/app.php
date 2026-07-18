@@ -35,6 +35,10 @@ return Application::configure(basePath: dirname(__DIR__))
             ->dailyAt('02:00')
             ->withoutOverlapping()
             ->onOneServer();
+        $schedule->command('raiderio:seed --phase=all')
+            ->dailyAt('01:00')
+            ->withoutOverlapping()
+            ->onOneServer();
         $schedule->command('raids:prune-legacy')
             ->monthlyOn(1, '04:30')
             ->withoutOverlapping()

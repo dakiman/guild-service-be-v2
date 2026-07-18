@@ -10,6 +10,8 @@ Lean discovery layer for bootstrapping from raider.io top-lists (`app/Services/R
 
 `RaiderIOClient` (Laravel `Http::` + Redis token-bucket throttle, default 175/min vs raider.io's 200/min ceiling), `RaiderIOSeeder` orchestrator (`seedGuilds`, `seedRuns`), `php artisan raiderio:seed`. Generators yield rows lazily — at most ~20 rows in memory at a time.
 
+**Scheduled daily 01:00 UTC** (`bootstrap/app.php`): `raiderio:seed --phase=all`. Discovery breadth and freshness come from prod env: `RAIDERIO_SEED_GUILDS_PER_REGION=25`, `RAIDERIO_SEED_RUNS_PAGES_PER_REGION=25`, `RAIDERIO_SEED_CHAR_TTL=604800` (weekly re-sync), `RAIDERIO_SEED_TEAMMATE_CRAWL_ENABLED=true`.
+
 ## Phases
 
 - **Phase 1 — Guilds.** `--phase=guilds` pulls top mythic raiding guilds via `/raiding/raid-rankings?raid={RAIDERIO_CURRENT_RAID_TIER}&difficulty=mythic`, dispatches `SyncGuildData`. `SyncGuildRoster` then dispatches `SyncCharacterData::Full` per roster member (TTL-gated on `Character.updated_at`).
