@@ -274,10 +274,14 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
 
         self::linkGuildMembers($character);
 
-        // Promote from any sub-Full depth: covers the newly-dinged case where
-        // the lookup lane saw a sub-endgame row and dispatched Standard — this
-        // sync just wrote the real level, so escalate in the same pass.
-        if ($this->depth !== SyncDepth::Full
+        // Promote from any depth that doesn't already sync slices (Shallow,
+        // Standard): covers the newly-dinged case where the lookup lane saw a
+        // sub-endgame row and dispatched Standard — this sync just wrote the
+        // real level, so escalate in the same pass. Full and StaleOnly are
+        // exempt: StaleOnly already reads a null *_synced_at as stale and
+        // syncs it in the fan-out below, so a separate promotion would just
+        // double-dispatch the same work.
+        if (! $this->depth->syncsSlices()
             && $character->level >= (int) config('blizzard.endgame_level', 90)
             && $character->mythics_synced_at === null
         ) {
@@ -338,21 +342,49 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $character->update(['user_id' => $this->userId]);
         }
 
-        // Full depth: also sync the nine slices — but only at endgame level.
-        // This is the invariant choke point: whatever lane dispatched Full
-        // (teammate crawl, seeder, a stale gate), a sub-endgame profile gets
-        // no slice fan-out. checked against the freshly fetched level.
-        if ($this->depth === SyncDepth::Full && $character->isEndgame()) {
-            $this->syncMythicPlus($client, $gameDataClient, $mythicPlusMapper, $ratingMapper, $character);
-            $this->syncPvpData($client, $pvpMapper, $character);
-            $this->syncProfessions($client, $professionMapper, $character);
-            $this->syncRaidEncounters($client, $raidMapper, $character);
-            $this->syncStats($client, $statsMapper, $character);
-            $this->syncTitles($client, $titleMapper, $character);
-            $this->syncReputations($client, $reputationMapper, $character);
-            $this->syncCollections($client, $mountMapper, $petMapper, $toyMapper, $character);
-            $this->syncAchievements($client, $achievementMapper, $character);
-            $this->dispatchTeammateCrawl($gameDataClient, $character);
+        // Full/StaleOnly depth: also sync slices — but only at endgame level.
+        // This is the invariant choke point: whatever lane dispatched a
+        // slice-syncing depth (teammate crawl, seeder, a stale gate), a
+        // sub-endgame profile gets no slice fan-out, checked against the
+        // freshly fetched level. StaleOnly consults Character::is*Stale() at
+        // EXECUTION TIME (no slice-set is ever serialized onto the job — a
+        // dispatch-time set would go stale in queue) and syncs only what
+        // reads stale right now; Full always syncs everything. Never-synced
+        // slices have null *_synced_at, which every is*Stale() reads as
+        // stale, so StaleOnly is equivalent to Full on first sync. Crawl
+        // fan-out stays Full-only — StaleOnly is the economy path.
+        if ($this->depth->syncsSlices() && $character->isEndgame()) {
+            $all = $this->depth === SyncDepth::Full;
+            if ($all || $character->isMythicsStale()) {
+                $this->syncMythicPlus($client, $gameDataClient, $mythicPlusMapper, $ratingMapper, $character);
+            }
+            if ($all || $character->isPvpStale()) {
+                $this->syncPvpData($client, $pvpMapper, $character);
+            }
+            if ($all || $character->isProfessionsStale()) {
+                $this->syncProfessions($client, $professionMapper, $character);
+            }
+            if ($all || $character->isRaidsStale()) {
+                $this->syncRaidEncounters($client, $raidMapper, $character);
+            }
+            if ($all || $character->isStatsStale()) {
+                $this->syncStats($client, $statsMapper, $character);
+            }
+            if ($all || $character->isTitlesStale()) {
+                $this->syncTitles($client, $titleMapper, $character);
+            }
+            if ($all || $character->isReputationsStale()) {
+                $this->syncReputations($client, $reputationMapper, $character);
+            }
+            if ($all || $character->isCollectionsStale()) {
+                $this->syncCollections($client, $mountMapper, $petMapper, $toyMapper, $character);
+            }
+            if ($all || $character->isAchievementsStale()) {
+                $this->syncAchievements($client, $achievementMapper, $character);
+            }
+            if ($all) {
+                $this->dispatchTeammateCrawl($gameDataClient, $character);
+            }
         }
     }
 

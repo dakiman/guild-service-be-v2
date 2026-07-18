@@ -73,8 +73,11 @@ class CharacterServiceDispatchGateTest extends TestCase
         Queue::assertPushed(SyncCharacterData::class, fn (SyncCharacterData $job) => $job->depth === SyncDepth::Standard);
     }
 
-    public function test_endgame_with_stale_slice_still_dispatches_full(): void
+    public function test_endgame_with_stale_slice_dispatches_stale_only(): void
     {
+        // StaleOnly (was Full): the job re-consults is*Stale() at execution
+        // time and only re-syncs what's actually stale then, so a single
+        // stale slice no longer forces a 9-slice fan-out from the view lane.
         Queue::fake();
         Carbon::setTestNow('2026-06-01 12:00:00');
 
@@ -93,6 +96,6 @@ class CharacterServiceDispatchGateTest extends TestCase
 
         $this->lookup();
 
-        Queue::assertPushed(SyncCharacterData::class, fn (SyncCharacterData $job) => $job->depth === SyncDepth::Full);
+        Queue::assertPushed(SyncCharacterData::class, fn (SyncCharacterData $job) => $job->depth === SyncDepth::StaleOnly);
     }
 }

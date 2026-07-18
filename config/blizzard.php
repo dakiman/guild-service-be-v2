@@ -48,7 +48,10 @@ return [
     'staleness' => [
         'character' => [
             'profile' => (int) env('BLIZZARD_STALE_CHARACTER_PROFILE', 604800),
-            'mythic_plus' => (int) env('BLIZZARD_STALE_CHARACTER_MYTHIC', 604800),
+            // 24h (was 7d): M+ progress is the fastest-moving slice — players
+            // push keys daily, and a week-stale rating/run list undercuts the
+            // whole point of the M+ page.
+            'mythic_plus' => (int) env('BLIZZARD_STALE_CHARACTER_MYTHIC', 86400),
             'equipment' => (int) env('BLIZZARD_STALE_CHARACTER_EQUIPMENT', 604800),
             'pvp' => (int) env('BLIZZARD_STALE_CHARACTER_PVP', 604800),
             'professions' => (int) env('BLIZZARD_STALE_CHARACTER_PROFESSIONS', 604800),

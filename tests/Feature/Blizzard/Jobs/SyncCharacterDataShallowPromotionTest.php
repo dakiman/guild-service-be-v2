@@ -191,6 +191,33 @@ class SyncCharacterDataShallowPromotionTest extends TestCase
         });
     }
 
+    public function test_stale_only_sync_never_promotes_even_when_never_fully_synced(): void
+    {
+        // Promotion gate is `! $this->depth->syncsSlices()` (was `depth !==
+        // Full`) — StaleOnly already syncs slices in the same pass (its
+        // is*Stale() gating reads a null mythics_synced_at as stale, so it's
+        // equivalent to Full on first sync), so a separate promotion
+        // dispatch here would just double the work.
+        Http::fake([
+            'eu.api.blizzard.com/*' => Http::response($this->profileResponse(level: 90), 200),
+        ]);
+
+        $job = new SyncCharacterData(
+            region: 'eu',
+            realm: 'tarren-mill',
+            name: 'nopromote',
+            depth: SyncDepth::StaleOnly,
+        );
+
+        app()->call([$job, 'handle']);
+
+        $character = Character::where('name', 'nopromote')->where('realm', 'tarren-mill')->first();
+        $this->assertNotNull($character);
+        $this->assertSame(90, $character->level);
+
+        Bus::assertNotDispatched(SyncCharacterData::class);
+    }
+
     /**
      * Minimal Blizzard profile JSON satisfying CharacterProfileMapper.
      */

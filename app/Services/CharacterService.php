@@ -54,8 +54,13 @@ class CharacterService
 
         // TODO(Plan 3): $forceRefresh must also bypass SyncCharacterData::$uniqueFor
         //               (nonced uniqueId) or back-to-back dispatches get dedup'd.
+        // StaleOnly (was Full): the job consults Character::is*Stale() at
+        // execution time and only re-fetches slices that read stale then, so
+        // an on-view dispatch never burns a full 9-slice fan-out for a single
+        // stale slice. Phase 3 builds real force-refresh on top of
+        // SyncDepth::syncsSlices().
         if ($forceRefresh || $anySliceStale) {
-            SyncCharacterData::dispatch($region, $realm, $name, SyncDepth::Full);
+            SyncCharacterData::dispatch($region, $realm, $name, SyncDepth::StaleOnly);
         } elseif ($character->isStale()) {
             SyncCharacterData::dispatch($region, $realm, $name, SyncDepth::Standard);
         }
