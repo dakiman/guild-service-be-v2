@@ -65,7 +65,7 @@ class RaiderIOSeederRunsTest extends TestCase
         $this->assertTrue(SeededRun::where('keystone_run_id', 1002)->exists());
     }
 
-    public function test_seed_runs_skips_already_seeded_runs(): void
+    public function test_seed_runs_counts_ledgered_runs_but_still_dispatches_their_members(): void
     {
         SeededRun::create(['keystone_run_id' => 1001, 'region' => 'eu']);
 
@@ -78,12 +78,46 @@ class RaiderIOSeederRunsTest extends TestCase
         $seeder = app(RaiderIOSeeder::class);
         $report = $seeder->seedRuns(new SeedOptions(regions: ['eu'], limit: 1));
 
-        Bus::assertDispatched(SyncCharacterData::class, 1);
+        Bus::assertDispatched(SyncCharacterData::class, 2);
+        Bus::assertDispatched(SyncCharacterData::class, fn (SyncCharacterData $j) => $j->name === 'Alice');
         Bus::assertDispatched(SyncCharacterData::class, fn (SyncCharacterData $j) => $j->name === 'Bob');
 
         $this->assertSame(2, $report->considered);
-        $this->assertSame(1, $report->dispatched);
+        $this->assertSame(2, $report->dispatched);
         $this->assertSame(1, $report->skippedDedupe);
+        $this->assertSame(1, SeededRun::where('keystone_run_id', 1001)->count()); // no duplicate ledger row
+    }
+
+    public function test_seed_runs_dispatches_stale_members_of_ledgered_runs_and_skips_fresh_ones(): void
+    {
+        SeededRun::create(['keystone_run_id' => 1001, 'region' => 'eu']);
+        Character::factory()->create([
+            'name' => 'fresh-bob', 'realm' => 'tarren-mill', 'region' => 'eu',
+        ]);
+        Character::where(['name' => 'fresh-bob', 'realm' => 'tarren-mill', 'region' => 'eu'])
+            ->update(['updated_at' => now()->subMinutes(5)]);
+
+        $client = $this->mock(RaiderIOClient::class);
+        $client->shouldReceive('topRuns')->andReturn((function () {
+            yield new SeedRunRef(1001, 'eu', [
+                new SeedCharacterRef('eu', 'tarren-mill', 'fresh-bob'),
+                new SeedCharacterRef('eu', 'kazzak', 'Newbie'),
+            ]);
+        })());
+
+        $seeder = app(RaiderIOSeeder::class);
+        $report = $seeder->seedRuns(new SeedOptions(regions: ['eu'], limit: 1));
+
+        // The run is ledgered (dedupe-counted, no re-insert) but its members are
+        // still individually gated: fresh-bob is inside the TTL, Newbie has no row.
+        Bus::assertDispatched(SyncCharacterData::class, 1);
+        Bus::assertDispatched(SyncCharacterData::class, fn (SyncCharacterData $j) => $j->name === 'Newbie');
+        Bus::assertNotDispatched(SyncCharacterData::class, fn (SyncCharacterData $j) => $j->name === 'fresh-bob');
+
+        $this->assertSame(1, $report->skippedDedupe);
+        $this->assertSame(1, $report->skippedTtl);
+        $this->assertSame(1, $report->dispatched);
+        $this->assertSame(1, SeededRun::count());
     }
 
     public function test_seed_runs_skips_fresh_characters(): void
@@ -205,7 +239,7 @@ class RaiderIOSeederRunsTest extends TestCase
         Bus::assertDispatched(SyncCharacterData::class, fn (SyncCharacterData $j) => $j->forceTeammateCrawl === false);
     }
 
-    public function test_seed_runs_dry_run_skips_already_seeded_runs_without_writing(): void
+    public function test_seed_runs_dry_run_counts_ledgered_runs_without_writing(): void
     {
         SeededRun::create(['keystone_run_id' => 1001, 'region' => 'eu']);
 
@@ -220,9 +254,9 @@ class RaiderIOSeederRunsTest extends TestCase
 
         Bus::assertNothingDispatched();
         $this->assertSame(1, $report->skippedDedupe);
-        $this->assertSame(1, $report->dispatched);
-        // 1002 is fresh but dry-run did not insert it.
+        $this->assertSame(2, $report->dispatched); // both members counted; neither is fresh
+        // Dry-run never mutates the ledger.
         $this->assertFalse(SeededRun::where('keystone_run_id', 1002)->exists());
-        $this->assertSame(1, SeededRun::count()); // only the pre-seeded 1001
+        $this->assertSame(1, SeededRun::count());
     }
 }

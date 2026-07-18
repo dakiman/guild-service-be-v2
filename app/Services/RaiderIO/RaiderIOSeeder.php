@@ -97,12 +97,14 @@ class RaiderIOSeeder
                 foreach ($this->client->topRuns($region, $season, $opts->limit) as $runRef) {
                     $report->considered++;
 
+                    // The ledger is run-level dedupe only (run data is immutable).
+                    // Members still go through the TTL gate below, so one missed on
+                    // an earlier pass (queue hiccup, prior TTL) is picked up when
+                    // the run reappears in the top list.
                     if ($opts->dryRun) {
                         // Dry-run does not mutate the ledger; check existence read-only.
                         if (SeededRun::where('keystone_run_id', $runRef->keystoneRunId)->exists()) {
                             $report->skippedDedupe++;
-
-                            continue;
                         }
                     } else {
                         $inserted = DB::table('seeded_runs')->insertOrIgnore([
@@ -113,8 +115,6 @@ class RaiderIOSeeder
 
                         if ($inserted === 0) {
                             $report->skippedDedupe++;
-
-                            continue;
                         }
                     }
 

@@ -13,7 +13,7 @@ Lean discovery layer for bootstrapping from raider.io top-lists (`app/Services/R
 ## Phases
 
 - **Phase 1 — Guilds.** `--phase=guilds` pulls top mythic raiding guilds via `/raiding/raid-rankings?raid={RAIDERIO_CURRENT_RAID_TIER}&difficulty=mythic`, dispatches `SyncGuildData`. `SyncGuildRoster` then dispatches `SyncCharacterData::Full` per roster member (TTL-gated on `Character.updated_at`).
-- **Phase 2 — Runs.** `--phase=runs` pulls top M+ runs from `/mythic-plus/runs?season={s}&region={r}&page={N}` (20 runs/page; `--limit` is *pages*). Each run yields 5 character refs; per-member `SyncCharacterData::Full`. Dedupe via `seeded_runs` table on `keystone_run_id` (immutable).
+- **Phase 2 — Runs.** `--phase=runs` pulls top M+ runs from `/mythic-plus/runs?season={s}&region={r}&page={N}` (20 runs/page; `--limit` is *pages*). Each run yields 5 character refs; per-member `SyncCharacterData::Full`. Run-level dedupe via `seeded_runs` on `keystone_run_id` (immutable); since 2026-07-19 the ledger no longer skips members — every member of every listed run goes through the per-character TTL gate (`RAIDERIO_SEED_CHAR_TTL`), so stale/missed members of known runs are picked up on later passes.
 - **Phase 3 — Cancelled.** raider.io has no public per-character/per-spec ranking endpoint. To broaden coverage, bump `RAIDERIO_SEED_GUILDS_PER_REGION` / `RAIDERIO_SEED_RUNS_PAGES_PER_REGION`.
 
 ## Roster fan-out
