@@ -707,4 +707,37 @@ class BlizzardGameDataClientTest extends TestCase
             $this->assertIsInt($ms);
         }
     }
+
+    /**
+     * Task 9 step 1 — the direct Http::withToken(...) getters (static-{region}
+     * namespace, bypassing request()) must retry through the same backoff
+     * chain as BlizzardClient::request(): retry on 5xx, never on 4xx.
+     * getFactionIndex is one of the representative static-namespace getters.
+     */
+    public function test_get_faction_index_retries_once_on_500_then_succeeds(): void
+    {
+        $callCount = 0;
+        Http::fake(function () use (&$callCount) {
+            $callCount++;
+
+            return $callCount === 1
+                ? Http::response(null, 500)
+                : Http::response(['factions' => [['id' => 2510, 'name' => 'Valdrakken Accord']]], 200);
+        });
+
+        $result = $this->client()->getFactionIndex();
+
+        $this->assertSame(2510, $result['factions'][0]['id']);
+        Http::assertSentCount(2);
+    }
+
+    public function test_get_faction_index_does_not_retry_on_404(): void
+    {
+        Http::fake(function () {
+            return Http::response(null, 404);
+        });
+
+        $this->assertNull($this->client()->getFactionIndex());
+        Http::assertSentCount(1);
+    }
 }

@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace App\Blizzard\Client;
 
+use App\Blizzard\Exceptions\BlizzardThrottleTimeoutException;
 use App\Support\Seasons;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
@@ -37,6 +41,59 @@ class BlizzardGameDataClient extends BlizzardClient
     protected function timeout(): int
     {
         return 30;
+    }
+
+    /**
+     * Applies the same retry chain as BlizzardClient::request() — retry on
+     * 5xx/timeout, never on 4xx (429 handled at the job middleware layer),
+     * never on BlizzardThrottleTimeoutException — to the getters below that
+     * bypass request() because their namespace (static-{region}, sometimes
+     * dynamic-{region}) differs from this client's namespace() override.
+     *
+     * retry(..., throw: true) throws a RequestException on a still-failing
+     * final attempt (including a non-retryable 4xx, on the very first try)
+     * before send() returns; we catch that here and hand back the failed
+     * Response so callers keep their existing status()===404 checks and
+     * $response->throw() calls unchanged.
+     */
+    private function getWithRetry(string $namespace, string $path): Response
+    {
+        try {
+            return Http::withToken($this->tokenManager->getToken($this->region))
+                ->withQueryParameters([
+                    'namespace' => $namespace,
+                    'locale' => 'en_GB',
+                ])
+                ->timeout($this->timeout())
+                ->connectTimeout(5)
+                ->retry(config('blizzard.http.retry_backoff_ms', [100, 500]), 0, function (\Exception $exception, PendingRequest $request) {
+                    // A throttle-slot timeout already waited block_seconds; retrying
+                    // would block again. Fail fast so the job middleware releases.
+                    if ($exception instanceof BlizzardThrottleTimeoutException) {
+                        return false;
+                    }
+
+                    if ($exception instanceof RequestException) {
+                        $status = $exception->response->status();
+
+                        // Never retry client errors (429 handled at job middleware layer)
+                        if ($status >= 400 && $status < 500) {
+                            return false;
+                        }
+
+                        // Retry on 5xx
+                        if ($status >= 500) {
+                            return true;
+                        }
+                    }
+
+                    // Retry on timeouts (ConnectionException)
+                    return true;
+                }, throw: true)
+                ->get("{$this->baseUrl()}/{$path}");
+        } catch (RequestException $e) {
+            return $e->response;
+        }
     }
 
     public function getCurrentMythicPlusSeason(): int
@@ -105,14 +162,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.talent_tree_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function () use ($treeId, $specId): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/talent-tree/{$treeId}/playable-specialization/{$specId}");
+            $response = $this->getWithRetry("static-{$this->region}", "data/wow/talent-tree/{$treeId}/playable-specialization/{$specId}");
 
             if ($response->status() === 404) {
                 return null;
@@ -139,14 +189,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function (): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/reputation-faction/index");
+            $response = $this->getWithRetry("static-{$this->region}", 'data/wow/reputation-faction/index');
 
             if ($response->status() === 404) {
                 return null;
@@ -169,14 +212,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/reputation-faction/{$id}");
+            $response = $this->getWithRetry("static-{$this->region}", "data/wow/reputation-faction/{$id}");
 
             if ($response->status() === 404) {
                 return null;
@@ -200,14 +236,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function (): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/title/index");
+            $response = $this->getWithRetry("static-{$this->region}", 'data/wow/title/index');
 
             if ($response->status() === 404) {
                 return null;
@@ -228,14 +257,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/title/{$id}");
+            $response = $this->getWithRetry("static-{$this->region}", "data/wow/title/{$id}");
 
             if ($response->status() === 404) {
                 return null;
@@ -262,14 +284,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function (): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/mount/index");
+            $response = $this->getWithRetry("static-{$this->region}", 'data/wow/mount/index');
 
             if ($response->status() === 404) {
                 return null;
@@ -292,14 +307,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/mount/{$id}");
+            $response = $this->getWithRetry("static-{$this->region}", "data/wow/mount/{$id}");
 
             if ($response->status() === 404) {
                 return null;
@@ -324,14 +332,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function (): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/achievement-category/index");
+            $response = $this->getWithRetry("static-{$this->region}", 'data/wow/achievement-category/index');
 
             if ($response->status() === 404) {
                 return null;
@@ -352,14 +353,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/achievement-category/{$id}");
+            $response = $this->getWithRetry("static-{$this->region}", "data/wow/achievement-category/{$id}");
 
             if ($response->status() === 404) {
                 return null;
@@ -382,14 +376,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function (): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/achievement/index");
+            $response = $this->getWithRetry("static-{$this->region}", 'data/wow/achievement/index');
 
             if ($response->status() === 404) {
                 return null;
@@ -409,14 +396,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/achievement/{$id}");
+            $response = $this->getWithRetry("static-{$this->region}", "data/wow/achievement/{$id}");
 
             if ($response->status() === 404) {
                 return null;
@@ -440,14 +420,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function (): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/journal-instance/index");
+            $response = $this->getWithRetry("static-{$this->region}", 'data/wow/journal-instance/index');
 
             if ($response->status() === 404) {
                 return null;
@@ -469,14 +442,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/journal-instance/{$id}");
+            $response = $this->getWithRetry("static-{$this->region}", "data/wow/journal-instance/{$id}");
 
             if ($response->status() === 404) {
                 return null;
@@ -497,14 +463,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/media/journal-instance/{$id}");
+            $response = $this->getWithRetry("static-{$this->region}", "data/wow/media/journal-instance/{$id}");
 
             if ($response->status() === 404) {
                 return null;
@@ -526,14 +485,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/journal-encounter/{$id}");
+            $response = $this->getWithRetry("static-{$this->region}", "data/wow/journal-encounter/{$id}");
 
             if ($response->status() === 404) {
                 return null;
@@ -553,14 +505,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/media/creature-display/{$id}");
+            $response = $this->getWithRetry("static-{$this->region}", "data/wow/media/creature-display/{$id}");
 
             if ($response->status() === 404) {
                 return null;
@@ -582,14 +527,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function (): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "dynamic-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/mythic-keystone/dungeon/index");
+            $response = $this->getWithRetry("dynamic-{$this->region}", 'data/wow/mythic-keystone/dungeon/index');
 
             if ($response->status() === 404) {
                 return null;
@@ -612,14 +550,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "dynamic-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/mythic-keystone/dungeon/{$id}");
+            $response = $this->getWithRetry("dynamic-{$this->region}", "data/wow/mythic-keystone/dungeon/{$id}");
 
             if ($response->status() === 404) {
                 return null;
@@ -641,14 +572,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "dynamic-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/mythic-keystone/season/{$id}");
+            $response = $this->getWithRetry("dynamic-{$this->region}", "data/wow/mythic-keystone/season/{$id}");
 
             if ($response->status() === 404) {
                 return null;
@@ -674,14 +598,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function (): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "dynamic-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/realm/index");
+            $response = $this->getWithRetry("dynamic-{$this->region}", 'data/wow/realm/index');
 
             if ($response->status() === 404) {
                 return null;
@@ -701,14 +618,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function (): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/keystone-affix/index");
+            $response = $this->getWithRetry("static-{$this->region}", 'data/wow/keystone-affix/index');
 
             if ($response->status() === 404) {
                 return null;
@@ -728,14 +638,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/keystone-affix/{$id}");
+            $response = $this->getWithRetry("static-{$this->region}", "data/wow/keystone-affix/{$id}");
 
             if ($response->status() === 404) {
                 return null;
@@ -755,14 +658,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/media/keystone-affix/{$id}");
+            $response = $this->getWithRetry("static-{$this->region}", "data/wow/media/keystone-affix/{$id}");
 
             if ($response->status() === 404) {
                 return null;
@@ -784,14 +680,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function (): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/playable-specialization/index");
+            $response = $this->getWithRetry("static-{$this->region}", 'data/wow/playable-specialization/index');
 
             if ($response->status() === 404) {
                 return null;
@@ -813,14 +702,7 @@ class BlizzardGameDataClient extends BlizzardClient
         $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
 
         return $this->rememberNullable($cacheKey, $ttl, function () use ($specId): ?array {
-            $response = Http::withToken($this->tokenManager->getToken($this->region))
-                ->withQueryParameters([
-                    'namespace' => "static-{$this->region}",
-                    'locale' => 'en_GB',
-                ])
-                ->timeout($this->timeout())
-                ->connectTimeout(5)
-                ->get("{$this->baseUrl()}/data/wow/playable-specialization/{$specId}");
+            $response = $this->getWithRetry("static-{$this->region}", "data/wow/playable-specialization/{$specId}");
 
             if ($response->status() === 404) {
                 return null;

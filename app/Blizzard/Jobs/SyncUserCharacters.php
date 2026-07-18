@@ -36,6 +36,9 @@ class SyncUserCharacters implements ShouldQueue
     // Time-bound retries (mirrors SyncCharacterData): every middleware release()
     // re-queues without burning a fixed $tries budget; only real exceptions
     // (maxExceptions) cap the work, within a 6h window. (P1.10)
+    // Intentionally shorter than the other sync jobs' 24h window: this is
+    // OAuth-triggered on login, so a day-old import landing as a surprise is
+    // worse than one that silently drops after 6h.
     public function retryUntil(): \DateTime
     {
         return now()->addHours(6);

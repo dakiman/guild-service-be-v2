@@ -91,51 +91,6 @@ class SyncGuildRosterTtlGateTest extends TestCase
         );
     }
 
-    public function test_proactive_with_config_dispatches_full_only_for_stale_and_shallow_only_for_fresh(): void
-    {
-        config()->set('raiderio.dispatch_roster_character_syncs', true);
-
-        $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill']);
-        GuildMember::factory()->create([
-            'guild_id' => $guild->id, 'name' => 'stale', 'realm' => 'tarren-mill', 'level' => 90,
-        ]);
-        GuildMember::factory()->create([
-            'guild_id' => $guild->id, 'name' => 'fresh', 'realm' => 'tarren-mill', 'level' => 90,
-        ]);
-
-        Character::factory()->create([
-            'name' => 'stale', 'realm' => 'tarren-mill', 'region' => 'eu', 'game_version' => 'retail',
-        ]);
-        Character::where('name', 'stale')->update(['updated_at' => now()->subDays(2)]);
-
-        Character::factory()->create([
-            'name' => 'fresh', 'realm' => 'tarren-mill', 'region' => 'eu', 'game_version' => 'retail',
-        ]);
-        Character::where('name', 'fresh')->update(['updated_at' => now()->subMinutes(5)]);
-
-        (new SyncGuildRoster($guild, forceFanout: false))->handle();
-
-        // Stale → Full only (no wasted Shallow).
-        Bus::assertDispatched(
-            SyncCharacterData::class,
-            fn (SyncCharacterData $j) => $j->name === 'stale' && $j->depth === SyncDepth::Full,
-        );
-        Bus::assertNotDispatched(
-            SyncCharacterData::class,
-            fn (SyncCharacterData $j) => $j->name === 'stale' && $j->depth === SyncDepth::Shallow,
-        );
-
-        // Fresh → Shallow only (proactive path never skips Shallow on freshness).
-        Bus::assertDispatched(
-            SyncCharacterData::class,
-            fn (SyncCharacterData $j) => $j->name === 'fresh' && $j->depth === SyncDepth::Shallow,
-        );
-        Bus::assertNotDispatched(
-            SyncCharacterData::class,
-            fn (SyncCharacterData $j) => $j->name === 'fresh' && $j->depth === SyncDepth::Full,
-        );
-    }
-
     public function test_full_dispatches_carry_force_teammate_crawl_when_force_fanout(): void
     {
         $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill']);
@@ -153,10 +108,8 @@ class SyncGuildRosterTtlGateTest extends TestCase
         );
     }
 
-    public function test_shallow_still_dispatched_for_cold_member_when_global_flag_off_and_no_force_fanout(): void
+    public function test_shallow_still_dispatched_for_cold_member_when_no_force_fanout(): void
     {
-        config()->set('raiderio.dispatch_roster_character_syncs', false);
-
         $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill']);
         GuildMember::factory()->create([
             'guild_id' => $guild->id, 'name' => 'proactive', 'realm' => 'tarren-mill', 'level' => 90,

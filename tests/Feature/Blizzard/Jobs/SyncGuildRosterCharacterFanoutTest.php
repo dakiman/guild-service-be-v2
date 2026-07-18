@@ -24,64 +24,11 @@ class SyncGuildRosterCharacterFanoutTest extends TestCase
         Bus::fake();
     }
 
-    public function test_dispatches_full_sync_for_each_member_when_flag_enabled(): void
+    public function test_stale_member_still_gets_shallow_only_when_no_force_fanout(): void
     {
-        config()->set('raiderio.dispatch_roster_character_syncs', true);
-        config()->set('raiderio.character_resync_ttl', 3600);
-        // SyncGuildRoster fans out endgame members only; fixtures are level 90.
-        config()->set('blizzard.endgame_level', 90);
-
-        $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill', 'name' => 'Echo']);
-        GuildMember::create([
-            'guild_id' => $guild->id, 'name' => 'Alpha', 'realm' => 'tarren-mill', 'level' => 90,
-            'class_id' => 1, 'race_id' => 1, 'rank' => 0,
-        ]);
-        GuildMember::create([
-            'guild_id' => $guild->id, 'name' => 'Beta', 'realm' => 'tarren-mill', 'level' => 90,
-            'class_id' => 2, 'race_id' => 1, 'rank' => 1,
-        ]);
-
-        (new SyncGuildRoster($guild))->handle();
-
-        Bus::assertDispatched(SyncCharacterData::class, function (SyncCharacterData $job) {
-            return $job->depth === SyncDepth::Full && $job->name === 'Alpha';
-        });
-        Bus::assertDispatched(SyncCharacterData::class, function (SyncCharacterData $job) {
-            return $job->depth === SyncDepth::Full && $job->name === 'Beta';
-        });
-    }
-
-    public function test_skips_full_dispatch_when_member_was_recently_updated(): void
-    {
-        config()->set('raiderio.dispatch_roster_character_syncs', true);
-        config()->set('raiderio.character_resync_ttl', 3600);
-        config()->set('blizzard.endgame_level', 90);
-
-        $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill', 'name' => 'Echo']);
-        GuildMember::create([
-            'guild_id' => $guild->id, 'name' => 'Fresh', 'realm' => 'tarren-mill', 'level' => 90,
-            'class_id' => 1, 'race_id' => 1, 'rank' => 0,
-        ]);
-
-        // Existing Character row, recently synced.
-        Character::factory()->create([
-            'name' => 'Fresh',
-            'realm' => 'tarren-mill',
-            'region' => 'eu',
-        ]);
-        // Force updated_at to be recent (factory may overwrite to now() automatically — that's fine for this test)
-        Character::where(['name' => 'Fresh', 'realm' => 'tarren-mill', 'region' => 'eu'])
-            ->update(['updated_at' => now()->subMinutes(5)]);
-
-        (new SyncGuildRoster($guild))->handle();
-
-        Bus::assertNotDispatched(SyncCharacterData::class, fn ($job) => $job->depth === SyncDepth::Full && $job->name === 'Fresh'
-        );
-    }
-
-    public function test_dispatches_full_sync_when_member_is_stale(): void
-    {
-        config()->set('raiderio.dispatch_roster_character_syncs', true);
+        // forceFanout is the only Full-fanout switch (the raiderio.dispatch_
+        // roster_character_syncs config that used to also gate this was dead
+        // and has been removed) — staleness alone can't trigger a Full.
         config()->set('raiderio.character_resync_ttl', 3600);  // 1h TTL
         config()->set('blizzard.endgame_level', 90);
 
@@ -99,13 +46,12 @@ class SyncGuildRosterCharacterFanoutTest extends TestCase
 
         (new SyncGuildRoster($guild))->handle();
 
-        Bus::assertDispatched(SyncCharacterData::class, fn ($job) => $job->depth === SyncDepth::Full && $job->name === 'Stale'
-        );
+        Bus::assertDispatched(SyncCharacterData::class, fn ($job) => $job->depth === SyncDepth::Shallow && $job->name === 'Stale');
+        Bus::assertNotDispatched(SyncCharacterData::class, fn ($job) => $job->depth === SyncDepth::Full && $job->name === 'Stale');
     }
 
-    public function test_skips_all_full_dispatches_when_flag_disabled(): void
+    public function test_skips_all_full_dispatches_without_force_fanout(): void
     {
-        config()->set('raiderio.dispatch_roster_character_syncs', false);
         config()->set('blizzard.endgame_level', 90);
 
         $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill', 'name' => 'Echo']);
@@ -119,9 +65,8 @@ class SyncGuildRosterCharacterFanoutTest extends TestCase
         Bus::assertNotDispatched(SyncCharacterData::class, fn ($job) => $job->depth === SyncDepth::Full);
     }
 
-    public function test_force_fanout_constructor_param_overrides_disabled_config(): void
+    public function test_force_fanout_constructor_param_triggers_full_dispatch(): void
     {
-        config()->set('raiderio.dispatch_roster_character_syncs', false);
         config()->set('raiderio.character_resync_ttl', 3600);
         config()->set('blizzard.endgame_level', 90);
 
@@ -131,8 +76,9 @@ class SyncGuildRosterCharacterFanoutTest extends TestCase
             'class_id' => 1, 'race_id' => 1, 'rank' => 0,
         ]);
 
-        // forceFanout=true overrides the config flag — used by the seeder so
-        // routine guild syncs don't accidentally cascade Full per-member.
+        // forceFanout=true is the only switch that activates the Full path —
+        // used by the seeder so routine guild syncs don't accidentally
+        // cascade Full per-member.
         (new SyncGuildRoster($guild, forceFanout: true))->handle();
 
         Bus::assertDispatched(SyncCharacterData::class, fn ($job) => $job->depth === SyncDepth::Full && $job->name === 'Alpha');
@@ -140,7 +86,6 @@ class SyncGuildRosterCharacterFanoutTest extends TestCase
 
     public function test_sub_endgame_member_gets_no_dispatch_at_all(): void
     {
-        config()->set('raiderio.dispatch_roster_character_syncs', true);
         config()->set('raiderio.character_resync_ttl', 3600);
         config()->set('blizzard.endgame_level', 90);
 

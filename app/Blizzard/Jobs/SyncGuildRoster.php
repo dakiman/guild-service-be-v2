@@ -86,20 +86,20 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
             ->where('level', '>=', (int) config('blizzard.endgame_level', 90))
             ->get();
 
-        // Per-member SyncCharacterData::Full fan-out is gated by either:
-        // 1. forceFanout=true on this specific job (set only by the raider.io
-        //    seeder path via SyncGuildData::forceRosterFanout).
-        // 2. raiderio.dispatch_roster_character_syncs config flag (default false).
-        $fullPathActive = $this->forceFanout || config('raiderio.dispatch_roster_character_syncs', false);
+        // Per-member SyncCharacterData::Full fan-out is gated solely by
+        // forceFanout=true on this specific job (set only by the raider.io
+        // seeder path via SyncGuildData::forceRosterFanout) — the only other
+        // switch (raiderio.dispatch_roster_character_syncs) was dead config
+        // (never set anywhere) and has been removed.
+        $fullPathActive = $this->forceFanout;
 
         // When forceFanout is true (seeder run — currently the only caller
         // that dispatches this job at all), skip both Shallow and Full
         // dispatches for any member whose Character row is fresh (updated_at
         // within $ttl). Cold + stale members get a Full.
-        // When forceFanout is false (non-force path — not currently
-        // dispatched in production, but still correct if ever wired in),
-        // Shallow fires unless the member is a Full target (config path
-        // staleness gate).
+        // When forceFanout is false, every member gets a Shallow only —
+        // $fullPathActive is false, so resolveFullTargets() below returns
+        // no targets.
         $freshTuples = [];
         if ($this->forceFanout) {
             $ttl = (int) config('raiderio.character_resync_ttl', 86400);
@@ -180,8 +180,12 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
             return $fullTargets;
         }
 
-        // Proactive + config path: per-member staleness lookup, run once here
-        // (hoisted out of dispatchFullSyncsForMembers so it doesn't repeat).
+        // Non-force path: per-member staleness lookup, run once here (hoisted
+        // out of dispatchFullSyncsForMembers so it doesn't repeat). Currently
+        // unreachable — $fullPathActive is now exactly $this->forceFanout, so
+        // reaching this line implies forceFanout is true and the branch above
+        // already returned. Kept as the structural fallback for a future
+        // non-force Full-fanout switch (see the deleted raiderio config).
         $ttl = (int) config('raiderio.character_resync_ttl', 86400);
         $cutoff = now()->subSeconds($ttl);
 

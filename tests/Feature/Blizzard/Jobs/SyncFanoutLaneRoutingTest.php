@@ -50,9 +50,8 @@ class SyncFanoutLaneRoutingTest extends TestCase
 
     public function test_shallow_fanout_on_proactive_path_also_uses_roster_lane(): void
     {
-        // forceFanout=false + config flag off → Shallow-only path.
-        config()->set('raiderio.dispatch_roster_character_syncs', false);
-
+        // forceFanout=false → Shallow-only path (forceFanout is the only
+        // Full-fanout switch).
         $guild = Guild::factory()->create(['region' => 'eu', 'realm' => 'tarren-mill']);
         GuildMember::factory()->create([
             'guild_id' => $guild->id, 'name' => 'shallowmember', 'realm' => 'tarren-mill', 'level' => 90,

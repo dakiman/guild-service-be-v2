@@ -34,15 +34,6 @@ return [
 
     'teammate_crawl_during_seed' => (bool) env('RAIDERIO_SEED_TEAMMATE_CRAWL_ENABLED', false),
 
-    // Emergency/manual lever for SyncGuildRoster's non-force path: when true,
-    // it also runs the per-member SyncCharacterData::Full fan-out (instead of
-    // Shallow-only) for guild syncs that didn't set forceRosterFanout. This is
-    // currently inert in production — only the raider.io seeder dispatches
-    // SyncGuildRoster at all, and it always passes forceFanout: true, so the
-    // non-force path this flag affects never runs. No Config::set of this key
-    // exists anywhere; it's here to flip on by hand if that ever changes.
-    'dispatch_roster_character_syncs' => (bool) env('RAIDERIO_DISPATCH_ROSTER_CHAR_SYNCS', false),
-
     'crawl' => [
         'enabled' => (bool) env('RAIDERIO_CRAWL_ENABLED', false),
     ],
