@@ -28,7 +28,8 @@ class SyncGuildRoster implements ShouldBeUnique, ShouldQueue
 
     public array $backoff = [30, 120, 300];
 
-    public int $uniqueFor = 60;
+    // Queue-lifetime dedupe; see SyncCharacterData::$uniqueFor.
+    public int $uniqueFor = 86400;
 
     /** Running index across BOTH the Shallow and Full fan-out loops. */
     private int $fanoutIndex = 0;

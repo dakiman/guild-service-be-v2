@@ -64,7 +64,10 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
 
     public array $backoff = [30, 120, 300];
 
-    public int $uniqueFor = 60;
+    // Queue-lifetime dedupe: the unique lock is released when the job
+    // completes or fails, so this TTL only bites for lost jobs (crashed
+    // worker, queue flush) — matches the 24h retryUntil window.
+    public int $uniqueFor = 86400;
 
     // Time-bound retries: every middleware release() re-queues without burning
     // a fixed $tries budget; only real exceptions (maxExceptions) cap the work.

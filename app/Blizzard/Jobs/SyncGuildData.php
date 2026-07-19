@@ -34,7 +34,8 @@ class SyncGuildData implements ShouldBeUnique, ShouldQueue
 
     public array $backoff = [30, 120, 300];
 
-    public int $uniqueFor = 60;
+    // Queue-lifetime dedupe; see SyncCharacterData::$uniqueFor.
+    public int $uniqueFor = 86400;
 
     public function __construct(
         public readonly string $region,
