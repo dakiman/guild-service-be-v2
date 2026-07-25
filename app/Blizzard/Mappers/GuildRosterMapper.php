@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Blizzard\Mappers;
 
 use App\Blizzard\DTO\GuildMemberData;
+use App\Support\BlizzardIdentity;
 
 class GuildRosterMapper
 {
@@ -22,7 +23,7 @@ class GuildRosterMapper
             $rawRealmName = isset($character['realm']['name']) ? (string) $character['realm']['name'] : null;
 
             $members[] = new GuildMemberData(
-                name: strtolower($rawName),
+                name: BlizzardIdentity::name($rawName),
                 realm: $character['realm']['slug'] ?? 'unknown',
                 level: (int) ($character['level'] ?? 0),
                 classId: (int) ($character['playable_class']['id'] ?? 0),
