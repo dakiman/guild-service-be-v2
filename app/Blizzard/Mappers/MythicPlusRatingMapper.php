@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Blizzard\Mappers;
 
 use App\Blizzard\DTO\CharacterMythicPlusRating;
+use App\Support\BlizzardIdentity;
 
 class MythicPlusRatingMapper
 {
@@ -50,8 +51,8 @@ class MythicPlusRatingMapper
      */
     private function aggregatePerSpec(array $bestRuns, string $name, string $realm): array
     {
-        $wantName = strtolower($name);
-        $wantRealm = strtolower($realm);
+        $wantName = BlizzardIdentity::name($name);
+        $wantRealm = strtolower($realm); // realm slugs are ASCII
         $perSpec = [];
 
         foreach ($bestRuns as $run) {
@@ -61,8 +62,8 @@ class MythicPlusRatingMapper
             }
 
             foreach ($run['members'] ?? [] as $m) {
-                $memberName = strtolower((string) ($m['character']['name'] ?? ''));
-                $memberRealm = strtolower((string) ($m['character']['realm']['slug'] ?? ''));
+                $memberName = BlizzardIdentity::name((string) ($m['character']['name'] ?? ''));
+                $memberRealm = strtolower((string) ($m['character']['realm']['slug'] ?? '')); // realm slugs are ASCII
                 if ($memberName !== $wantName || $memberRealm !== $wantRealm) {
                     continue;
                 }
