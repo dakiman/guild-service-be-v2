@@ -194,8 +194,11 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         $profile = $profileMapper->map($response['basic']);
 
         $characterData = [
-            'name' => $this->name,
-            'realm' => $this->realm,
+            // Canonical (mb-safe lowercase / slug) identity — must match the
+            // updateOrCreate keys below, otherwise the update leg would write
+            // the raw casing straight back over the canonical row.
+            'name' => BlizzardIdentity::name($this->name),
+            'realm' => BlizzardIdentity::realm($this->realm),
             'region' => $this->region,
             'display_name' => $profile->name !== '' ? $profile->name : null,
             'display_realm' => $profile->realmName,
@@ -284,10 +287,14 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         // Upsert the character.
         // game_version is always 'retail' here — Classic uses a separate read-through
         // service and does not flow through this job.
+        // The identity keys are canonicalized here (not just at dispatch sites):
+        // jobs serialized before the canonicalization deploy still carry raw-cased
+        // names and unserialize bypasses the constructor, so this is the one
+        // chokepoint that guarantees no non-canonical row can ever be written.
         $character = Character::updateOrCreate(
             [
-                'name' => $this->name,
-                'realm' => $this->realm,
+                'name' => BlizzardIdentity::name($this->name),
+                'realm' => BlizzardIdentity::realm($this->realm),
                 'region' => $this->region,
                 'game_version' => 'retail',
             ],
