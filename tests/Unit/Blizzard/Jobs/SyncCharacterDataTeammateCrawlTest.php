@@ -14,6 +14,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 final class SyncCharacterDataTeammateCrawlTest extends TestCase
@@ -278,6 +279,57 @@ final class SyncCharacterDataTeammateCrawlTest extends TestCase
         $this->invokeCrawl($job, $seed);
 
         Bus::assertDispatchedTimes(SyncCharacterData::class, 2);
+    }
+
+    public function test_display_cased_cyrillic_teammate_dispatches_canonical_name(): void
+    {
+        // dungeon_run_members stores display-cased names by design (RunTeamPersister);
+        // strtolower() leaves multibyte bytes untouched, so the crawl used to dispatch
+        // 'Бробабади' and Character::updateOrCreate minted a duplicate row.
+        $seed = $this->makeSeedWithRun();
+        $run = DungeonRun::query()->firstOrFail();
+
+        DungeonRunMember::create([
+            'dungeon_run_id' => $run->id,
+            'character_id' => null,
+            'character_name' => 'Бробабади',
+            'character_realm' => 'howling-fjord',
+            'character_region' => 'eu',
+        ]);
+
+        Bus::fake();
+
+        $job = new SyncCharacterData('eu', 'the-maelstrom', 'seedy', SyncDepth::Full, null, 0);
+        $this->invokeCrawl($job, $seed);
+
+        Bus::assertDispatched(
+            SyncCharacterData::class,
+            fn ($d) => $d->name === 'бробабади' && $d->realm === 'howling-fjord',
+        );
+    }
+
+    public function test_seed_skip_matches_display_cased_pivot_row_of_seed_itself(): void
+    {
+        // The seed is stored canonical-lowercase; its own pivot row is display-cased.
+        // The skip comparison must be multibyte-safe or the seed crawls itself.
+        $seed = $this->makeSeedWithRun();
+
+        $seed->update(['name' => 'бробабади', 'realm' => 'howling-fjord']);
+        DB::table('dungeon_run_members')
+            ->where('character_id', $seed->id)
+            ->update(['character_name' => 'Бробабади', 'character_realm' => 'howling-fjord']);
+
+        Bus::fake();
+
+        $job = new SyncCharacterData('eu', 'howling-fjord', 'бробабади', SyncDepth::Full, null, 0);
+        $this->invokeCrawl($job, $seed);
+
+        // Only the four other teammates; the seed's own row is filtered out.
+        Bus::assertDispatchedTimes(SyncCharacterData::class, 4);
+        Bus::assertNotDispatched(
+            SyncCharacterData::class,
+            fn ($d) => Str::lower($d->name) === 'бробабади',
+        );
     }
 
     public function test_max_depth_clamped_to_2(): void

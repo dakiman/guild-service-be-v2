@@ -959,7 +959,9 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             // First pass: dedupe and drop the seed / blank identities.
             $targets = [];
             foreach ($rows as $row) {
-                $name = strtolower((string) $row->character_name);
+                // Pivot names are display-cased by design (RunTeamPersister); strtolower()
+                // is ASCII-only and would leave multibyte names capitalized.
+                $name = BlizzardIdentity::name((string) $row->character_name);
                 $realm = (string) $row->character_realm;
                 $region = (string) $row->character_region;
                 $key = "{$region}:{$realm}:{$name}";
@@ -969,7 +971,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 }
 
                 // Skip the seed itself.
-                if ($name === strtolower($this->name)
+                if ($name === BlizzardIdentity::name($this->name)
                     && $realm === $this->realm
                     && $region === $this->region) {
                     continue;
