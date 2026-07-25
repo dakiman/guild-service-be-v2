@@ -127,3 +127,4 @@ Sanctum bearer tokens (issued on register/login, deleted on logout). Blizzard OA
 - Common scopes: `byIdentity($name, $realm, $region)`, `recentlySearched($limit)`, `mostPopular($limit)`.
 - Routes versioned under `/api/v1/` in `routes/api.php`.
 - Config in `config/blizzard.php`, env-backed for thresholds, timeouts, rate limits.
+- Character/guild-member names are canonical **mb-lowercase** (`BlizzardIdentity::name()`); display casing lives in `display_name`. NEVER `strtolower()` a name — it is ASCII-only and mints case-duplicate rows for Cyrillic/accented names (2026-07-25 incident; repair: `characters:canonicalize-names --dry-run`).
