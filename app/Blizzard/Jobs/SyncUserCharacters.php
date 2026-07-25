@@ -9,6 +9,7 @@ use App\Blizzard\Middleware\BlizzardHealthCheck;
 use App\Blizzard\Middleware\BlizzardRateLimiter;
 use App\Enums\SyncDepth;
 use App\Models\User;
+use App\Support\BlizzardIdentity;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -76,7 +77,7 @@ class SyncUserCharacters implements ShouldQueue
             $characters = $account['characters'] ?? [];
 
             foreach ($characters as $character) {
-                $name = strtolower($character['name'] ?? '');
+                $name = BlizzardIdentity::name($character['name'] ?? '');
                 $realm = $character['realm']['slug'] ?? '';
 
                 if ($name === '' || $realm === '') {
