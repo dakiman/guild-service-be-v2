@@ -64,6 +64,30 @@ class CharacterScopeNameSearchTest extends TestCase
         $this->assertCount(1, Character::nameSearch('MELANIYA')->get());
     }
 
+    public function test_cyrillic_search_is_case_insensitive(): void
+    {
+        Character::factory()->create([
+            'name' => 'бробабади',
+            'realm' => 'howling-fjord',
+            'region' => 'eu',
+            'game_version' => 'retail',
+        ]);
+
+        $this->assertCount(1, Character::nameSearch('Бробабади')->get());
+    }
+
+    public function test_single_cyrillic_char_needle_is_rejected(): void
+    {
+        Character::factory()->create([
+            'name' => 'бробабади',
+            'realm' => 'howling-fjord',
+            'region' => 'eu',
+            'game_version' => 'retail',
+        ]);
+
+        $this->assertCount(0, Character::nameSearch('б')->get());
+    }
+
     public function test_substring_match_works_when_query_is_in_middle_of_name(): void
     {
         Character::factory()->create(['name' => 'xxmelyy', 'realm' => 'r', 'region' => 'eu']);

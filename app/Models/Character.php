@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Str;
 
 class Character extends Model
 {
@@ -259,9 +260,9 @@ class Character extends Model
 
     public function scopeNameSearch(Builder $query, string $q, int $limit = 8): Builder
     {
-        $needle = strtolower(trim($q));
+        $needle = Str::lower(trim($q));
 
-        if (strlen($needle) < 2) {
+        if (mb_strlen($needle) < 2) {
             return $query->whereRaw('1 = 0');
         }
 

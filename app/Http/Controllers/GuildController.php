@@ -16,6 +16,7 @@ use App\Support\RefreshCooldown;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 
 class GuildController extends Controller
 {
@@ -72,7 +73,7 @@ class GuildController extends Controller
 
         if ($filter !== '') {
             // Names are stored canonical-lowercase; LIKE is case-correct on Postgres.
-            $query->where('name', 'LIKE', '%'.strtolower($filter).'%');
+            $query->where('name', 'LIKE', '%'.Str::lower($filter).'%');
         }
 
         $members = $query->paginate($perPage);

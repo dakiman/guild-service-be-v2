@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Str;
 
 class Guild extends Model
 {
@@ -114,9 +115,9 @@ class Guild extends Model
 
     public function scopeNameSearch(Builder $query, string $q, int $limit = 8): Builder
     {
-        $needle = strtolower(trim($q));
+        $needle = Str::lower(trim($q));
 
-        if (strlen($needle) < 2) {
+        if (mb_strlen($needle) < 2) {
             return $query->whereRaw('1 = 0');
         }
 
