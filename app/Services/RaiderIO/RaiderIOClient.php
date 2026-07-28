@@ -73,17 +73,24 @@ class RaiderIOClient
     /**
      * Yields top mythic+ runs for the given region+season.
      * `pages` is a fixed page count (1 page = 20 runs from raider.io).
+     * `$dungeon` (a dungeon slug) filters the ladder to that single dungeon;
+     * null keeps the unfiltered all-dungeons ladder.
      *
      * @return Generator<int, SeedRunRef>
      */
-    public function topRuns(string $region, string $season, int $pages): Generator
+    public function topRuns(string $region, string $season, int $pages, ?string $dungeon = null): Generator
     {
         for ($page = 0; $page < $pages; $page++) {
-            $response = $this->get('/mythic-plus/runs', [
+            $query = [
                 'season' => $season,
                 'region' => $region,
                 'page' => $page,
-            ]);
+            ];
+            if ($dungeon !== null) {
+                $query['dungeon'] = $dungeon;
+            }
+
+            $response = $this->get('/mythic-plus/runs', $query);
 
             $rankings = $response->json('rankings') ?? [];
 
@@ -146,6 +153,26 @@ class RaiderIOClient
         ]);
 
         return $response->json() ?? [];
+    }
+
+    /**
+     * Dungeon slugs for one season, from /mythic-plus/static-data. Used by the
+     * seeder's per-dungeon ladder loop. Empty array when the season is absent.
+     *
+     * @return list<string>
+     */
+    public function seasonDungeonSlugs(int $expansionId, string $seasonSlug): array
+    {
+        foreach ($this->mythicPlusStaticData($expansionId)['seasons'] ?? [] as $season) {
+            if (($season['slug'] ?? null) === $seasonSlug) {
+                return array_values(array_filter(array_map(
+                    fn (array $dungeon): ?string => $dungeon['slug'] ?? null,
+                    $season['dungeons'] ?? [],
+                )));
+            }
+        }
+
+        return [];
     }
 
     /**

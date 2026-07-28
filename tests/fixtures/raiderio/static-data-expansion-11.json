@@ -1,0 +1,17 @@
+{
+    "seasons": [
+        {
+            "slug": "season-mn-1",
+            "dungeons": [
+                { "id": 16395, "slug": "maisara-caverns", "challenge_mode_id": 560 },
+                { "id": 4813, "slug": "pit-of-saron", "challenge_mode_id": 561 }
+            ]
+        },
+        {
+            "slug": "season-mn-0",
+            "dungeons": [
+                { "id": 9999, "slug": "should-not-appear", "challenge_mode_id": 1 }
+            ]
+        }
+    ]
+}
