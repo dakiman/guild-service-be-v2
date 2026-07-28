@@ -31,7 +31,7 @@ class RaiderIOSeederRunsTest extends TestCase
     public function test_seed_runs_dispatches_full_per_member_and_persists_ledger(): void
     {
         $client = $this->mock(RaiderIOClient::class);
-        $client->shouldReceive('topRuns')->with('eu', 'season-mn-1', 1)->andReturn((function () {
+        $client->shouldReceive('topRuns')->with('eu', 'season-mn-1', 1, null)->andReturn((function () {
             yield new SeedRunRef(
                 keystoneRunId: 1001,
                 region: 'eu',
@@ -196,10 +196,10 @@ class RaiderIOSeederRunsTest extends TestCase
     public function test_seed_runs_isolates_per_region_errors(): void
     {
         $client = $this->mock(RaiderIOClient::class);
-        $client->shouldReceive('topRuns')->with('eu', 'season-mn-1', 1)->andReturn((function () {
+        $client->shouldReceive('topRuns')->with('eu', 'season-mn-1', 1, null)->andReturn((function () {
             yield new SeedRunRef(1001, 'eu', [new SeedCharacterRef('eu', 'tarren-mill', 'A')]);
         })());
-        $client->shouldReceive('topRuns')->with('us', 'season-mn-1', 1)->andThrow(
+        $client->shouldReceive('topRuns')->with('us', 'season-mn-1', 1, null)->andThrow(
             new RaiderIOException('boom')
         );
 

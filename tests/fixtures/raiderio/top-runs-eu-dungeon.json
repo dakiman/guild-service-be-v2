@@ -1,0 +1,18 @@
+{
+    "rankings": [
+        {
+            "rank": 1,
+            "score": 512.0,
+            "run": {
+                "keystone_run_id": 2001,
+                "roster": [
+                    { "character": { "name": "Alice", "realm": { "slug": "tarren-mill" }, "region": { "slug": "eu" } } },
+                    { "character": { "name": "Nadia", "realm": { "slug": "kazzak" }, "region": { "slug": "eu" } } },
+                    { "character": { "name": "Olaf", "realm": { "slug": "kazzak" }, "region": { "slug": "eu" } } },
+                    { "character": { "name": "Pia", "realm": { "slug": "silvermoon" }, "region": { "slug": "eu" } } },
+                    { "character": { "name": "Quinn", "realm": { "slug": "silvermoon" }, "region": { "slug": "eu" } } }
+                ]
+            }
+        }
+    ]
+}

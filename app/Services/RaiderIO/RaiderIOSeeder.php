@@ -85,75 +85,135 @@ class RaiderIOSeeder
         $report = new SeedReport(phase: 'runs', regions: $opts->regions);
         $season = Seasons::raiderioSeasonSlug();
 
-        Log::info('raiderio.seed.start', [
-            'phase' => 'runs',
-            'regions' => $opts->regions,
-            'pages' => $opts->limit,
-            'season' => $season,
-        ]);
-
-        foreach ($opts->regions as $region) {
+        // Per-dungeon ladders are additive breadth: the global top list is
+        // meta-dungeon-biased, per-dungeon lists surface distinct rosters.
+        $dungeons = [];
+        if ($opts->dungeonPages > 0) {
             try {
-                foreach ($this->client->topRuns($region, $season, $opts->limit) as $runRef) {
-                    $report->considered++;
-
-                    // The ledger is run-level dedupe only (run data is immutable).
-                    // Members still go through the TTL gate below, so one missed on
-                    // an earlier pass (queue hiccup, prior TTL) is picked up when
-                    // the run reappears in the top list.
-                    if ($opts->dryRun) {
-                        // Dry-run does not mutate the ledger; check existence read-only.
-                        if (SeededRun::where('keystone_run_id', $runRef->keystoneRunId)->exists()) {
-                            $report->skippedDedupe++;
-                        }
-                    } else {
-                        $inserted = DB::table('seeded_runs')->insertOrIgnore([
-                            'keystone_run_id' => $runRef->keystoneRunId,
-                            'region' => $region,
-                            'seeded_at' => now(),
-                        ]);
-
-                        if ($inserted === 0) {
-                            $report->skippedDedupe++;
-                        }
-                    }
-
-                    foreach ($runRef->members as $memberRef) {
-                        if (! $opts->force && $this->characterIsFresh($memberRef)) {
-                            $report->skippedTtl++;
-
-                            continue;
-                        }
-
-                        if ($opts->dryRun) {
-                            $report->dispatched++;
-
-                            continue;
-                        }
-
-                        SyncCharacterData::dispatch(
-                            region: $memberRef->region,
-                            realm: $memberRef->realmSlug,
-                            name: $memberRef->name,
-                            depth: SyncDepth::Full,
-                            forceTeammateCrawl: $opts->teammateCrawl,
-                        );
-                        $report->dispatched++;
-                    }
-                }
-            } catch (RaiderIOThrottledException $e) {
-                // Console context — blocking is fine here, unlike the crawl
-                // jobs where a 429 must release() instead of sleeping a worker.
-                sleep(min($e->retryAfter, 90));
-
-                continue;
+                $dungeons = $this->client->seasonDungeonSlugs(
+                    (int) config('raiderio.expansion_id'),
+                    $season,
+                );
             } catch (RaiderIOException $e) {
                 $report->errors++;
                 Log::warning('raiderio.seed.error', [
                     'phase' => 'runs',
-                    'region' => $region,
+                    'stage' => 'static-data',
                     'error' => $e->getMessage(),
                 ]);
+            }
+        }
+
+        Log::info('raiderio.seed.start', [
+            'phase' => 'runs',
+            'regions' => $opts->regions,
+            'pages' => $opts->limit,
+            'dungeon_pages' => $opts->dungeonPages,
+            'dungeons' => $dungeons,
+            'season' => $season,
+        ]);
+
+        foreach ($opts->regions as $region) {
+            // One dispatch per member identity per invocation — the same top
+            // players recur across ladders and cap slots must not be wasted.
+            $dispatchedMembers = [];
+            $regionDispatched = 0;
+            $capReached = false;
+
+            // null = the global ladder ($opts->limit pages), then one ladder
+            // per dungeon ($opts->dungeonPages pages each).
+            foreach ([null, ...$dungeons] as $dungeon) {
+                if ($capReached) {
+                    break;
+                }
+                $pages = $dungeon === null ? $opts->limit : $opts->dungeonPages;
+
+                try {
+                    foreach ($this->client->topRuns($region, $season, $pages, $dungeon) as $runRef) {
+                        $report->considered++;
+
+                        // The ledger is run-level dedupe only (run data is immutable).
+                        // Members still go through the TTL gate below, so one missed on
+                        // an earlier pass (queue hiccup, prior TTL) is picked up when
+                        // the run reappears in the top list.
+                        if ($opts->dryRun) {
+                            // Dry-run does not mutate the ledger; check existence read-only.
+                            if (SeededRun::where('keystone_run_id', $runRef->keystoneRunId)->exists()) {
+                                $report->skippedDedupe++;
+                            }
+                        } else {
+                            $inserted = DB::table('seeded_runs')->insertOrIgnore([
+                                'keystone_run_id' => $runRef->keystoneRunId,
+                                'region' => $region,
+                                'seeded_at' => now(),
+                            ]);
+
+                            if ($inserted === 0) {
+                                $report->skippedDedupe++;
+                            }
+                        }
+
+                        foreach ($runRef->members as $memberRef) {
+                            $memberKey = $memberRef->realmSlug.':'.$memberRef->name;
+                            if (isset($dispatchedMembers[$memberKey])) {
+                                $report->skippedDedupe++;
+
+                                continue;
+                            }
+
+                            if (! $opts->force && $this->characterIsFresh($memberRef)) {
+                                $report->skippedTtl++;
+
+                                continue;
+                            }
+
+                            if ($opts->maxCharDispatches > 0 && $regionDispatched >= $opts->maxCharDispatches) {
+                                $report->skippedCap++;
+                                $capReached = true;
+
+                                continue;
+                            }
+
+                            $dispatchedMembers[$memberKey] = true;
+                            $regionDispatched++;
+
+                            if ($opts->dryRun) {
+                                $report->dispatched++;
+
+                                continue;
+                            }
+
+                            SyncCharacterData::dispatch(
+                                region: $memberRef->region,
+                                realm: $memberRef->realmSlug,
+                                name: $memberRef->name,
+                                depth: SyncDepth::Full,
+                                forceTeammateCrawl: $opts->teammateCrawl,
+                            );
+                            $report->dispatched++;
+                        }
+
+                        if ($capReached) {
+                            // Abandon the region's remaining pages/ladders — no point
+                            // spending raider.io requests on members we won't dispatch.
+                            break;
+                        }
+                    }
+                } catch (RaiderIOThrottledException $e) {
+                    // Console context — blocking is fine here, unlike the crawl
+                    // jobs where a 429 must release() instead of sleeping a worker.
+                    sleep(min($e->retryAfter, 90));
+
+                    continue;
+                } catch (RaiderIOException $e) {
+                    $report->errors++;
+                    Log::warning('raiderio.seed.error', [
+                        'phase' => 'runs',
+                        'region' => $region,
+                        'dungeon' => $dungeon,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
         }
 
