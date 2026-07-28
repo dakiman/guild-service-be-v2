@@ -8,6 +8,7 @@ use App\Services\RaiderIO\DTO\SeedGuildRef;
 use App\Services\RaiderIO\Exceptions\RaiderIOException;
 use App\Services\RaiderIO\Exceptions\RaiderIOThrottledException;
 use App\Services\RaiderIO\RaiderIOClient;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -107,6 +108,59 @@ class RaiderIOClientTest extends TestCase
 
         $this->expectException(RaiderIOException::class);
         iterator_to_array($client->topGuilds('eu', 3), preserve_keys: false);
+    }
+
+    /**
+     * A cURL timeout / connection refusal surfaces as ConnectionException, not a
+     * 5xx response. It must be retried on the same budget as a 5xx instead of
+     * escaping the client and aborting the whole seed run.
+     */
+    public function test_top_guilds_retries_on_connection_exception(): void
+    {
+        $fixture = json_decode(file_get_contents(base_path('tests/fixtures/raiderio/top-guilds-eu.json')), true);
+
+        $calls = 0;
+        Http::fake(function () use ($fixture, &$calls) {
+            $calls++;
+
+            if ($calls === 1) {
+                throw new ConnectionException('cURL error 28: Operation timed out after 15002 milliseconds');
+            }
+
+            return Http::response($fixture, 200);
+        });
+
+        $client = app(RaiderIOClient::class);
+
+        $refs = iterator_to_array($client->topGuilds('eu', 3), preserve_keys: false);
+
+        $this->assertCount(3, $refs);
+        $this->assertSame(2, $calls);
+    }
+
+    public function test_top_guilds_throws_raiderio_exception_after_exhausting_connection_retries(): void
+    {
+        $calls = 0;
+        Http::fake(function () use (&$calls) {
+            $calls++;
+
+            throw new ConnectionException('cURL error 28: Operation timed out after 15002 milliseconds');
+        });
+
+        $client = app(RaiderIOClient::class);
+
+        try {
+            iterator_to_array($client->topGuilds('eu', 3), preserve_keys: false);
+            $this->fail('Expected RaiderIOException');
+        } catch (ConnectionException $e) {
+            $this->fail('ConnectionException escaped the client: '.$e->getMessage());
+        } catch (RaiderIOException $e) {
+            $this->assertStringContainsString('/raiding/raid-rankings', $e->getMessage());
+            $this->assertInstanceOf(ConnectionException::class, $e->getPrevious());
+        }
+
+        // 1 initial attempt + 3 retries on the shared 5xx/connection budget.
+        $this->assertSame(4, $calls);
     }
 
     public function test_top_guilds_canonicalizes_mixed_case_names(): void

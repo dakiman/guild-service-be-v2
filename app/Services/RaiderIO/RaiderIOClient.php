@@ -12,6 +12,7 @@ use App\Services\RaiderIO\Exceptions\RaiderIOThrottledException;
 use App\Support\BlizzardIdentity;
 use App\Support\Seasons;
 use Generator;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
@@ -281,7 +282,28 @@ class RaiderIOClient
         $backoffSeconds = [1, 4, 10];
 
         while (true) {
-            $response = $this->http()->get($path, $query);
+            try {
+                $response = $this->http()->get($path, $query);
+            } catch (ConnectionException $e) {
+                // A cURL timeout / refused connection is as transient as a 5xx and
+                // shares its retry budget. Uncaught, one 15s timeout mid-crawl
+                // aborted the whole seed run (observed in prod 2026-07-28).
+                if ($attempt5xx < count($backoffSeconds)) {
+                    $sleep = $backoffSeconds[$attempt5xx];
+                    if ($sleep > 0 && ! $this->skipBackoffSleep()) {
+                        sleep($sleep);
+                    }
+                    $attempt5xx++;
+
+                    continue;
+                }
+
+                throw new RaiderIOException(
+                    sprintf('raider.io connection failed for %s: %s', $path, $e->getMessage()),
+                    0,
+                    $e
+                );
+            }
 
             if ($response->successful()) {
                 return $response;
