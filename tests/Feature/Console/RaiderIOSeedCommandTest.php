@@ -33,6 +33,20 @@ class RaiderIOSeedCommandTest extends TestCase
         Bus::assertDispatched(SyncGuildData::class, 3);
     }
 
+    public function test_guild_dispatch_cap_limits_dispatches_per_region(): void
+    {
+        config()->set('raiderio.phase.max_guild_dispatches_per_region', 1);
+
+        $this->artisan('raiderio:seed', [
+            '--phase' => 'guilds',
+            '--limit' => 3,
+            '--regions' => 'eu',
+        ])->assertSuccessful();
+
+        // Fixture has 3 stale guilds; cap allows only the first.
+        Bus::assertDispatched(SyncGuildData::class, 1);
+    }
+
     public function test_dry_run_dispatches_nothing(): void
     {
         $this->artisan('raiderio:seed', [

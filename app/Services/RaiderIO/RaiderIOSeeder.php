@@ -34,6 +34,8 @@ class RaiderIOSeeder
         Log::info('raiderio.seed.start', ['phase' => 'guilds', 'regions' => $opts->regions, 'limit' => $opts->limit]);
 
         foreach ($opts->regions as $region) {
+            $regionDispatched = 0;
+
             try {
                 foreach ($this->client->topGuilds($region, $opts->limit) as $ref) {
                     $report->considered++;
@@ -44,8 +46,15 @@ class RaiderIOSeeder
                         continue;
                     }
 
+                    if ($opts->maxGuildDispatches > 0 && $regionDispatched >= $opts->maxGuildDispatches) {
+                        $report->skippedCap++;
+
+                        continue;
+                    }
+
                     if ($opts->dryRun) {
                         $report->dispatched++;
+                        $regionDispatched++;
 
                         continue;
                     }
@@ -58,6 +67,7 @@ class RaiderIOSeeder
                         origin: SyncOrigin::Discovery,
                     );
                     $report->dispatched++;
+                    $regionDispatched++;
                 }
             } catch (RaiderIOThrottledException $e) {
                 // Console context — blocking is fine here, unlike the crawl
