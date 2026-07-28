@@ -14,6 +14,8 @@ final class SeedReport
 
     public int $skippedDedupe = 0;
 
+    public int $skippedCap = 0;
+
     public int $errors = 0;
 
     public function __construct(
@@ -34,6 +36,7 @@ final class SeedReport
             'dispatched' => $this->dispatched,
             'skipped_ttl' => $this->skippedTtl,
             'skipped_dedupe' => $this->skippedDedupe,
+            'skipped_cap' => $this->skippedCap,
             'errors' => $this->errors,
         ];
     }

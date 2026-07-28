@@ -41,7 +41,7 @@ class RaiderIOSeed extends Command
         };
 
         $this->table(
-            ['phase', 'regions', 'considered', 'dispatched', 'skipped_ttl', 'skipped_dedupe', 'errors'],
+            ['phase', 'regions', 'considered', 'dispatched', 'skipped_ttl', 'skipped_dedupe', 'skipped_cap', 'errors'],
             array_map(fn (SeedReport $r) => [
                 $r->phase,
                 implode(',', $r->regions),
@@ -49,6 +49,7 @@ class RaiderIOSeed extends Command
                 $r->dispatched,
                 $r->skippedTtl,
                 $r->skippedDedupe,
+                $r->skippedCap,
                 $r->errors,
             ], $reports)
         );
@@ -76,6 +77,9 @@ class RaiderIOSeed extends Command
             force: (bool) $this->option('force'),
             dryRun: (bool) $this->option('dry-run'),
             teammateCrawl: (bool) config('raiderio.teammate_crawl_during_seed'),
+            dungeonPages: (int) config('raiderio.phase.runs_pages_per_dungeon'),
+            maxGuildDispatches: (int) config('raiderio.phase.max_guild_dispatches_per_region'),
+            maxCharDispatches: (int) config('raiderio.phase.max_char_dispatches_per_region'),
         );
     }
 }
