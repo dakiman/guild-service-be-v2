@@ -151,6 +151,26 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Mythic+ Ladder Ingestion
+    |--------------------------------------------------------------------------
+    | Drives the connected-realm keystone-leaderboard crawl that feeds the M+
+    | meta hub. `regions`/`brackets` are comma-separated env strings; brackets
+    | are the key-level floors each weekly aggregate is bucketed into.
+    */
+
+    'mplus_leaderboard' => [
+        // Kill switch for the daily connected-realm ladder crawl.
+        'enabled' => (bool) env('BLIZZARD_LADDER_ENABLED', false),
+        'regions' => array_values(array_filter(explode(',', env('BLIZZARD_LADDER_REGIONS', 'eu,us')))),
+        'brackets' => array_map('intval', array_values(array_filter(
+            explode(',', env('BLIZZARD_LADDER_BRACKETS', '0,7,12,17')),
+            fn ($v) => $v !== '',
+        ))),
+        'comp_min_sample' => (int) env('BLIZZARD_LADDER_COMP_MIN_SAMPLE', 25),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Cache TTLs for Game Data Endpoints
     |--------------------------------------------------------------------------
     */

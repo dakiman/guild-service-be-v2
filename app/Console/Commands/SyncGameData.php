@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Console\Commands;
 
 use App\Blizzard\Client\BlizzardGameDataClient;
+use App\Blizzard\Client\GameDataClientFactory;
 use App\Blizzard\Mappers\GameDataAchievementCategoryMapper;
 use App\Blizzard\Mappers\GameDataAchievementMapper;
 use App\Blizzard\Mappers\GameDataFactionMapper;
@@ -17,15 +18,18 @@ use App\Blizzard\Mappers\GameDataTalentTreeMapper;
 use App\Blizzard\Mappers\GameDataTitleMapper;
 use App\Models\GameDataAchievement;
 use App\Models\GameDataAchievementCategory;
+use App\Models\GameDataConnectedRealm;
 use App\Models\GameDataFaction;
 use App\Models\GameDataKeystoneAffix;
 use App\Models\GameDataMount;
 use App\Models\GameDataMythicKeystoneDungeon;
+use App\Models\GameDataPeriod;
 use App\Models\GameDataRaidEncounter;
 use App\Models\GameDataRaidInstance;
 use App\Models\GameDataTalentTree;
 use App\Models\GameDataTitle;
 use Illuminate\Console\Command;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -33,9 +37,9 @@ use Throwable;
 
 class SyncGameData extends Command
 {
-    protected $signature = 'blizzard:sync-game-data {resource? : factions|titles|mounts|achievements|pve|talent-trees; omit for all}';
+    protected $signature = 'blizzard:sync-game-data {resource? : factions|titles|mounts|achievements|pve|talent-trees|periods|connected-realms; omit for all}';
 
-    protected $description = 'Sync static reference data (factions/titles/mounts/achievements/pve/talent-trees) from Blizzard Game Data API into game_data_* tables';
+    protected $description = 'Sync static reference data (factions/titles/mounts/achievements/pve/talent-trees/periods/connected-realms) from Blizzard Game Data API into game_data_* tables';
 
     private const ACHIEVEMENT_CHUNK_SIZE = 500;
 
@@ -51,11 +55,12 @@ class SyncGameData extends Command
         GameDataMythicKeystoneDungeonMapper $dungeonMapper,
         GameDataKeystoneAffixMapper $affixMapper,
         GameDataTalentTreeMapper $talentTreeMapper,
+        GameDataClientFactory $clientFactory,
     ): int {
         $resource = $this->argument('resource');
 
         $resources = $resource === null
-            ? ['factions', 'titles', 'mounts', 'achievements', 'pve', 'talent-trees']
+            ? ['factions', 'titles', 'mounts', 'achievements', 'pve', 'talent-trees', 'periods', 'connected-realms']
             : [$resource];
 
         $achievementsEnabled = (bool) config('blizzard.sync.achievements_enabled');
@@ -74,6 +79,8 @@ class SyncGameData extends Command
                 'achievements' => $this->syncAchievements($client, $achievementCategoryMapper, $achievementMapper),
                 'pve' => $this->syncPve($client, $raidInstanceMapper, $raidEncounterMapper, $dungeonMapper, $affixMapper),
                 'talent-trees' => $this->syncTalentTrees($client, $talentTreeMapper),
+                'periods' => $this->syncPeriods($clientFactory),
+                'connected-realms' => $this->syncConnectedRealms($clientFactory),
                 default => $this->error("Unknown resource: {$r}") || self::FAILURE,
             };
         }
@@ -827,5 +834,88 @@ class SyncGameData extends Command
         $bar->finish();
         $this->newLine();
         $this->info("Talent trees synced: {$upserted} upserted, {$skipped} skipped.");
+    }
+
+    /**
+     * Sync the mythic-keystone period registry per ladder region. Periods live
+     * in the `dynamic-{region}` namespace and differ per region, so each region
+     * gets its own client from the factory.
+     *
+     * Both this and syncConnectedRealms deal in tiny row counts, so they skip
+     * the fetch-then-transaction dance the big slices use — per-row
+     * updateOrCreate keeps every HTTP call outside a transaction. (P2.4)
+     */
+    private function syncPeriods(GameDataClientFactory $clientFactory): void
+    {
+        foreach (config('blizzard.mplus_leaderboard.regions', ['eu', 'us']) as $region) {
+            $client = $clientFactory->forRegion($region);
+            $index = $client->getMythicKeystonePeriodIndex();
+            if ($index === null) {
+                $this->warn("Period index returned null (404) for {$region}. Skipping.");
+
+                continue;
+            }
+
+            // Only the tail matters: old periods are immutable and never queried.
+            $recent = collect($index['periods'] ?? [])->pluck('id')->filter()->sort()->values()->slice(-12);
+            $known = GameDataPeriod::query()->where('region', $region)->whereIn('period_id', $recent)->pluck('period_id');
+            $missing = $recent->diff($known)->values();
+
+            $upserted = 0;
+            foreach ($missing as $id) {
+                $detail = $client->getMythicKeystonePeriod((int) $id);
+                if ($detail === null) {
+                    continue;
+                }
+
+                GameDataPeriod::updateOrCreate(
+                    ['region' => $region, 'period_id' => (int) $id],
+                    [
+                        'start_at' => isset($detail['start_timestamp']) ? Carbon::createFromTimestampMs($detail['start_timestamp']) : null,
+                        'end_at' => isset($detail['end_timestamp']) ? Carbon::createFromTimestampMs($detail['end_timestamp']) : null,
+                    ],
+                );
+                $upserted++;
+            }
+
+            $this->info("Periods {$region}: {$upserted} upserted, ".($recent->count() - $missing->count()).' already known.');
+        }
+    }
+
+    /**
+     * Sync the connected-realm roster per ladder region. The index only carries
+     * hrefs (no ids), so the connected-realm id is parsed out of the href; the
+     * detail call supplies the member realm slugs.
+     */
+    private function syncConnectedRealms(GameDataClientFactory $clientFactory): void
+    {
+        foreach (config('blizzard.mplus_leaderboard.regions', ['eu', 'us']) as $region) {
+            $client = $clientFactory->forRegion($region);
+            $index = $client->getConnectedRealmIndex();
+            if ($index === null) {
+                $this->warn("Connected-realm index returned null (404) for {$region}. Skipping.");
+
+                continue;
+            }
+
+            $ids = collect($index['connected_realms'] ?? [])
+                ->map(fn ($entry) => preg_match('#/connected-realm/(\d+)#', $entry['href'] ?? '', $m) ? (int) $m[1] : null)
+                ->filter()
+                ->values();
+
+            $upserted = 0;
+            foreach ($ids as $id) {
+                $detail = $client->getConnectedRealm($id);
+                $slugs = collect($detail['realms'] ?? [])->pluck('slug')->filter()->values()->all();
+
+                GameDataConnectedRealm::updateOrCreate(
+                    ['region' => $region, 'connected_realm_id' => $id],
+                    ['realm_slugs' => $slugs],
+                );
+                $upserted++;
+            }
+
+            $this->info("Connected realms {$region}: {$upserted} upserted.");
+        }
     }
 }
