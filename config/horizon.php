@@ -231,7 +231,7 @@ return [
             ],
             'blizzard-background' => [
                 'connection' => 'redis',
-                'queue' => ['blizzard-roster-sync', 'blizzard-background'],
+                'queue' => ['blizzard-roster-sync', 'blizzard-background', 'blizzard-ladder'],
                 'balance' => 'auto',
                 'autoScalingStrategy' => 'time',
                 'minProcesses' => 2,
@@ -294,7 +294,7 @@ return [
             ],
             'blizzard-background' => [
                 'connection' => 'redis',
-                'queue' => ['blizzard-roster-sync', 'blizzard-background'],
+                'queue' => ['blizzard-roster-sync', 'blizzard-background', 'blizzard-ladder'],
                 'balance' => 'auto',
                 'autoScalingStrategy' => 'time',
                 'minProcesses' => 3,
