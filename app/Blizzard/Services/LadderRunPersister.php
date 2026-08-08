@@ -32,18 +32,24 @@ class LadderRunPersister
             DB::transaction(function () use ($chunk, &$inserted): void {
                 foreach ($chunk as $entry) {
                     try {
-                        $run = LadderRun::query()->create($entry['run']);
+                        // Nested transaction = SAVEPOINT on Postgres: a unique
+                        // violation aborts only the inner transaction, so a
+                        // racing duplicate skips this entry without poisoning
+                        // the rest of the chunk (25P02).
+                        DB::transaction(function () use ($entry, &$inserted): void {
+                            $run = LadderRun::query()->create($entry['run']);
+
+                            $now = now();
+                            LadderRunMember::query()->insert(array_map(
+                                fn (array $m): array => $m + ['ladder_run_id' => $run->id, 'created_at' => $now, 'updated_at' => $now],
+                                $entry['members'],
+                            ));
+                            $inserted++;
+                        });
                     } catch (UniqueConstraintViolationException) {
                         // Lost a race against a concurrent shard job holding the same run.
                         continue;
                     }
-
-                    $now = now();
-                    LadderRunMember::query()->insert(array_map(
-                        fn (array $m): array => $m + ['ladder_run_id' => $run->id, 'created_at' => $now, 'updated_at' => $now],
-                        $entry['members'],
-                    ));
-                    $inserted++;
                 }
             });
         }
