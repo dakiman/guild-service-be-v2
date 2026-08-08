@@ -35,6 +35,14 @@ return Application::configure(basePath: dirname(__DIR__))
             ->dailyAt('02:00')
             ->withoutOverlapping()
             ->onOneServer();
+        $schedule->command('blizzard:sync-game-data periods')
+            ->dailyAt('03:15')
+            ->withoutOverlapping()
+            ->onOneServer();
+        $schedule->command('blizzard:seed-ladders')
+            ->dailyAt('03:30')
+            ->withoutOverlapping()
+            ->onOneServer();
         $schedule->command('raiderio:seed --phase=all')
             ->dailyAt('01:00')
             ->withoutOverlapping()

@@ -156,6 +156,10 @@ class SeasonRollover extends Command
             }
         }
 
+        // ── 8. Always-relevant checklist ──
+        $this->newLine();
+        $this->line('- M+ ladder crawl: no manual action — blizzard:seed-ladders derives the dungeon pool from the season detail; just confirm `blizzard:sync-game-data periods` has run since the rollover.');
+
         $this->newLine();
         $this->info('Season rollover complete. Frontend picks the new season up automatically.');
 
