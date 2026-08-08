@@ -69,6 +69,55 @@ class SeedLaddersTest extends TestCase
         Queue::assertNothingPushed();
     }
 
+    public function test_just_ended_period_is_crawled_alongside_the_current_one(): void
+    {
+        GameDataPeriod::create([
+            'period_id' => 1001,
+            'region' => 'eu',
+            'start_at' => now()->subDays(8),
+            'end_at' => now()->subHours(12),
+        ]);
+        Queue::fake();
+
+        $this->artisan('blizzard:seed-ladders')->assertExitCode(0);
+
+        Queue::assertPushed(FetchLadderShard::class, 12); // 2 periods × 2 realms × 3 dungeons
+        Queue::assertPushed(fn (FetchLadderShard $job) => $job->periodId === 1002);
+        Queue::assertPushed(fn (FetchLadderShard $job) => $job->periodId === 1001);
+    }
+
+    public function test_long_finished_period_is_not_crawled(): void
+    {
+        GameDataPeriod::create([
+            'period_id' => 1001,
+            'region' => 'eu',
+            'start_at' => now()->subDays(12),
+            'end_at' => now()->subDays(5),
+        ]);
+        Queue::fake();
+
+        $this->artisan('blizzard:seed-ladders')->assertExitCode(0);
+
+        Queue::assertPushed(FetchLadderShard::class, 6); // current period only
+        Queue::assertNotPushed(FetchLadderShard::class, fn (FetchLadderShard $job) => $job->periodId === 1001);
+    }
+
+    public function test_period_override_targets_only_that_period(): void
+    {
+        GameDataPeriod::create([
+            'period_id' => 1001,
+            'region' => 'eu',
+            'start_at' => now()->subDays(8),
+            'end_at' => now()->subHours(12),
+        ]);
+        Queue::fake();
+
+        $this->artisan('blizzard:seed-ladders', ['--period' => 999])->assertExitCode(0);
+
+        Queue::assertPushed(FetchLadderShard::class, 6);
+        Queue::assertPushed(fn (FetchLadderShard $job) => $job->periodId === 999);
+    }
+
     public function test_missing_period_skips_region_with_error(): void
     {
         GameDataPeriod::query()->delete();

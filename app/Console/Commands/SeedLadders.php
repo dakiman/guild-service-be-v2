@@ -13,6 +13,13 @@ use Illuminate\Console\Command;
 
 class SeedLadders extends Command
 {
+    /**
+     * How long after a period's reset we keep re-crawling it. The last scheduled
+     * crawl of a week runs hours before that week's reset, so without this window
+     * every run completed between it and the reset would be missed permanently.
+     */
+    private const FINALIZE_WINDOW_HOURS = 48;
+
     protected $signature = 'blizzard:seed-ladders
         {--region=* : Limit to specific region(s)}
         {--period= : Blizzard period id override}
@@ -31,11 +38,9 @@ class SeedLadders extends Command
         $regions = $this->option('region') ?: config('blizzard.mplus_leaderboard.regions', ['eu', 'us']);
 
         foreach ($regions as $region) {
-            $periodId = $this->option('period') !== null
-                ? (int) $this->option('period')
-                : GameDataPeriod::currentFor($region)?->period_id;
+            $periodIds = $this->resolvePeriodIds($region);
 
-            if ($periodId === null) {
+            if ($periodIds === []) {
                 $this->error("No current period known for {$region} — run `blizzard:sync-game-data periods` first.");
 
                 continue;
@@ -55,21 +60,51 @@ class SeedLadders extends Command
                 continue;
             }
 
-            $dispatched = 0;
-            foreach ($crIds as $crId) {
-                foreach ($dungeonIds as $dungeonId) {
-                    if (! $this->option('dry-run')) {
-                        FetchLadderShard::dispatch($region, (int) $crId, (int) $dungeonId, $periodId);
+            foreach ($periodIds as $periodId) {
+                $dispatched = 0;
+                foreach ($crIds as $crId) {
+                    foreach ($dungeonIds as $dungeonId) {
+                        if (! $this->option('dry-run')) {
+                            FetchLadderShard::dispatch($region, (int) $crId, (int) $dungeonId, $periodId);
+                        }
+                        $dispatched++;
                     }
-                    $dispatched++;
                 }
-            }
 
-            $verb = $this->option('dry-run') ? 'Would dispatch' : 'Dispatched';
-            $this->info("{$verb} {$dispatched} ladder shard jobs for {$region} period {$periodId} ({$crIds->count()} realms × ".count($dungeonIds).' dungeons).');
+                $verb = $this->option('dry-run') ? 'Would dispatch' : 'Dispatched';
+                $this->info("{$verb} {$dispatched} ladder shard jobs for {$region} period {$periodId} ({$crIds->count()} realms × ".count($dungeonIds).' dungeons).');
+            }
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Periods to crawl for a region: the current one, plus a just-ended one so the
+     * first pull after reset finalizes the completed week. Shard jobs dedupe on
+     * run_hash (and are ShouldBeUnique per period), so the overlap is harmless.
+     *
+     * @return list<int>
+     */
+    private function resolvePeriodIds(string $region): array
+    {
+        if ($this->option('period') !== null) {
+            return [(int) $this->option('period')];
+        }
+
+        $ids = [];
+
+        $current = GameDataPeriod::currentFor($region);
+        if ($current !== null) {
+            $ids[] = $current->period_id;
+        }
+
+        $justEnded = GameDataPeriod::recentlyEndedFor($region, self::FINALIZE_WINDOW_HOURS);
+        if ($justEnded !== null) {
+            $ids[] = $justEnded->period_id;
+        }
+
+        return array_values(array_unique($ids));
     }
 
     /** @return list<int> */

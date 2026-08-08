@@ -27,4 +27,18 @@ class GameDataPeriod extends Model
             ->orderByDesc('period_id')
             ->first();
     }
+
+    /**
+     * The most recent period whose reset already happened, but only if it ended
+     * within the last $withinHours — used to finalize a week after its reset.
+     */
+    public static function recentlyEndedFor(string $region, int $withinHours): ?self
+    {
+        return self::query()
+            ->where('region', $region)
+            ->where('end_at', '<=', now())
+            ->where('end_at', '>=', now()->subHours($withinHours))
+            ->orderByDesc('period_id')
+            ->first();
+    }
 }
