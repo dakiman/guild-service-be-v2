@@ -12,6 +12,7 @@ use App\Http\Controllers\CharacterStatsController;
 use App\Http\Controllers\GameDataController;
 use App\Http\Controllers\GuildController;
 use App\Http\Controllers\GuildStatsController;
+use App\Http\Controllers\MetaStatsController;
 use App\Http\Controllers\RaidKillStatsController;
 use App\Http\Controllers\SeasonArchiveController;
 use App\Http\Controllers\TopKeysController;
@@ -102,6 +103,18 @@ Route::get('/stats/characters', CharacterStatsController::class)
 Route::get('/stats/archive/seasons/{slug}', [SeasonArchiveController::class, 'show'])
     ->middleware('throttle:30,1')
     ->name('stats.archive.season');
+Route::get('/meta/periods', [MetaStatsController::class, 'periods'])
+    ->middleware('throttle:30,1')
+    ->name('meta.periods');
+Route::get('/meta/specs', [MetaStatsController::class, 'specs'])
+    ->middleware('throttle:30,1')
+    ->name('meta.specs');
+Route::get('/meta/dungeons', [MetaStatsController::class, 'dungeons'])
+    ->middleware('throttle:30,1')
+    ->name('meta.dungeons');
+Route::get('/meta/comps', [MetaStatsController::class, 'comps'])
+    ->middleware('throttle:30,1')
+    ->name('meta.comps');
 
 /*
 |--------------------------------------------------------------------------
