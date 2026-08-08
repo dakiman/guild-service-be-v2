@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace App\Console\Commands;
 
-use App\Blizzard\Client\GameDataClientFactory;
 use App\Blizzard\Jobs\FetchLadderShard;
 use App\Models\GameDataConnectedRealm;
 use App\Models\GameDataMythicKeystoneDungeon;
 use App\Models\GameDataPeriod;
+use App\Services\RaiderIO\RaiderIOClient;
+use App\Support\Seasons;
 use Illuminate\Console\Command;
 
 class SeedLadders extends Command
@@ -27,7 +28,7 @@ class SeedLadders extends Command
 
     protected $description = 'Fan out FetchLadderShard jobs for every connected realm × current-season dungeon';
 
-    public function handle(GameDataClientFactory $clientFactory): int
+    public function handle(RaiderIOClient $raiderIO): int
     {
         if (! config('blizzard.mplus_leaderboard.enabled')) {
             $this->warn('Ladder crawl disabled (BLIZZARD_LADDER_ENABLED=false).');
@@ -36,6 +37,14 @@ class SeedLadders extends Command
         }
 
         $regions = $this->option('region') ?: config('blizzard.mplus_leaderboard.regions', ['eu', 'us']);
+
+        // The season's dungeon pool is region-independent — resolve it once per run.
+        $dungeonIds = $this->currentSeasonDungeonIds($raiderIO);
+        if ($dungeonIds === []) {
+            $this->error('No dungeons resolvable — run `blizzard:sync-game-data pve` first.');
+
+            return self::SUCCESS;
+        }
 
         foreach ($regions as $region) {
             $periodIds = $this->resolvePeriodIds($region);
@@ -49,13 +58,6 @@ class SeedLadders extends Command
             $crIds = GameDataConnectedRealm::query()->where('region', $region)->pluck('connected_realm_id');
             if ($crIds->isEmpty()) {
                 $this->error("No connected realms known for {$region} — run `blizzard:sync-game-data connected-realms` first.");
-
-                continue;
-            }
-
-            $dungeonIds = $this->currentSeasonDungeonIds($clientFactory, $region);
-            if ($dungeonIds === []) {
-                $this->error("No dungeons resolvable for {$region}. Skipping.");
 
                 continue;
             }
@@ -107,26 +109,63 @@ class SeedLadders extends Command
         return array_values(array_unique($ids));
     }
 
-    /** @return list<int> */
-    private function currentSeasonDungeonIds(GameDataClientFactory $clientFactory, string $region): array
+    /**
+     * The current season's dungeon pool, from raider.io static-data.
+     *
+     * Blizzard's mythic-keystone season detail carries no `dungeons` key
+     * (verified live: `_links, id, start_timestamp, periods, season_name`), so
+     * deriving the pool from it silently fell back to all ~82 rows of
+     * game_data_mythic_keystone_dungeons — ~90% of the fan-out was 404s.
+     * raider.io's `challenge_mode_id` is the same id space as
+     * game_data_mythic_keystone_dungeons.id (it already keys the icon backfill).
+     *
+     * @return list<int>
+     */
+    private function currentSeasonDungeonIds(RaiderIOClient $raiderIO): array
     {
-        $client = $clientFactory->forRegion($region);
+        $season = Seasons::current();
+        $slug = $season['slug'] ?? null;
 
-        try {
-            $season = $client->getMythicKeystoneSeason($client->getCurrentMythicPlusSeason());
-            $ids = array_values(array_filter(array_map(
-                fn ($d) => isset($d['id']) ? (int) $d['id'] : null,
-                $season['dungeons'] ?? [],
-            )));
-            if ($ids !== []) {
-                return $ids;
+        if ($slug === null) {
+            $this->warn('No current season in game_data_seasons — cannot resolve the raider.io dungeon pool.');
+        } else {
+            $expansionId = ($season['raiderio_expansion_id'] ?? 0) ?: (int) config('raiderio.expansion_id');
+
+            try {
+                $ids = $this->challengeModeIdsForSeason($raiderIO->mythicPlusStaticData($expansionId), $slug);
+                if ($ids !== []) {
+                    $this->info(sprintf('Dungeon pool for %s (raider.io expansion %d): %d dungeons.', $slug, $expansionId, count($ids)));
+
+                    return $ids;
+                }
+                $this->warn("raider.io static-data has no dungeons for season {$slug} (expansion {$expansionId}).");
+            } catch (\Throwable $e) {
+                $this->warn("Season dungeon pool lookup failed: {$e->getMessage()}");
             }
-        } catch (\Throwable $e) {
-            $this->warn("Season dungeon pool lookup failed for {$region}: {$e->getMessage()}");
         }
 
-        $this->warn("Falling back to full game_data_mythic_keystone_dungeons table for {$region}.");
+        $this->warn('Falling back to full game_data_mythic_keystone_dungeons table.');
 
         return GameDataMythicKeystoneDungeon::query()->pluck('id')->map(fn ($id) => (int) $id)->all();
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @return list<int>
+     */
+    private function challengeModeIdsForSeason(array $payload, string $slug): array
+    {
+        foreach ($payload['seasons'] ?? [] as $entry) {
+            if (($entry['slug'] ?? null) !== $slug) {
+                continue;
+            }
+
+            return array_values(array_unique(array_filter(array_map(
+                fn ($dungeon) => isset($dungeon['challenge_mode_id']) ? (int) $dungeon['challenge_mode_id'] : 0,
+                $entry['dungeons'] ?? [],
+            ))));
+        }
+
+        return [];
     }
 }
