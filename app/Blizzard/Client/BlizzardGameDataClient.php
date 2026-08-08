@@ -712,4 +712,89 @@ class BlizzardGameDataClient extends BlizzardClient
             return $response->json();
         });
     }
+
+    public function getMythicKeystonePeriodIndex(): ?array
+    {
+        $cacheKey = "blizzard:game-data:mk-period-index:{$this->region}";
+
+        return $this->rememberNullable($cacheKey, 3600, function (): ?array {
+            $response = $this->getWithRetry("dynamic-{$this->region}", 'data/wow/mythic-keystone/period/index');
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
+
+    public function getMythicKeystonePeriod(int $id): ?array
+    {
+        $cacheKey = "blizzard:game-data:mk-period:{$this->region}:{$id}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
+            $response = $this->getWithRetry("dynamic-{$this->region}", "data/wow/mythic-keystone/period/{$id}");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
+
+    public function getConnectedRealmIndex(): ?array
+    {
+        $cacheKey = "blizzard:game-data:connected-realm-index:{$this->region}";
+
+        return $this->rememberNullable($cacheKey, 86400, function (): ?array {
+            $response = $this->getWithRetry("dynamic-{$this->region}", 'data/wow/connected-realm/index');
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
+
+    public function getConnectedRealm(int $id): ?array
+    {
+        $cacheKey = "blizzard:game-data:connected-realm:{$this->region}:{$id}";
+        $ttl = (int) config('blizzard.game_data_cache_ttl', 86400 * 7);
+
+        return $this->rememberNullable($cacheKey, $ttl, function () use ($id): ?array {
+            $response = $this->getWithRetry("dynamic-{$this->region}", "data/wow/connected-realm/{$id}");
+
+            if ($response->status() === 404) {
+                return null;
+            }
+            $response->throw();
+
+            return $response->json();
+        });
+    }
+
+    /**
+     * Deliberately uncached: ladder contents change all week and each shard
+     * is fetched exactly once per crawl.
+     */
+    public function getMythicLeaderboard(int $connectedRealmId, int $dungeonId, int $periodId): ?array
+    {
+        $response = $this->getWithRetry(
+            "dynamic-{$this->region}",
+            "data/wow/connected-realm/{$connectedRealmId}/mythic-leaderboard/{$dungeonId}/period/{$periodId}",
+        );
+
+        if ($response->status() === 404) {
+            return null;
+        }
+        $response->throw();
+
+        return $response->json();
+    }
 }
