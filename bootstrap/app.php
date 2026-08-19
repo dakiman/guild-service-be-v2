@@ -56,6 +56,10 @@ return Application::configure(basePath: dirname(__DIR__))
             ->monthlyOn(1, '04:30')
             ->withoutOverlapping()
             ->onOneServer();
+        $schedule->command('ladder:prune')
+            ->weeklyOn(4, '09:00') // Thu — after both regions' resets and the finalize crawls
+            ->withoutOverlapping()
+            ->onOneServer();
     })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->api(prepend: [
