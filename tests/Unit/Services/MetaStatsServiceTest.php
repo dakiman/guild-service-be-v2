@@ -156,14 +156,26 @@ class MetaStatsServiceTest extends TestCase
         $this->assertEqualsWithDelta(0.5, $comps['comps'][0]['timed_rate'], 0.001);
     }
 
-    public function test_warm_writes_snapshot_rows_for_all_scopes(): void
+    public function test_warm_skips_regions_without_runs_and_gates_the_all_rollup(): void
     {
-        $this->makeRun(504, 15, true);
+        $this->makeRun(504, 15, true); // eu only — us has nothing
 
         app(MetaStatsService::class)->warm(1002);
 
-        // scopes: all, eu, us × sections: specs, dungeons, comps
-        $this->assertSame(9, MetaSnapshot::count());
+        // Only the eu scope × 3 sections — no zero-run us snapshot, no us-only "all" rollup.
+        $this->assertSame(3, MetaSnapshot::count());
+        $this->assertSame(0, MetaSnapshot::where('region', 'us')->count());
+        $this->assertSame(0, MetaSnapshot::where('region', 'all')->count());
+    }
+
+    public function test_warm_writes_all_scopes_once_every_region_has_runs(): void
+    {
+        $this->makeRun(504, 15, true);
+        $this->makeRun(504, 15, true, 'us', [104, 105, 102, 253, 577]);
+
+        app(MetaStatsService::class)->warm(1002);
+
+        $this->assertSame(9, MetaSnapshot::count()); // all, eu, us × 3 sections
 
         // idempotent — rewarming overwrites, not duplicates
         app(MetaStatsService::class)->warm(1002);

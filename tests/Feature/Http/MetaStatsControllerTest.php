@@ -101,6 +101,18 @@ class MetaStatsControllerTest extends TestCase
             ->assertJson(['status' => 'not_warmed']);
     }
 
+    public function test_default_period_resolves_per_region(): void
+    {
+        // eu warmed through 1002; us (and all) only through 1001 — the Wednesday window.
+        $this->snapshot(1001, 'all', 'specs', ['brackets' => ['all' => ['roles' => [], 'total_runs' => 3]]]);
+        $this->snapshot(1001, 'us', 'specs', ['brackets' => ['all' => ['roles' => [], 'total_runs' => 4]]]);
+        $this->snapshot(1002, 'eu', 'specs', ['brackets' => ['all' => ['roles' => [], 'total_runs' => 9]]]);
+
+        $this->getJson('/api/v1/meta/specs?region=eu')->assertOk()->assertJson(['period_id' => 1002]);
+        $this->getJson('/api/v1/meta/specs?region=us')->assertOk()->assertJson(['period_id' => 1001]);
+        $this->getJson('/api/v1/meta/specs')->assertOk()->assertJson(['period_id' => 1001]); // 'all' scope
+    }
+
     public function test_sections_include_computed_at(): void
     {
         $this->snapshot(1002, 'all', 'specs', ['brackets' => []]);

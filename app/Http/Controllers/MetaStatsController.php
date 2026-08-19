@@ -29,7 +29,7 @@ class MetaStatsController extends Controller
             $current = $periodIds->first();
 
             return $periodIds->map(function (int $id) use ($dates, $current): array {
-                $rows = $dates->get($id) ?? collect();
+                $rows = ($dates->get($id) ?? collect())->sortBy('region')->values();
                 $row = $rows->first();
 
                 $affixes = [];
@@ -95,7 +95,7 @@ class MetaStatsController extends Controller
 
         $periodId = $request->filled('period')
             ? (int) $request->input('period')
-            : (int) MetaSnapshot::query()->max('period_id');
+            : (int) MetaSnapshot::query()->where('region', $region)->max('period_id');
 
         if ($periodId === 0) {
             return response()->json(['status' => 'not_warmed'], 404);

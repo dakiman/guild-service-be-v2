@@ -20,7 +20,22 @@ class MetaStatsService
 
     public function warm(int $periodId): void
     {
-        $scopes = array_merge(['all'], config('blizzard.mplus_leaderboard.regions', ['eu', 'us']));
+        $regions = config('blizzard.mplus_leaderboard.regions', ['eu', 'us']);
+
+        $counts = DB::table('ladder_runs')
+            ->where('period_id', $periodId)
+            ->whereIn('region', $regions)
+            ->groupBy('region')
+            ->selectRaw('region, COUNT(*) as runs')
+            ->pluck('runs', 'region');
+
+        $scopes = array_values(array_filter($regions, fn (string $r): bool => ($counts[$r] ?? 0) > 0));
+
+        // The cross-region rollup would present a lone region's half-week as "all
+        // regions" — only publish it once every configured region has runs.
+        if ($scopes !== [] && count($scopes) === count($regions)) {
+            array_unshift($scopes, 'all');
+        }
 
         foreach ($scopes as $region) {
             $this->store($periodId, $region, 'specs', $this->computeSpecs($periodId, $region));
