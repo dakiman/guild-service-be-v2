@@ -44,7 +44,8 @@ return Application::configure(basePath: dirname(__DIR__))
             ->withoutOverlapping()
             ->onOneServer();
         $schedule->command('meta:warm')
-            ->dailyAt('06:00')
+            ->everyThirtyMinutes()
+            ->between('4:30', '12:00')
             ->withoutOverlapping()
             ->onOneServer();
         $schedule->command('raiderio:seed --phase=all')

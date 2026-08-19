@@ -18,7 +18,7 @@ class MetaStatsService
     /** Minimum runs a dungeon needs before it can be "dungeon of the week". */
     private const DOTW_MIN_RUNS = 50;
 
-    public function warm(int $periodId): void
+    public function warm(int $periodId, ?array $coverage = null): void
     {
         $regions = config('blizzard.mplus_leaderboard.regions', ['eu', 'us']);
 
@@ -38,9 +38,9 @@ class MetaStatsService
         }
 
         foreach ($scopes as $region) {
-            $this->store($periodId, $region, 'specs', $this->computeSpecs($periodId, $region));
-            $this->store($periodId, $region, 'dungeons', $this->computeDungeons($periodId, $region));
-            $this->store($periodId, $region, 'comps', $this->computeComps($periodId, $region));
+            $this->store($periodId, $region, 'specs', $this->computeSpecs($periodId, $region), $coverage);
+            $this->store($periodId, $region, 'dungeons', $this->computeDungeons($periodId, $region), $coverage);
+            $this->store($periodId, $region, 'comps', $this->computeComps($periodId, $region), $coverage);
         }
     }
 
@@ -191,8 +191,12 @@ class MetaStatsService
             ->when($region !== 'all', fn ($q) => $q->where('region', $region));
     }
 
-    private function store(int $periodId, string $region, string $section, array $payload): void
+    private function store(int $periodId, string $region, string $section, array $payload, ?array $coverage = null): void
     {
+        if ($coverage !== null) {
+            $payload['coverage'] = $coverage;
+        }
+
         MetaSnapshot::query()->updateOrCreate(
             ['period_id' => $periodId, 'region' => $region, 'section' => $section],
             ['payload' => $payload, 'computed_at' => now()],

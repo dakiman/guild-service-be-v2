@@ -77,6 +77,12 @@ class SeedLadders extends Command
 
                 $verb = $this->option('dry-run') ? 'Would dispatch' : 'Dispatched';
                 $this->info("{$verb} {$dispatched} ladder shard jobs for {$region} period {$periodId} ({$crIds->count()} realms × ".count($dungeonIds).' dungeons).');
+
+                if (! $this->option('dry-run')) {
+                    $key = 'ladder-crawl:'.now()->format('Y-m-d').':dispatched';
+                    Cache::add($key, 0, now()->addHours(48));
+                    Cache::increment($key, $dispatched);
+                }
             }
         }
 

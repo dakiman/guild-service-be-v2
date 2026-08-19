@@ -252,4 +252,13 @@ class SeedLaddersTest extends TestCase
 
         Queue::assertPushed(FetchLadderShard::class, 3); // (2 eu + 1 us realms) × 1 dungeon
     }
+
+    public function test_dispatch_bumps_the_daily_dispatched_counter(): void
+    {
+        Queue::fake();
+
+        $this->artisan('blizzard:seed-ladders')->assertExitCode(0);
+
+        $this->assertSame(6, Cache::get('ladder-crawl:'.now()->format('Y-m-d').':dispatched'));
+    }
 }
