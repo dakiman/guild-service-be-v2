@@ -108,6 +108,7 @@ class MetaStatsController extends Controller
             }
 
             $payload = $snapshot->payload;
+            $payload['computed_at'] = $snapshot->computed_at?->toIso8601String();
 
             return $decorate !== null ? $decorate($payload, $periodId, $region) : $payload;
         });

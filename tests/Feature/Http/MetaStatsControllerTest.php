@@ -84,4 +84,19 @@ class MetaStatsControllerTest extends TestCase
             ->assertNotFound()
             ->assertJson(['status' => 'not_warmed']);
     }
+
+    public function test_sections_include_computed_at(): void
+    {
+        $this->snapshot(1002, 'all', 'specs', ['brackets' => []]);
+        $this->snapshot(1002, 'all', 'dungeons', ['dungeons' => [], 'dungeon_of_the_week' => null]);
+
+        $specs = $this->getJson('/api/v1/meta/specs');
+        $specs->assertOk();
+        $this->assertNotNull($specs->json('computed_at'));
+
+        // The dungeons decorator (trends) must not drop it.
+        $dungeons = $this->getJson('/api/v1/meta/dungeons');
+        $dungeons->assertOk();
+        $this->assertNotNull($dungeons->json('computed_at'));
+    }
 }
