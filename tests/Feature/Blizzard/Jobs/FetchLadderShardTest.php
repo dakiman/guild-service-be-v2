@@ -10,6 +10,7 @@ use App\Blizzard\Jobs\FetchLadderShard;
 use App\Blizzard\Mappers\BlizzardLadderMapper;
 use App\Blizzard\Services\LadderRunPersister;
 use App\Models\GameDataMythicKeystoneDungeon;
+use App\Models\GameDataPeriod;
 use App\Models\LadderRun;
 use App\Models\LadderRunMember;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -81,5 +82,45 @@ class FetchLadderShardTest extends TestCase
         );
 
         $this->assertSame(0, LadderRun::count());
+    }
+
+    private function handleShard(): void
+    {
+        (new FetchLadderShard('eu', 509, 504, 1002))->handle(
+            app(GameDataClientFactory::class),
+            app(BlizzardLadderMapper::class),
+            app(LadderRunPersister::class),
+        );
+    }
+
+    public function test_records_period_affixes_once(): void
+    {
+        GameDataPeriod::create(['period_id' => 1002, 'region' => 'eu', 'start_at' => now()->subDay(), 'end_at' => now()->addWeek()]);
+
+        $this->fakeLeaderboard([
+            'leading_groups' => [$this->group(100)],
+            'keystone_affixes' => [
+                ['keystone_affix' => ['id' => 9]],
+                ['keystone_affix' => ['id' => 148]],
+            ],
+        ]);
+
+        $this->handleShard();
+
+        $this->assertSame([9, 148], GameDataPeriod::where('period_id', 1002)->where('region', 'eu')->first()->affix_ids);
+    }
+
+    public function test_does_not_overwrite_existing_period_affixes(): void
+    {
+        GameDataPeriod::create(['period_id' => 1002, 'region' => 'eu', 'start_at' => now()->subDay(), 'end_at' => now()->addWeek(), 'affix_ids' => [9, 148]]);
+
+        $this->fakeLeaderboard([
+            'leading_groups' => [$this->group(100)],
+            'keystone_affixes' => [['keystone_affix' => ['id' => 999]]],
+        ]);
+
+        $this->handleShard();
+
+        $this->assertSame([9, 148], GameDataPeriod::where('period_id', 1002)->where('region', 'eu')->first()->affix_ids);
     }
 }

@@ -10,6 +10,7 @@ use App\Blizzard\Middleware\BlizzardHealthCheck;
 use App\Blizzard\Middleware\BlizzardRateLimiter;
 use App\Blizzard\Services\LadderRunPersister;
 use App\Models\GameDataMythicKeystoneDungeon;
+use App\Models\GameDataPeriod;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -70,6 +71,7 @@ class FetchLadderShard implements ShouldBeUnique, ShouldQueue
 
         $upgrades = GameDataMythicKeystoneDungeon::query()->find($this->dungeonId)?->keystone_upgrades;
         $mapped = $mapper->mapLeaderboard($payload, $this->periodId, $this->region, $this->dungeonId, $upgrades);
+        $this->recordPeriodAffixes($mapper->affixIds($payload));
         $result = $persister->persist($mapped);
 
         $this->bumpCounter('inserted', $result['inserted']);
@@ -85,6 +87,25 @@ class FetchLadderShard implements ShouldBeUnique, ShouldQueue
             'period_id' => $this->periodId,
             'message' => $exception->getMessage(),
         ]);
+    }
+
+    /**
+     * The affix set is identical for every shard of a period+region — first
+     * successful shard wins, the whereNull guard makes the rest no-ops.
+     *
+     * @param  list<int>  $affixIds
+     */
+    private function recordPeriodAffixes(array $affixIds): void
+    {
+        if ($affixIds === []) {
+            return;
+        }
+
+        GameDataPeriod::query()
+            ->where('period_id', $this->periodId)
+            ->where('region', $this->region)
+            ->whereNull('affix_ids')
+            ->update(['affix_ids' => json_encode($affixIds)]);
     }
 
     private function bumpCounter(string $kind, int $by = 1): void
