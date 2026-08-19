@@ -94,6 +94,31 @@ class WarmCharacterStatsTest extends TestCase
         Cache::forget(CharacterStatsService::CACHE_KEY);
         Queue::fake();
 
-        $this->assertSame($computed, $service->getStats());
+        $empty = $service->getStats();
+
+        // generated_at is intentionally divergent (real timestamp vs null) —
+        // exclude it from the shape comparison.
+        unset($computed['generated_at'], $empty['generated_at']);
+
+        $this->assertSame($computed, $empty);
+    }
+
+    public function test_warm_stamps_generated_at(): void
+    {
+        Character::factory()->create(['level' => 90, 'class_id' => 1]);
+
+        app(CharacterStatsService::class)->warm();
+
+        $this->assertNotNull(Cache::get(CharacterStatsService::CACHE_KEY)['generated_at']);
+    }
+
+    public function test_empty_stats_carry_null_generated_at(): void
+    {
+        Queue::fake();
+
+        $stats = app(CharacterStatsService::class)->getStats();
+
+        $this->assertArrayHasKey('generated_at', $stats);
+        $this->assertNull($stats['generated_at']);
     }
 }

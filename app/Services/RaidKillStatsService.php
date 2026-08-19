@@ -70,6 +70,7 @@ class RaidKillStatsService
             'raids' => $this->restructure($rows),
             'expansions' => $expansion === '' ? [] : [$expansion],
             'current_expansion' => $expansion === '' ? null : $expansion,
+            'generated_at' => now()->toIso8601String(),
         ];
     }
 

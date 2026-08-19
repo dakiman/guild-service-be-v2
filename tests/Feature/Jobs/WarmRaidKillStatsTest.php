@@ -68,4 +68,20 @@ class WarmRaidKillStatsTest extends TestCase
         $cached = Cache::get('stats:raid-kills:heroic:Midnight');
         $this->assertSame(1234, $cached['raids'][0]['instance_id']);
     }
+
+    public function test_compute_stamps_generated_at(): void
+    {
+        $character = Character::factory()->create(['class_id' => 1, 'level' => 90]);
+        RaidEncounterKill::factory()->create([
+            'character_id' => $character->id,
+            'expansion_name' => 'Midnight',
+            'difficulty' => 'heroic',
+            'completed_count' => 10,
+        ]);
+
+        app(RaidKillStatsService::class)->warm();
+
+        $payload = app(RaidKillStatsService::class)->getByDifficulty('heroic');
+        $this->assertNotNull($payload['generated_at']);
+    }
 }

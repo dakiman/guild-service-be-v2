@@ -63,6 +63,7 @@ class CharacterStatsService
             ],
             'avg_achievement_points' => 0,
             'most_popular_spec' => null,
+            'generated_at' => null,
         ];
     }
 
@@ -93,6 +94,7 @@ class CharacterStatsService
                 'top_performers' => $this->getTopPerformers($currentSeason),
                 'avg_achievement_points' => $this->getAvgAchievementPoints(),
                 'most_popular_spec' => $specDistribution[0] ?? null,
+                'generated_at' => now()->toIso8601String(),
             ];
         } finally {
             // Drop the temp table so ~532k rows don't park on this
