@@ -29,7 +29,7 @@ class FetchLadderShard implements ShouldBeUnique, ShouldQueue
 
     public array $backoff = [30, 120, 300];
 
-    public int $uniqueFor = 3600;
+    public int $uniqueFor = 43200;
 
     public function __construct(
         public readonly string $region,
@@ -70,6 +70,11 @@ class FetchLadderShard implements ShouldBeUnique, ShouldQueue
         }
 
         $upgrades = GameDataMythicKeystoneDungeon::query()->find($this->dungeonId)?->keystone_upgrades;
+        if ($upgrades === null) {
+            Log::warning('FetchLadderShard: no keystone_upgrades for dungeon — runs stored with unknown timed-ness (repair: ladder:recompute-timed)', [
+                'dungeon_id' => $this->dungeonId, 'region' => $this->region, 'period_id' => $this->periodId,
+            ]);
+        }
         $mapped = $mapper->mapLeaderboard($payload, $this->periodId, $this->region, $this->dungeonId, $upgrades);
         $this->recordPeriodAffixes($mapper->affixIds($payload));
         $result = $persister->persist($mapped);

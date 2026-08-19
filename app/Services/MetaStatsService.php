@@ -42,7 +42,7 @@ class MetaStatsService
                 ->when($minLevel > 0, fn ($q) => $q->where('r.keystone_level', '>=', $minLevel))
                 ->whereNotNull('m.spec_id')
                 ->groupBy('m.spec_id')
-                ->selectRaw('m.spec_id, COUNT(*) as appearances, SUM(CASE WHEN r.is_completed_on_time THEN 1 ELSE 0 END) as timed')
+                ->selectRaw('m.spec_id, COUNT(*) as appearances, SUM(CASE WHEN r.is_completed_on_time THEN 1 ELSE 0 END) as timed, COUNT(r.is_completed_on_time) as judged')
                 ->get();
 
             $roles = ['tank' => [], 'healer' => [], 'dps' => []];
@@ -68,7 +68,7 @@ class MetaStatsService
                     'spec_id' => (int) $e->spec_id,
                     'count' => (int) $e->appearances,
                     'share' => $roleTotals[$role] > 0 ? round($e->appearances / $roleTotals[$role], 4) : 0.0,
-                    'timed_rate' => $e->appearances > 0 ? round($e->timed / $e->appearances, 4) : 0.0,
+                    'timed_rate' => $e->judged > 0 ? round($e->timed / $e->judged, 4) : 0.0,
                 ], $entries);
             }
             $out['brackets'][$bracketKey] = $bracketOut;
@@ -81,7 +81,7 @@ class MetaStatsService
     {
         $rows = $this->baseRuns($periodId, $region)
             ->groupBy('dungeon_id')
-            ->selectRaw('dungeon_id, COUNT(*) as runs, SUM(CASE WHEN is_completed_on_time THEN 1 ELSE 0 END) as timed, AVG(keystone_level) as avg_key, AVG(duration) as avg_duration, MAX(keystone_level) as highest_key')
+            ->selectRaw('dungeon_id, COUNT(*) as runs, SUM(CASE WHEN is_completed_on_time THEN 1 ELSE 0 END) as timed, COUNT(is_completed_on_time) as judged, AVG(keystone_level) as avg_key, AVG(duration) as avg_duration, MAX(keystone_level) as highest_key')
             ->get();
 
         $dungeons = GameDataMythicKeystoneDungeon::query()
@@ -97,7 +97,7 @@ class MetaStatsService
                 'dungeon_id' => (int) $row->dungeon_id,
                 'name' => $dungeon?->name,
                 'runs' => (int) $row->runs,
-                'timed_rate' => $row->runs > 0 ? round($row->timed / $row->runs, 4) : 0.0,
+                'timed_rate' => $row->judged > 0 ? round($row->timed / $row->judged, 4) : 0.0,
                 'avg_key' => round((float) $row->avg_key, 1),
                 'avg_duration_ms' => $avgDuration,
                 'timer_ms' => $timerMs,
@@ -121,16 +121,17 @@ class MetaStatsService
         $rows = $this->baseRuns($periodId, $region)
             ->whereNotNull('comp_signature')
             ->groupBy('comp_signature')
-            ->selectRaw('comp_signature, COUNT(*) as runs, SUM(CASE WHEN is_completed_on_time THEN 1 ELSE 0 END) as timed')
+            ->selectRaw('comp_signature, COUNT(*) as runs, SUM(CASE WHEN is_completed_on_time THEN 1 ELSE 0 END) as timed, COUNT(is_completed_on_time) as judged')
             ->get();
 
         $pairings = [];
         foreach ($rows as $row) {
             [$tank, $healer] = explode(':', $row->comp_signature);
             $key = "{$tank}:{$healer}";
-            $pairings[$key] ??= ['tank_spec_id' => (int) $tank, 'healer_spec_id' => (int) $healer, 'count' => 0, 'timed' => 0];
+            $pairings[$key] ??= ['tank_spec_id' => (int) $tank, 'healer_spec_id' => (int) $healer, 'count' => 0, 'timed' => 0, 'judged' => 0];
             $pairings[$key]['count'] += (int) $row->runs;
             $pairings[$key]['timed'] += (int) $row->timed;
+            $pairings[$key]['judged'] += (int) $row->judged;
         }
 
         $comps = $rows
@@ -146,7 +147,7 @@ class MetaStatsService
                     'healer_spec_id' => (int) $healer,
                     'dps_spec_ids' => array_map('intval', explode(',', $dps)),
                     'count' => (int) $row->runs,
-                    'timed_rate' => round($row->timed / $row->runs, 4),
+                    'timed_rate' => $row->judged > 0 ? round($row->timed / $row->judged, 4) : 0.0,
                 ];
             })
             ->values()
@@ -160,7 +161,7 @@ class MetaStatsService
                 'tank_spec_id' => $p['tank_spec_id'],
                 'healer_spec_id' => $p['healer_spec_id'],
                 'count' => $p['count'],
-                'timed_rate' => round($p['timed'] / $p['count'], 4),
+                'timed_rate' => $p['judged'] > 0 ? round($p['timed'] / $p['judged'], 4) : 0.0,
             ])
             ->values()
             ->all();

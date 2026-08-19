@@ -122,6 +122,40 @@ class MetaStatsServiceTest extends TestCase
         $this->assertSame(2, $payload['min_sample']);
     }
 
+    public function test_unknown_timed_rows_are_excluded_from_timed_rate_denominators(): void
+    {
+        $this->makeRun(504, 15, true);   // judged, timed
+        $this->makeRun(504, 15, false);  // judged, untimed
+        // Unknown-timer run: same shape as makeRun but is_completed_on_time null.
+        $run = LadderRun::create([
+            'period_id' => 1002, 'region' => 'eu', 'dungeon_id' => 504,
+            'keystone_level' => 15, 'duration' => 1700000,
+            'completed_timestamp' => 1754399999999, 'is_completed_on_time' => null,
+            'comp_signature' => '268:65:102,253,577', 'run_hash' => sha1('null-timed-fixture'),
+        ]);
+        foreach ([268, 65, 102, 253, 577] as $spec) {
+            LadderRunMember::create([
+                'ladder_run_id' => $run->id, 'profile_id' => 9000 + $spec,
+                'name' => "N{$spec}", 'realm_slug' => 'r', 'realm_id' => 1, 'faction' => 'HORDE', 'spec_id' => $spec,
+            ]);
+        }
+
+        $service = app(MetaStatsService::class);
+
+        $specs = $service->computeSpecs(1002, 'eu');
+        $tank = collect($specs['brackets']['all']['roles']['tank'])->firstWhere('spec_id', 268);
+        $this->assertSame(3, $tank['count']);                        // appearances still count the unknown run
+        $this->assertEqualsWithDelta(0.5, $tank['timed_rate'], 0.001); // 1 timed / 2 judged — not /3
+
+        $dungeons = $service->computeDungeons(1002, 'eu');
+        $sky = collect($dungeons['dungeons'])->firstWhere('dungeon_id', 504);
+        $this->assertSame(3, $sky['runs']);
+        $this->assertEqualsWithDelta(0.5, $sky['timed_rate'], 0.001);
+
+        $comps = $service->computeComps(1002, 'eu');
+        $this->assertEqualsWithDelta(0.5, $comps['comps'][0]['timed_rate'], 0.001);
+    }
+
     public function test_warm_writes_snapshot_rows_for_all_scopes(): void
     {
         $this->makeRun(504, 15, true);

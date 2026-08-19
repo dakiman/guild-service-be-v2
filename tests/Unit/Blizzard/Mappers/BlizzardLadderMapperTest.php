@@ -89,7 +89,17 @@ class BlizzardLadderMapperTest extends TestCase
         $this->assertFalse($mapped[0]['run']['is_completed_on_time']);
 
         $mapped = $this->mapper->mapLeaderboard($this->payload([$group]), 1002, 'eu', 504, null);
-        $this->assertFalse($mapped[0]['run']['is_completed_on_time']);
+        $this->assertNull($mapped[0]['run']['is_completed_on_time']);
+    }
+
+    public function test_timed_is_null_when_timer_unknown(): void
+    {
+        $runs = $this->mapper->mapLeaderboard($this->payload([[
+            'duration' => 1650000, 'completed_timestamp' => 1754300000000, 'keystone_level' => 15,
+            'members' => [$this->member(1, 268)],
+        ]]), 1002, 'eu', 504, null);
+
+        $this->assertNull($runs[0]['run']['is_completed_on_time']);
     }
 
     public function test_irregular_comp_yields_null_signature(): void

@@ -49,7 +49,7 @@ class BlizzardLadderMapper
                     'keystone_level' => $level,
                     'duration' => $duration,
                     'completed_timestamp' => $completed,
-                    'is_completed_on_time' => $timerMs !== null && $duration <= $timerMs,
+                    'is_completed_on_time' => $timerMs !== null ? $duration <= $timerMs : null,
                     'comp_signature' => $this->compSignature($members),
                     'run_hash' => $this->runHash($dungeonId, $completed, $duration, $members),
                 ],
