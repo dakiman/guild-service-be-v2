@@ -29,13 +29,22 @@ class MetaStatsController extends Controller
             $current = $periodIds->first();
 
             return $periodIds->map(function (int $id) use ($dates, $current): array {
-                $row = $dates->get($id)?->first();
+                $rows = $dates->get($id) ?? collect();
+                $row = $rows->first();
+
+                $affixes = [];
+                foreach ($rows as $r) {
+                    if (! empty($r->affix_ids)) {
+                        $affixes[$r->region] = array_map('intval', $r->affix_ids);
+                    }
+                }
 
                 return [
                     'period_id' => $id,
                     'start_at' => $row?->start_at?->toIso8601String(),
                     'end_at' => $row?->end_at?->toIso8601String(),
                     'is_current' => $id === $current,
+                    'affixes' => (object) $affixes,
                 ];
             })->values()->all();
         });

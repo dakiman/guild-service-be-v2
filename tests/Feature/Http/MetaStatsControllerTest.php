@@ -41,6 +41,22 @@ class MetaStatsControllerTest extends TestCase
         $this->assertNotNull($response->json('periods.0.start_at'));
     }
 
+    public function test_periods_include_per_region_affixes(): void
+    {
+        // setUp already created period 1002 for eu without affix_ids.
+        GameDataPeriod::where('period_id', 1002)->where('region', 'eu')->update(['affix_ids' => json_encode([9, 148])]);
+        GameDataPeriod::create(['period_id' => 1002, 'region' => 'us', 'start_at' => now()->subDay(), 'end_at' => now()->addWeek(), 'affix_ids' => [9, 148]]);
+        $this->snapshot(1002, 'all', 'specs', ['brackets' => []]);
+        $this->snapshot(1001, 'all', 'specs', ['brackets' => []]); // no period rows → empty affixes
+
+        $response = $this->getJson('/api/v1/meta/periods');
+
+        $response->assertOk();
+        $this->assertSame([9, 148], $response->json('periods.0.affixes.eu'));
+        $this->assertSame([9, 148], $response->json('periods.0.affixes.us'));
+        $this->assertSame([], (array) $response->json('periods.1.affixes'));
+    }
+
     public function test_specs_defaults_to_latest_period_and_all_region(): void
     {
         $this->snapshot(1001, 'all', 'specs', ['brackets' => ['all' => ['roles' => [], 'total_runs' => 1]]]);
