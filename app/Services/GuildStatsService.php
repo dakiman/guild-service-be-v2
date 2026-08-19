@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Models\Character;
 use App\Models\DungeonRun;
 use App\Models\Guild;
+use App\Support\Seasons;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -87,10 +88,13 @@ class GuildStatsService
             return [];
         }
 
+        $season = Seasons::currentId();
+
         return DungeonRun::query()
             ->select('dungeon_id', 'dungeon_name', DB::raw('MAX(keystone_level) as key_level'))
             ->whereHas('memberEntries', fn ($q) => $q->whereIn('character_id', $guildCharacterIds))
             ->where('is_completed_on_time', true)
+            ->when($season !== null, fn ($q) => $q->where('season', $season))
             ->groupBy('dungeon_id', 'dungeon_name')
             ->orderByDesc('key_level')
             ->get()

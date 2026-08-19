@@ -7,8 +7,10 @@ namespace Tests\Feature\Http;
 use App\Models\Character;
 use App\Models\DungeonRun;
 use App\Models\DungeonRunMember;
+use App\Models\GameDataSeason;
 use App\Models\Guild;
 use App\Models\RaidEncounterKill;
+use App\Support\Seasons;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -127,5 +129,45 @@ class GuildStatsControllerTest extends TestCase
         $response = $this->getJson('/api/v1/guilds/eu/TEST-REALM/TEST-GUILD/stats');
 
         $response->assertOk();
+    }
+
+    public function test_best_keys_only_counts_current_season_runs(): void
+    {
+        GameDataSeason::create([
+            'id' => 18, 'slug' => 'season-mn-2', 'name' => 'Midnight Season 2',
+            'raiderio_tier_slug' => 'tier-mn-2', 'raiderio_expansion_id' => 11, 'is_current' => true,
+        ]);
+        Seasons::clearCache();
+
+        $guild = $this->createGuild();
+        $char = $this->createActiveGuildMember($guild, ['name' => 'keychar', 'realm' => 'test-realm']);
+
+        $current = DungeonRun::factory()->create([
+            'season' => 18, 'dungeon_id' => 600, 'dungeon_name' => 'Current Dungeon',
+            'keystone_level' => 12, 'is_completed_on_time' => true,
+        ]);
+        $old = DungeonRun::factory()->create([
+            'season' => 17, 'dungeon_id' => 500, 'dungeon_name' => 'Old Dungeon',
+            'keystone_level' => 25, 'is_completed_on_time' => true,
+        ]);
+        DungeonRunMember::create([
+            'dungeon_run_id' => $current->id,
+            'character_id' => $char->id,
+            'character_name' => $char->name,
+            'character_realm' => $char->realm,
+            'character_region' => $char->region,
+        ]);
+        DungeonRunMember::create([
+            'dungeon_run_id' => $old->id,
+            'character_id' => $char->id,
+            'character_name' => $char->name,
+            'character_realm' => $char->realm,
+            'character_region' => $char->region,
+        ]);
+
+        $data = $this->getJson('/api/v1/guilds/eu/test-realm/test-guild/stats')->assertOk()->json();
+
+        $this->assertCount(1, $data['best_keys']);
+        $this->assertSame(600, $data['best_keys'][0]['dungeon_id']);
     }
 }
