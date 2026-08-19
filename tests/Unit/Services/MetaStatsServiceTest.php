@@ -49,7 +49,7 @@ class MetaStatsServiceTest extends TestCase
             'period_id' => 1002, 'region' => $region, 'dungeon_id' => $dungeonId,
             'keystone_level' => $level, 'duration' => $timed ? 1650000 : 1900000,
             'completed_timestamp' => 1754300000000 + $this->hashSeq,
-            'is_completed_on_time' => $timed, 'affixes' => [9],
+            'is_completed_on_time' => $timed,
             'comp_signature' => $tanks[0].':'.$healers[0].':'.implode(',', $dps),
             'run_hash' => sha1('fixture-'.$this->hashSeq++),
         ]);

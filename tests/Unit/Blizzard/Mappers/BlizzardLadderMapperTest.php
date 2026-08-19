@@ -57,7 +57,8 @@ class BlizzardLadderMapperTest extends TestCase
         $this->assertCount(1, $mapped);
         $run = $mapped[0]['run'];
         $this->assertTrue($run['is_completed_on_time']);
-        $this->assertSame([9, 10], $run['affixes']);
+        $this->assertArrayNotHasKey('affixes', $run);
+        $this->assertSame([9, 10], $this->mapper->affixIds($this->payload([$group])));
         $this->assertSame('268:65:102,253,577', $run['comp_signature']);
         $this->assertSame(1002, $run['period_id']);
         $this->assertCount(5, $mapped[0]['members']);

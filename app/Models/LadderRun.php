@@ -11,7 +11,7 @@ class LadderRun extends Model
 {
     protected $fillable = [
         'period_id', 'region', 'dungeon_id', 'keystone_level', 'duration',
-        'completed_timestamp', 'is_completed_on_time', 'affixes',
+        'completed_timestamp', 'is_completed_on_time',
         'comp_signature', 'run_hash',
     ];
 
@@ -24,7 +24,6 @@ class LadderRun extends Model
             'duration' => 'integer',
             'completed_timestamp' => 'integer',
             'is_completed_on_time' => 'boolean',
-            'affixes' => 'array',
         ];
     }
 

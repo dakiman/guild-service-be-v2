@@ -22,10 +22,6 @@ class BlizzardLadderMapper
         }
 
         $timerMs = KeystoneTimers::plusOne($keystoneUpgrades);
-        $affixes = array_values(array_filter(array_map(
-            fn ($a) => $a['keystone_affix']['id'] ?? null,
-            $payload['keystone_affixes'] ?? [],
-        )));
 
         $out = [];
         foreach ($groups as $group) {
@@ -54,7 +50,6 @@ class BlizzardLadderMapper
                     'duration' => $duration,
                     'completed_timestamp' => $completed,
                     'is_completed_on_time' => $timerMs !== null && $duration <= $timerMs,
-                    'affixes' => $affixes,
                     'comp_signature' => $this->compSignature($members),
                     'run_hash' => $this->runHash($dungeonId, $completed, $duration, $members),
                 ],
@@ -63,6 +58,20 @@ class BlizzardLadderMapper
         }
 
         return $out;
+    }
+
+    /**
+     * The period-wide affix set from a leaderboard payload's keystone_affixes.
+     *
+     * @param  array<string, mixed>|null  $payload
+     * @return list<int>
+     */
+    public function affixIds(?array $payload): array
+    {
+        return array_values(array_filter(array_map(
+            fn ($a) => $a['keystone_affix']['id'] ?? null,
+            $payload['keystone_affixes'] ?? [],
+        )));
     }
 
     /**

@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class GameDataPeriod extends Model
 {
-    protected $fillable = ['period_id', 'region', 'start_at', 'end_at'];
+    protected $fillable = ['period_id', 'region', 'start_at', 'end_at', 'affix_ids'];
 
     protected function casts(): array
     {
@@ -16,6 +16,7 @@ class GameDataPeriod extends Model
             'period_id' => 'integer',
             'start_at' => 'datetime',
             'end_at' => 'datetime',
+            'affix_ids' => 'array',
         ];
     }
 

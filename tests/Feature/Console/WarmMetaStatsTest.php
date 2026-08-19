@@ -25,7 +25,7 @@ class WarmMetaStatsTest extends TestCase
             'period_id' => $periodId, 'region' => 'eu', 'dungeon_id' => 504,
             'keystone_level' => 15, 'duration' => 1650000,
             'completed_timestamp' => 1754300000000, 'is_completed_on_time' => true,
-            'affixes' => [], 'comp_signature' => null, 'run_hash' => sha1($hashSuffix),
+            'comp_signature' => null, 'run_hash' => sha1($hashSuffix),
         ]);
     }
 

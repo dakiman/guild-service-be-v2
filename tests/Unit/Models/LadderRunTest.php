@@ -24,7 +24,6 @@ class LadderRunTest extends TestCase
             'duration' => 1650000,
             'completed_timestamp' => 1754300000000,
             'is_completed_on_time' => true,
-            'affixes' => [9, 10],
             'comp_signature' => '268:65:102,253,577',
             'run_hash' => sha1('run-a'),
         ], $overrides));
@@ -50,7 +49,6 @@ class LadderRunTest extends TestCase
             'spec_id' => 577,
         ]);
 
-        $this->assertSame([9, 10], $run->fresh()->affixes);
         $this->assertCount(1, $run->memberEntries);
         $this->assertSame(577, $run->memberEntries->first()->spec_id);
     }
