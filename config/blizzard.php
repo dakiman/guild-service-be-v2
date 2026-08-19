@@ -163,7 +163,7 @@ return [
         'enabled' => (bool) env('BLIZZARD_LADDER_ENABLED', false),
         'regions' => array_values(array_filter(explode(',', env('BLIZZARD_LADDER_REGIONS', 'eu,us')))),
         'brackets' => array_map('intval', array_values(array_filter(
-            explode(',', env('BLIZZARD_LADDER_BRACKETS', '0,7,12,17')),
+            explode(',', env('BLIZZARD_LADDER_BRACKETS', '0,5,7,10,12')),
             fn ($v) => $v !== '',
         ))),
         'comp_min_sample' => (int) env('BLIZZARD_LADDER_COMP_MIN_SAMPLE', 25),
