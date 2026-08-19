@@ -11,6 +11,7 @@ use App\Models\GameDataPeriod;
 use App\Services\RaiderIO\RaiderIOClient;
 use App\Support\Seasons;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 
 class SeedLadders extends Command
 {
@@ -24,7 +25,8 @@ class SeedLadders extends Command
     protected $signature = 'blizzard:seed-ladders
         {--region=* : Limit to specific region(s)}
         {--period= : Blizzard period id override}
-        {--dry-run : Count shards without dispatching}';
+        {--dry-run : Count shards without dispatching}
+        {--all-dungeons : Force the full game_data_mythic_keystone_dungeons sweep (no season pool)}';
 
     protected $description = 'Fan out FetchLadderShard jobs for every connected realm × current-season dungeon';
 
@@ -41,9 +43,9 @@ class SeedLadders extends Command
         // The season's dungeon pool is region-independent — resolve it once per run.
         $dungeonIds = $this->currentSeasonDungeonIds($raiderIO);
         if ($dungeonIds === []) {
-            $this->error('No dungeons resolvable — run `blizzard:sync-game-data pve` first.');
+            $this->error('No dungeon pool resolvable — aborting; tomorrow\'s crawl and the 48h finalize window self-heal. Use --all-dungeons to force the full-table sweep.');
 
-            return self::SUCCESS;
+            return self::FAILURE;
         }
 
         foreach ($regions as $region) {
@@ -114,39 +116,53 @@ class SeedLadders extends Command
      *
      * Blizzard's mythic-keystone season detail carries no `dungeons` key
      * (verified live: `_links, id, start_timestamp, periods, season_name`), so
-     * deriving the pool from it silently fell back to all ~82 rows of
-     * game_data_mythic_keystone_dungeons — ~90% of the fan-out was 404s.
-     * raider.io's `challenge_mode_id` is the same id space as
-     * game_data_mythic_keystone_dungeons.id (it already keys the icon backfill).
+     * the pool comes from raider.io instead. raider.io's `challenge_mode_id`
+     * is the same id space as game_data_mythic_keystone_dungeons.id (it
+     * already keys the icon backfill).
      *
      * @return list<int>
      */
     private function currentSeasonDungeonIds(RaiderIOClient $raiderIO): array
     {
+        if ($this->option('all-dungeons')) {
+            $this->warn('--all-dungeons: sweeping the full game_data_mythic_keystone_dungeons table.');
+
+            return GameDataMythicKeystoneDungeon::query()->pluck('id')->map(fn ($id) => (int) $id)->all();
+        }
+
         $season = Seasons::current();
         $slug = $season['slug'] ?? null;
 
         if ($slug === null) {
             $this->warn('No current season in game_data_seasons — cannot resolve the raider.io dungeon pool.');
-        } else {
-            $expansionId = ($season['raiderio_expansion_id'] ?? 0) ?: (int) config('raiderio.expansion_id');
 
-            try {
-                $ids = $this->challengeModeIdsForSeason($raiderIO->mythicPlusStaticData($expansionId), $slug);
-                if ($ids !== []) {
-                    $this->info(sprintf('Dungeon pool for %s (raider.io expansion %d): %d dungeons.', $slug, $expansionId, count($ids)));
-
-                    return $ids;
-                }
-                $this->warn("raider.io static-data has no dungeons for season {$slug} (expansion {$expansionId}).");
-            } catch (\Throwable $e) {
-                $this->warn("Season dungeon pool lookup failed: {$e->getMessage()}");
-            }
+            return [];
         }
 
-        $this->warn('Falling back to full game_data_mythic_keystone_dungeons table.');
+        $cacheKey = "ladder:dungeon-pool:{$slug}";
+        $expansionId = ($season['raiderio_expansion_id'] ?? 0) ?: (int) config('raiderio.expansion_id');
 
-        return GameDataMythicKeystoneDungeon::query()->pluck('id')->map(fn ($id) => (int) $id)->all();
+        try {
+            $ids = $this->challengeModeIdsForSeason($raiderIO->mythicPlusStaticData($expansionId), $slug);
+            if ($ids !== []) {
+                Cache::put($cacheKey, $ids, now()->addDays(14));
+                $this->info(sprintf('Dungeon pool for %s (raider.io expansion %d): %d dungeons.', $slug, $expansionId, count($ids)));
+
+                return $ids;
+            }
+            $this->warn("raider.io static-data has no dungeons for season {$slug} (expansion {$expansionId}).");
+        } catch (\Throwable $e) {
+            $this->warn("Season dungeon pool lookup failed: {$e->getMessage()}");
+        }
+
+        $cached = Cache::get($cacheKey, []);
+        if ($cached !== []) {
+            $this->warn(sprintf('Using last-known-good pool for %s (%d dungeons).', $slug, count($cached)));
+
+            return $cached;
+        }
+
+        return [];
     }
 
     /**

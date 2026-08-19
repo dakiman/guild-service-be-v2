@@ -12,6 +12,7 @@ use App\Models\GameDataSeason;
 use App\Services\RaiderIO\RaiderIOClient;
 use App\Support\Seasons;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -94,34 +95,24 @@ class SeedLaddersTest extends TestCase
         Queue::assertNotPushed(FetchLadderShard::class, fn (FetchLadderShard $job) => $job->dungeonId === 1);
     }
 
-    public function test_empty_static_data_falls_back_to_all_known_dungeons_with_a_warning(): void
+    public function test_raiderio_failure_with_cached_pool_uses_the_cache(): void
     {
-        $this->fakeStaticData([]);
-        $this->seedFallbackDungeons();
+        Cache::put('ladder:dungeon-pool:season-mn-1', [402, 558], now()->addDays(14));
+        $client = $this->createMock(RaiderIOClient::class);
+        $client->method('mythicPlusStaticData')->willThrowException(new \RuntimeException('raider.io down'));
+        $this->app->instance(RaiderIOClient::class, $client);
+        $this->seedFallbackDungeons(); // must be ignored
         Queue::fake();
 
         $this->artisan('blizzard:seed-ladders')
-            ->expectsOutputToContain('Falling back to full game_data_mythic_keystone_dungeons table')
+            ->expectsOutputToContain('last-known-good')
             ->assertExitCode(0);
 
-        Queue::assertPushed(FetchLadderShard::class, 4); // 2 realms × 2 table rows
-        Queue::assertPushed(fn (FetchLadderShard $job) => $job->dungeonId === 900);
-        Queue::assertPushed(fn (FetchLadderShard $job) => $job->dungeonId === 901);
+        Queue::assertPushed(FetchLadderShard::class, 4); // 2 realms × 2 cached dungeons
+        Queue::assertNotPushed(FetchLadderShard::class, fn (FetchLadderShard $job) => $job->dungeonId === 900);
     }
 
-    public function test_unmatched_season_slug_falls_back_to_all_known_dungeons(): void
-    {
-        $this->fakeStaticData(['seasons' => [['slug' => 'season-tww-4', 'dungeons' => [['challenge_mode_id' => 1]]]]]);
-        $this->seedFallbackDungeons();
-        Queue::fake();
-
-        $this->artisan('blizzard:seed-ladders')->assertExitCode(0);
-
-        Queue::assertPushed(FetchLadderShard::class, 4);
-        Queue::assertNotPushed(FetchLadderShard::class, fn (FetchLadderShard $job) => $job->dungeonId === 1);
-    }
-
-    public function test_raiderio_failure_falls_back_to_all_known_dungeons(): void
+    public function test_raiderio_failure_without_cache_aborts(): void
     {
         $client = $this->createMock(RaiderIOClient::class);
         $client->method('mythicPlusStaticData')->willThrowException(new \RuntimeException('raider.io down'));
@@ -129,11 +120,41 @@ class SeedLaddersTest extends TestCase
         $this->seedFallbackDungeons();
         Queue::fake();
 
-        $this->artisan('blizzard:seed-ladders')
-            ->expectsOutputToContain('raider.io down')
+        $this->artisan('blizzard:seed-ladders')->assertExitCode(1);
+
+        Queue::assertNothingPushed();
+    }
+
+    public function test_unmatched_season_slug_without_cache_aborts(): void
+    {
+        $this->fakeStaticData(['seasons' => [['slug' => 'season-tww-4', 'dungeons' => [['challenge_mode_id' => 1]]]]]);
+        $this->seedFallbackDungeons();
+        Queue::fake();
+
+        $this->artisan('blizzard:seed-ladders')->assertExitCode(1);
+
+        Queue::assertNothingPushed();
+    }
+
+    public function test_all_dungeons_flag_forces_the_full_table_sweep(): void
+    {
+        $this->fakeStaticData([]);
+        $this->seedFallbackDungeons();
+        Queue::fake();
+
+        $this->artisan('blizzard:seed-ladders', ['--all-dungeons' => true])
             ->assertExitCode(0);
 
-        Queue::assertPushed(FetchLadderShard::class, 4);
+        Queue::assertPushed(FetchLadderShard::class, 4); // 2 realms × 2 table rows
+    }
+
+    public function test_successful_resolution_caches_the_pool(): void
+    {
+        Queue::fake();
+
+        $this->artisan('blizzard:seed-ladders')->assertExitCode(0);
+
+        $this->assertSame([402, 558, 560], Cache::get('ladder:dungeon-pool:season-mn-1'));
     }
 
     public function test_kill_switch_dispatches_nothing(): void
