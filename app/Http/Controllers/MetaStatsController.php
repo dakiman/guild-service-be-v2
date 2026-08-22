@@ -44,12 +44,20 @@ class MetaStatsController extends Controller
                     'start_at' => $row?->start_at?->toIso8601String(),
                     'end_at' => $row?->end_at?->toIso8601String(),
                     'is_current' => $id === $current,
-                    'affixes' => (object) $affixes,
+                    // Plain array in the cache: cache.serializable_classes=false
+                    // turns a cached stdClass into __PHP_Incomplete_Class on hit.
+                    'affixes' => $affixes,
                 ];
             })->values()->all();
         });
 
-        return response()->json(['periods' => $payload]);
+        // Cast at response time so an empty affix set encodes as {} not [].
+        $periods = array_map(
+            fn (array $p): array => ['affixes' => (object) $p['affixes']] + $p,
+            $payload,
+        );
+
+        return response()->json(['periods' => $periods]);
     }
 
     public function specs(Request $request): JsonResponse

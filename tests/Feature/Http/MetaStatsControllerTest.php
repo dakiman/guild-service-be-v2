@@ -7,6 +7,7 @@ namespace Tests\Feature\Http;
 use App\Models\GameDataPeriod;
 use App\Models\MetaSnapshot;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
 
 class MetaStatsControllerTest extends TestCase
@@ -55,6 +56,36 @@ class MetaStatsControllerTest extends TestCase
         $this->assertSame([9, 148], $response->json('periods.0.affixes.eu'));
         $this->assertSame([9, 148], $response->json('periods.0.affixes.us'));
         $this->assertSame([], (array) $response->json('periods.1.affixes'));
+    }
+
+    /**
+     * Production caches through Redis with cache.serializable_classes = false,
+     * so anything cached must be plain arrays — an `(object)` cast inside the
+     * cache closure comes back as __PHP_Incomplete_Class on every cache hit.
+     * The array store never serializes, so round-trip through the file store.
+     */
+    public function test_periods_survive_a_serialized_cache_hit(): void
+    {
+        config(['cache.default' => 'file']);
+        Cache::store('file')->flush();
+
+        try {
+            GameDataPeriod::where('period_id', 1002)->where('region', 'eu')->update(['affix_ids' => json_encode([9, 148])]);
+            $this->snapshot(1002, 'all', 'specs', ['brackets' => []]);
+            $this->snapshot(1001, 'all', 'specs', ['brackets' => []]);
+
+            $this->getJson('/api/v1/meta/periods')->assertOk(); // miss → populates the cache
+
+            $hit = $this->getJson('/api/v1/meta/periods');
+
+            $hit->assertOk();
+            $this->assertSame([9, 148], $hit->json('periods.0.affixes.eu'));
+            $this->assertArrayNotHasKey('__PHP_Incomplete_Class_Name', (array) $hit->json('periods.0.affixes'));
+            // Empty affix sets must still encode as a JSON object, not [].
+            $this->assertStringContainsString('"affixes":{}', $hit->getContent());
+        } finally {
+            Cache::store('file')->flush();
+        }
     }
 
     public function test_specs_defaults_to_latest_period_and_all_region(): void
