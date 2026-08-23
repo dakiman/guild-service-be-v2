@@ -139,7 +139,13 @@ class SeasonRollover extends Command
             $this->warn('--skip-sync: run these yourself: blizzard:sync-game-data pve && dungeons:backfill-icons-from-raiderio --expansion='.$raiderioExpansion);
         } else {
             $this->call('blizzard:sync-game-data', ['resource' => 'pve']);
-            $this->call('dungeons:backfill-icons-from-raiderio', ['--expansion' => $raiderioExpansion]);
+            $iconsRc = $this->call('dungeons:backfill-icons-from-raiderio', ['--expansion' => $raiderioExpansion]);
+            if ($iconsRc !== self::SUCCESS) {
+                $this->newLine();
+                $this->warn('Icon backfill did NOT complete — new-season dungeons will render without icons until you run:');
+                $this->warn('  dungeons:backfill-icons-from-raiderio --expansion='.$raiderioExpansion.' --dest=/tmp/dungeons');
+                $this->warn('  then docker cp the files into frontend/public/dungeons/ and frontend/dist/dungeons/ on the host.');
+            }
         }
 
         // ── 7. Expansion-boundary checklist ──

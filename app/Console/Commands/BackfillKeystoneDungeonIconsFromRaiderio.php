@@ -16,13 +16,29 @@ class BackfillKeystoneDungeonIconsFromRaiderio extends Command
      * --expansion=N when a new expansion ships, or run for several expansions
      * to cover historical dungeons referenced by older runs.
      */
-    protected $signature = 'dungeons:backfill-icons-from-raiderio {--expansion=11 : raider.io expansion_id to fetch}';
+    protected $signature = 'dungeons:backfill-icons-from-raiderio
+        {--expansion=11 : raider.io expansion_id to fetch}
+        {--dest= : Directory to write {id}.jpg into (default: ../frontend/public/dungeons relative to the backend)}';
 
     protected $description = 'Pull dungeon icon_url from raider.io, download to frontend/public/dungeons/, and store local path in game_data_mythic_keystone_dungeons.media_url';
 
     public function handle(RaiderIOClient $client): int
     {
         $expansionId = (int) $this->option('expansion');
+
+        // Resolve the destination BEFORE any network/DB work. Inside the app
+        // container `../frontend` does not exist: a blind mkdir here would
+        // download the icons into the container's ephemeral filesystem and
+        // still point media_url at /dungeons/{id}.jpg — which the FE then
+        // 404s on (MN-2 rollover, 2026-08-22). Refuse unless the parent dir
+        // (frontend/public) is really there.
+        $destDir = rtrim((string) ($this->option('dest') ?: base_path('../frontend/public/dungeons')), '/');
+        if (! is_dir(dirname($destDir))) {
+            $this->error(sprintf('Destination parent %s does not exist — the frontend tree is not available here (inside the app container?).', dirname($destDir)));
+            $this->error('Run on the host, or pass --dest=<dir> (e.g. --dest=/tmp/dungeons in the container) and then copy the files into frontend/public/dungeons/ AND frontend/dist/dungeons/.');
+
+            return self::FAILURE;
+        }
 
         $this->info("Fetching raider.io static-data for expansion_id={$expansionId}…");
         $payload = $client->mythicPlusStaticData($expansionId);
@@ -46,9 +62,8 @@ class BackfillKeystoneDungeonIconsFromRaiderio extends Command
 
         $this->info(sprintf('Found %d distinct (challenge_mode_id → icon_url) pairs.', count($iconByChallengeModeId)));
 
-        $destDir = base_path('../frontend/public/dungeons');
         if (! is_dir($destDir)) {
-            mkdir($destDir, 0755, true);
+            mkdir($destDir, 0755);
         }
 
         $matched = 0;
