@@ -8,6 +8,7 @@ use App\Blizzard\Client\BlizzardGameDataClient;
 use App\Models\DungeonRun;
 use App\Models\GameDataSeason;
 use App\Models\SeasonArchive;
+use App\Services\RaiderIO\RaiderIOClient;
 use App\Support\Seasons;
 use Database\Seeders\GameDataExpansionSeeder;
 use Database\Seeders\GameDataSeasonSeeder;
@@ -40,6 +41,18 @@ class SeasonRolloverTest extends TestCase
             'start_timestamp' => 1797000000000,
         ]);
         $this->app->instance(BlizzardGameDataClient::class, $mock);
+
+        $this->mockRaiderIO(['tier-mn-2', 'the-venomous-abyss']);
+    }
+
+    /** @param list<string>|\Throwable $activeRaids */
+    private function mockRaiderIO(array|\Throwable $activeRaids): void
+    {
+        $rio = $this->createMock(RaiderIOClient::class);
+        $activeRaids instanceof \Throwable
+            ? $rio->method('activeRaidSlugs')->willThrowException($activeRaids)
+            : $rio->method('activeRaidSlugs')->willReturn($activeRaids);
+        $this->app->instance(RaiderIOClient::class, $rio);
     }
 
     private function rollover(array $extra = []): PendingCommand
@@ -81,6 +94,32 @@ class SeasonRolloverTest extends TestCase
 
         // Registry cache cleared: resolver sees the new id immediately.
         $this->assertSame(18, Seasons::currentId());
+    }
+
+    public function test_rejects_tier_slug_raiderio_does_not_serve(): void
+    {
+        // 2026-08-22: the operator guessed `tier-mn-2`; raider.io had shipped
+        // S2 as two individual raids and /raiding/raid-rankings 400'd for a
+        // week, silently emptying the guild seed.
+        $this->mockRaiderIO(['the-venomous-abyss', 'the-tidebound-grotto']);
+
+        $this->rollover(['--tier-slug' => 'tier-mn-2'])
+            ->expectsOutputToContain('the-venomous-abyss')
+            ->assertFailed();
+
+        $this->assertTrue((bool) GameDataSeason::find(17)->is_current);
+        $this->assertSame(0, SeasonArchive::count());
+    }
+
+    public function test_raiderio_outage_does_not_block_the_rollover(): void
+    {
+        $this->mockRaiderIO(new \RuntimeException('raider.io down'));
+
+        $this->rollover()
+            ->expectsConfirmation('Proceed with the rollover?', 'yes')
+            ->assertSuccessful();
+
+        $this->assertTrue((bool) GameDataSeason::find(18)->is_current);
     }
 
     public function test_rejects_id_missing_from_blizzard_index(): void

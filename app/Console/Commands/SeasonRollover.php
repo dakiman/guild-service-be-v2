@@ -9,6 +9,7 @@ use App\Jobs\WarmCharacterStats;
 use App\Models\DungeonRun;
 use App\Models\GameDataExpansion;
 use App\Models\GameDataSeason;
+use App\Services\RaiderIO\RaiderIOClient;
 use App\Services\SeasonArchiveService;
 use App\Support\Seasons;
 use Illuminate\Console\Command;
@@ -22,7 +23,7 @@ class SeasonRollover extends Command
         {--blizzard-id= : Blizzard integer id of the NEW season (validated against the live index)}
         {--slug= : raider.io-style season slug, e.g. season-mn-2}
         {--name= : Display name, e.g. "Midnight Season 2"}
-        {--tier-slug= : raider.io raid tier slug, e.g. tier-mn-2}
+        {--tier-slug= : raider.io raid slug for /raiding/raid-rankings — an active raid, or a tier bundle once raider.io publishes one (validated against /raiding/static-data), e.g. the-venomous-abyss}
         {--raiderio-expansion= : raider.io expansion_id for icon backfill (default: outgoing season\'s)}
         {--expansion-id= : game_data_expansions id (default: outgoing season\'s)}
         {--force : Overwrite an existing archive for the outgoing season}
@@ -30,7 +31,7 @@ class SeasonRollover extends Command
 
     protected $description = 'Roll the M+ season: snapshot the outgoing season to the archive, flip the registry, clear caches, sync the new dungeon pool';
 
-    public function handle(BlizzardGameDataClient $client, SeasonArchiveService $archiveService): int
+    public function handle(BlizzardGameDataClient $client, SeasonArchiveService $archiveService, RaiderIOClient $raiderio): int
     {
         $old = GameDataSeason::where('is_current', true)->first();
         if ($old === null) {
@@ -64,9 +65,27 @@ class SeasonRollover extends Command
 
         $slug = (string) ($this->option('slug') ?? $this->ask('New season slug (raider.io style, e.g. season-mn-2)'));
         $name = (string) ($this->option('name') ?? $this->ask('New season display name (e.g. "Midnight Season 2")'));
-        $tierSlug = (string) ($this->option('tier-slug') ?? $this->ask('New raider.io raid tier slug (e.g. tier-mn-2)'));
+        $tierSlug = (string) ($this->option('tier-slug') ?? $this->ask('New raider.io raid slug for raid-rankings (e.g. the-venomous-abyss)'));
         $raiderioExpansion = (int) ($this->option('raiderio-expansion') ?? $old->raiderio_expansion_id);
         $expansionId = (int) ($this->option('expansion-id') ?? $old->expansion_id ?? 0);
+
+        // ── 1b. Validate the raid slug against raider.io (fail open on outage) ──
+        // The slug's only consumer is the guild seed's /raiding/raid-rankings
+        // call, which 400s on an unknown slug and leaves the seed empty with
+        // nothing louder than a daily warning. Tier bundles aren't guaranteed
+        // to exist per season, so check the live list instead of trusting a
+        // pattern.
+        $activeRaids = null;
+        try {
+            $activeRaids = $raiderio->activeRaidSlugs($raiderioExpansion);
+        } catch (\Throwable $e) {
+            $this->warn("Could not verify '{$tierSlug}' against raider.io ({$e->getMessage()}) — continuing unchecked; confirm the slug with https://raider.io/api/v1/raiding/static-data?expansion_id={$raiderioExpansion} afterwards.");
+        }
+        if ($activeRaids !== null && ! in_array($tierSlug, $activeRaids, true)) {
+            $this->error("raider.io has no active raid '{$tierSlug}' for expansion {$raiderioExpansion} — /raiding/raid-rankings would 400 and the guild seed would find nothing. Active raid slugs: [".implode(', ', $activeRaids).']');
+
+            return self::FAILURE;
+        }
 
         // An expansion id we don't have a row for means the operator is
         // rolling across an expansion boundary before seeding it. Don't trip

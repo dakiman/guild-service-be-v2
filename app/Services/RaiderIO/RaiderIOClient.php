@@ -15,6 +15,7 @@ use Generator;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Redis;
 
@@ -154,6 +155,38 @@ class RaiderIOClient
         ]);
 
         return $response->json() ?? [];
+    }
+
+    /**
+     * Raid slugs raider.io currently accepts as `raid=` on /raiding/raid-rankings
+     * for an expansion: every /raiding/static-data entry whose `ends` window is
+     * still open in at least one region (no window published → assumed open).
+     * Combined "tier-…" slugs only exist when raider.io publishes one — Midnight
+     * S2 shipped as two individual raids, and the rollover's guessed `tier-mn-2`
+     * 400'd the guild seed daily for a week (2026-08-23..28). The rollover
+     * validates its --tier-slug against this list.
+     *
+     * @return list<string>
+     */
+    public function activeRaidSlugs(int $expansionId): array
+    {
+        $raids = $this->get('/raiding/static-data', ['expansion_id' => $expansionId])->json('raids') ?? [];
+
+        $active = [];
+        foreach ($raids as $raid) {
+            $slug = $raid['slug'] ?? null;
+            if (! is_string($slug) || $slug === '') {
+                continue;
+            }
+
+            $ends = array_values((array) ($raid['ends'] ?? []));
+            $open = $ends === [] || array_any($ends, fn ($end) => Carbon::parse((string) $end)->isFuture());
+            if ($open) {
+                $active[] = $slug;
+            }
+        }
+
+        return $active;
     }
 
     /**
