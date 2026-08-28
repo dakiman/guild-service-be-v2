@@ -199,6 +199,10 @@ class RaiderIOSeeder
                                 name: $memberRef->name,
                                 depth: SyncDepth::Full,
                                 forceTeammateCrawl: $opts->teammateCrawl,
+                                // Background lane, like the guild phase above. Left
+                                // to the UserLookup default this put ~6.5k Full
+                                // syncs/day in front of every interactive lookup.
+                                origin: SyncOrigin::Discovery,
                             );
                             $report->dispatched++;
                         }

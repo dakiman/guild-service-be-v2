@@ -6,6 +6,7 @@ namespace Tests\Unit\Services\RaiderIO;
 
 use App\Blizzard\Jobs\SyncCharacterData;
 use App\Enums\SyncDepth;
+use App\Enums\SyncOrigin;
 use App\Models\Character;
 use App\Models\SeededRun;
 use App\Services\RaiderIO\DTO\SeedCharacterRef;
@@ -56,6 +57,10 @@ class RaiderIOSeederRunsTest extends TestCase
 
         Bus::assertDispatched(SyncCharacterData::class, 3);
         Bus::assertDispatched(SyncCharacterData::class, fn (SyncCharacterData $j) => $j->name === 'Alice' && $j->depth === SyncDepth::Full);
+        // Discovery traffic belongs on the background lane. Defaulting to
+        // UserLookup put ~6.5k Full syncs a day on blizzard-user-sync, ahead
+        // of every interactive lookup (2026-08-23..28 incident).
+        Bus::assertDispatched(SyncCharacterData::class, fn (SyncCharacterData $j) => $j->origin === SyncOrigin::Discovery && $j->queue === 'blizzard-background');
 
         $this->assertSame(2, $report->considered);
         $this->assertSame(3, $report->dispatched);

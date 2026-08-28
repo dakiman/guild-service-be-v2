@@ -942,23 +942,9 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
         try {
             $season = $gameDataClient->getCurrentMythicPlusSeason();
 
-            $rows = DB::table('dungeon_run_members')
-                ->join('dungeon_runs', 'dungeon_runs.id', '=', 'dungeon_run_members.dungeon_run_id')
-                ->where('dungeon_runs.season', $season)
-                ->whereIn('dungeon_runs.id', function ($q) use ($character, $season) {
-                    $q->select('dungeon_run_id')
-                        ->from('dungeon_run_members')
-                        ->where('character_id', $character->id)
-                        ->whereIn('dungeon_run_id', function ($q2) use ($season) {
-                            $q2->select('id')->from('dungeon_runs')->where('season', $season);
-                        });
-                })
-                ->select(
-                    'dungeon_run_members.character_name',
-                    'dungeon_run_members.character_realm',
-                    'dungeon_run_members.character_region',
-                )
-                ->get();
+            // Plan-proof lookup — see Character::seasonTeammateRows() for why
+            // this must not be a single season-filtered join.
+            $rows = $character->seasonTeammateRows((int) $season);
 
             $threshold = (int) config('blizzard.crawl.recent_threshold', 21600);
             $cutoff = now()->subSeconds($threshold);

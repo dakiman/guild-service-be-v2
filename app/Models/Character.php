@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class Character extends Model
@@ -111,6 +113,47 @@ class Character extends Model
         return $this->belongsToMany(DungeonRun::class, 'dungeon_run_members')
             ->withPivot(['spec_id', 'spec_name', 'equipped_item_level'])
             ->withTimestamps();
+    }
+
+    /**
+     * Identity rows (name/realm/region) of everyone — this character included —
+     * who appeared in this character's Mythic+ runs for the given season.
+     * Feeds the teammate crawl in SyncCharacterData.
+     *
+     * Deliberately three cheap index lookups instead of one join: drive from
+     * this character's own pivot rows (character_id index), filter the run
+     * ids by pkey, then read members by run id. The former single-statement
+     * join let Postgres start from `dungeon_runs.season = ?`; right after a
+     * rollover the new season isn't in pg_stats yet (autoanalyze needs ~10%
+     * of a 6M-row table to change), the planner estimated 1 row, and it ran
+     * that season scan twice in a nested loop — 48k × 48k probes, hours per
+     * job, every blizzard-user-sync worker wedged and unkillable
+     * (2026-08-23..28). This shape has no season-cardinality dependency.
+     *
+     * @return Collection<int, object{character_name: string, character_realm: string, character_region: string}>
+     */
+    public function seasonTeammateRows(int $season): Collection
+    {
+        $runIds = DB::table('dungeon_run_members')
+            ->where('character_id', $this->id)
+            ->pluck('dungeon_run_id');
+
+        if ($runIds->isEmpty()) {
+            return collect();
+        }
+
+        $seasonRunIds = DB::table('dungeon_runs')
+            ->whereIn('id', $runIds)
+            ->where('season', $season)
+            ->pluck('id');
+
+        if ($seasonRunIds->isEmpty()) {
+            return collect();
+        }
+
+        return DB::table('dungeon_run_members')
+            ->whereIn('dungeon_run_id', $seasonRunIds)
+            ->get(['character_name', 'character_realm', 'character_region']);
     }
 
     public function pvpBrackets(): HasMany

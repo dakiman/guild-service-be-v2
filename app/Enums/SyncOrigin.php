@@ -17,8 +17,9 @@ enum SyncOrigin: string
     case RosterFanout = 'roster-fanout';
     case TeammateCrawl = 'teammate-crawl';
     case Proactive = 'proactive';
-    // Guild discovered as a side effect of a character sync (shell row
-    // creation) or shell backfill — background lane, never the user lane.
+    // Discovered rather than requested: guild shells created as a side effect
+    // of a character sync, shell backfills, and the raider.io discovery seed's
+    // character/guild dispatches — background lane, never the user lane.
     case Discovery = 'discovery';
 
     public function queue(): string
