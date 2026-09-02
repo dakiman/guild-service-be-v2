@@ -9,7 +9,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CharacterRank extends Model
 {
-    protected $primaryKey = 'character_id';
+    /**
+     * Composite key (character_id, season_id) — Eloquent has no composite PK
+     * support, so find()/save() on existing rows are off limits. Rows are
+     * only ever created (materializer, tests) or read through queries and
+     * the Character::rank()/previousRank() relations.
+     */
+    protected $primaryKey = null;
 
     public $incrementing = false;
 

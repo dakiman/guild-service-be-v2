@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Support\Seasons;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -269,9 +270,38 @@ class Character extends Model
         return $this->hasOne(GuildMember::class);
     }
 
+    /**
+     * This season's rank row. Fails open (no season filter) when the
+     * registry is empty — the Seasons contract; pre-registry tests seed
+     * rank rows without a game_data_seasons row.
+     */
     public function rank(): HasOne
     {
-        return $this->hasOne(CharacterRank::class);
+        $season = Seasons::currentId();
+
+        return $this->hasOne(CharacterRank::class)
+            ->when($season !== null, fn ($q) => $q->where('character_ranks.season_id', $season));
+    }
+
+    /**
+     * Newest older-season rank row (frozen standings). Null until the first
+     * rollover. Eloquent's ofMany() ties its subquery join to the related
+     * model's getKeyName(), which CharacterRank sets to null (composite
+     * key) — that would append an unnamed tie-break column and break the
+     * SQL. A correlated MAX(season_id) subquery gets the same "newest
+     * older season" row without depending on a single-column key.
+     */
+    public function previousRank(): HasOne
+    {
+        $season = Seasons::currentId();
+
+        return $this->hasOne(CharacterRank::class)
+            ->whereIn('character_ranks.season_id', function ($query) use ($season) {
+                $query->selectRaw('max(season_id)')
+                    ->from('character_ranks as previous_character_ranks')
+                    ->whereColumn('previous_character_ranks.character_id', 'character_ranks.character_id')
+                    ->where('previous_character_ranks.season_id', '<', $season ?? 0);
+            });
     }
 
     public function scopeByIdentity(Builder $query, string $name, string $realm, string $region): Builder
