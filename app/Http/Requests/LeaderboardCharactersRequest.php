@@ -31,6 +31,7 @@ class LeaderboardCharactersRequest extends FormRequest
             'realm' => ['required_if:scope,realm', 'nullable', 'string', 'max:100'],
             'class_id' => ['required_if:scope,class', 'nullable', 'integer', 'min:1'],
             'spec_id' => ['required_if:scope,spec', 'nullable', 'integer', 'min:1'],
+            'season' => ['nullable', 'string', 'max:100'],
         ];
     }
 }

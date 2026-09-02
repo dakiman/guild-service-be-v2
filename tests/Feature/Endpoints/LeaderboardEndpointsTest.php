@@ -7,8 +7,10 @@ namespace Tests\Feature\Endpoints;
 use App\Models\Character;
 use App\Models\CharacterRank;
 use App\Models\GameDataPeriod;
+use App\Models\GameDataSeason;
 use App\Models\RealmRunBoard;
 use App\Models\RealmSlugMap;
+use App\Support\Seasons;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
@@ -23,6 +25,15 @@ class LeaderboardEndpointsTest extends TestCase
         Cache::forever('ranks:computed_at', '2026-09-01T04:00:00+00:00');
         RealmSlugMap::create(['region' => 'eu', 'realm_slug' => 'draenor', 'connected_realm_id' => 1403]);
         RealmSlugMap::create(['region' => 'eu', 'realm_slug' => 'tarren-mill', 'connected_realm_id' => 1084]);
+        GameDataSeason::create([
+            'id' => 17, 'slug' => 'season-mn-1', 'name' => 'Midnight Season 1', 'raiderio_tier_slug' => 'tier-mn-1',
+            'raiderio_expansion_id' => 11, 'is_current' => false, 'started_at' => '2026-03-18 00:00:00', 'ended_at' => '2026-08-22 00:00:00',
+        ]);
+        GameDataSeason::create([
+            'id' => 18, 'slug' => 'season-mn-2', 'name' => 'Midnight Season 2', 'raiderio_tier_slug' => 'tier-mn-2',
+            'raiderio_expansion_id' => 11, 'is_current' => true, 'started_at' => '2026-08-22 00:00:00',
+        ]);
+        Seasons::clearCache();
     }
 
     private function ranked(string $name, int $rating, int $regionRank, array $extra = []): Character
@@ -62,7 +73,42 @@ class LeaderboardEndpointsTest extends TestCase
             ->assertJsonPath('meta.scope', 'region')
             ->assertJsonPath('meta.population', 3)
             ->assertJsonPath('meta.season_id', 18)
+            ->assertJsonPath('meta.computed_at', '2026-09-01T04:00:00+00:00')
+            ->assertJsonPath('meta.season.slug', 'season-mn-2')
+            ->assertJsonPath('meta.season.is_current', true);
+    }
+
+    public function test_season_slug_selects_a_frozen_season_with_row_derived_stamp(): void
+    {
+        $this->ranked('now', 3000, 1);
+        $this->ranked('then', 2600, 1, ['rank' => ['season_id' => 17, 'computed_at' => '2026-08-21 04:00:00']]);
+
+        $this->getJson('/api/v1/leaderboards/characters?scope=region&region=eu')
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.character.name', 'now')
+            ->assertJsonPath('meta.season_id', 18)
             ->assertJsonPath('meta.computed_at', '2026-09-01T04:00:00+00:00');
+
+        $res = $this->getJson('/api/v1/leaderboards/characters?scope=region&region=eu&season=season-mn-1')
+            ->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.character.name', 'then')
+            ->assertJsonPath('meta.season.id', 17)
+            ->assertJsonPath('meta.season.name', 'Midnight Season 1')
+            ->assertJsonPath('meta.season.is_current', false)
+            ->assertJsonPath('meta.season_id', 17);
+        $this->assertStringStartsWith('2026-08-21T04:00:00', $res->json('meta.computed_at'));
+
+        $this->getJson('/api/v1/leaderboards/characters?scope=world&season=season-mn-1')
+            ->assertOk()->assertJsonCount(1, 'data');
+    }
+
+    public function test_unknown_season_is_404_and_empty_frozen_season_has_null_stamp(): void
+    {
+        $this->getJson('/api/v1/leaderboards/characters?scope=region&region=eu&season=season-nope')
+            ->assertNotFound()->assertJsonPath('message', 'Unknown season');
+
+        $this->getJson('/api/v1/leaderboards/characters?scope=region&region=eu&season=season-mn-1')
+            ->assertOk()->assertJsonCount(0, 'data')
+            ->assertJsonPath('meta.population', 0)
+            ->assertJsonPath('meta.computed_at', null);
     }
 
     public function test_realm_scope_resolves_slug_to_connected_realm(): void

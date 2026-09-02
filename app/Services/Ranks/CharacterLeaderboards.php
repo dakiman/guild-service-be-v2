@@ -13,8 +13,8 @@ class CharacterLeaderboards
 
     public const SCOPES = ['world', 'region', 'realm', 'class', 'spec'];
 
-    /** @return array{rows: list<array<string, mixed>>, population: int, season_id: ?int} */
-    public function top(string $scope, ?string $region, ?int $connectedRealmId, ?int $classId, ?int $specId): array
+    /** @return array{rows: list<array<string, mixed>>, population: int, computed_at: ?string} */
+    public function top(int $seasonId, string $scope, ?string $region, ?int $connectedRealmId, ?int $classId, ?int $specId): array
     {
         $rankColumn = "{$scope}_rank";
         $popColumn = "{$scope}_pop";
@@ -23,6 +23,7 @@ class CharacterLeaderboards
             ->join('characters', 'characters.id', '=', 'character_ranks.character_id')
             ->select('character_ranks.*')
             ->with('character:id,name,display_name,realm,display_realm,region,class_id,active_specialization_id,faction,mythic_plus_rating_color')
+            ->where('character_ranks.season_id', $seasonId)
             ->whereNotNull("character_ranks.{$rankColumn}")
             ->orderBy("character_ranks.{$rankColumn}")
             ->orderBy('characters.name')
@@ -49,7 +50,8 @@ class CharacterLeaderboards
                 ],
             ])->values()->all(),
             'population' => $ranks->isEmpty() ? 0 : (int) $ranks->first()->{$popColumn},
-            'season_id' => $ranks->isEmpty() ? null : (int) $ranks->first()->season_id,
+            // Frozen seasons have no live stamp — the rows' own computed_at is the truth.
+            'computed_at' => $ranks->isEmpty() ? null : $ranks->max('computed_at')?->toIso8601String(),
         ];
     }
 

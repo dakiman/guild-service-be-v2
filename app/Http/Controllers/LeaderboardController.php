@@ -12,6 +12,7 @@ use App\Models\RealmSlugMap;
 use App\Services\Ranks\CharacterLeaderboards;
 use App\Services\Ranks\RankMaterializer;
 use App\Support\BlizzardIdentity;
+use App\Support\Seasons;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 
@@ -25,6 +26,20 @@ class LeaderboardController extends Controller
         $classId = $request->filled('class_id') ? (int) $request->input('class_id') : null;
         $specId = $request->filled('spec_id') ? (int) $request->input('spec_id') : null;
 
+        // Default = the registry's current season (null on an empty registry →
+        // empty payload); an explicit slug must exist.
+        $season = $request->filled('season')
+            ? Seasons::bySlug((string) $request->input('season'))
+            : Seasons::current();
+        if ($request->filled('season') && $season === null) {
+            return response()->json(['message' => 'Unknown season'], 404);
+        }
+        $seasonId = $season === null ? null : (int) $season['id'];
+        $isCurrent = $seasonId !== null && $seasonId === Seasons::currentId();
+        $seasonMeta = $season === null ? null : [
+            'id' => $seasonId, 'slug' => (string) $season['slug'], 'name' => (string) $season['name'], 'is_current' => $isCurrent,
+        ];
+
         $connectedRealmId = null;
         if ($scope === 'realm') {
             $connectedRealmId = $this->connectedRealmId($region, $realm);
@@ -34,11 +49,13 @@ class LeaderboardController extends Controller
         }
 
         $stamp = $this->stamp();
-        $key = "leaderboards:chars:{$stamp}:{$scope}:".($region ?? 'all').':'.($connectedRealmId ?? $classId ?? $specId ?? 'all');
+        $key = "leaderboards:chars:{$stamp}:".($seasonId ?? 'none').":{$scope}:".($region ?? 'all').':'.($connectedRealmId ?? $classId ?? $specId ?? 'all');
 
         // Plain array only — cache.serializable_classes is false.
-        $payload = Cache::flexible($key, [270, 86400], function () use ($leaderboards, $scope, $region, $connectedRealmId, $classId, $specId, $realm, $stamp) {
-            $result = $leaderboards->top($scope, $region, $connectedRealmId, $classId, $specId);
+        $payload = Cache::flexible($key, [270, 86400], function () use ($leaderboards, $seasonId, $isCurrent, $seasonMeta, $scope, $region, $connectedRealmId, $classId, $specId, $realm, $stamp) {
+            $result = $seasonId === null
+                ? ['rows' => [], 'population' => 0, 'computed_at' => null]
+                : $leaderboards->top($seasonId, $scope, $region, $connectedRealmId, $classId, $specId);
 
             return [
                 'data' => $result['rows'],
@@ -49,9 +66,11 @@ class LeaderboardController extends Controller
                     'connected_realm_id' => $connectedRealmId,
                     'class_id' => $classId,
                     'spec_id' => $specId,
-                    'season_id' => $result['season_id'],
+                    'season' => $seasonMeta,
+                    'season_id' => $seasonId,
                     'population' => $result['population'],
-                    'computed_at' => $stamp === 'none' ? null : $stamp,
+                    // Current season: the nightly stamp. Frozen season: its last materialization.
+                    'computed_at' => $isCurrent ? ($stamp === 'none' ? null : $stamp) : $result['computed_at'],
                 ],
             ];
         });
