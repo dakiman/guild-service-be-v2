@@ -184,6 +184,7 @@ class SeasonRollover extends Command
         // ── 8. Always-relevant checklist ──
         $this->newLine();
         $this->line('- M+ ladder crawl: no manual action — blizzard:seed-ladders derives the dungeon pool from raider.io static-data for the current registry season (matched by slug); just confirm `blizzard:sync-game-data periods` has run since the rollover.');
+        $this->line('- Ranks: character_ranks is empty until characters resync this season (rating_synced_at gate) — ratings:refresh refills the backlog daily; run `php artisan ranks:materialize` after the first refresh day.');
         $this->line('- M+ brackets: confirm BLIZZARD_LADDER_BRACKETS floors match the new season\'s affix breakpoints, and update BRACKET_LABELS in frontend/src/utils/wowConstants.ts to the new affix names.');
 
         $this->newLine();

@@ -43,6 +43,10 @@ return Application::configure(basePath: dirname(__DIR__))
             ->dailyAt('03:30')
             ->withoutOverlapping()
             ->onOneServer();
+        $schedule->command('ranks:materialize')
+            ->dailyAt('04:00') // after seed-ladders 03:30, before meta:warm 04:30
+            ->withoutOverlapping()
+            ->onOneServer();
         $schedule->command('meta:warm')
             ->everyThirtyMinutes()
             ->between('4:30', '12:00')

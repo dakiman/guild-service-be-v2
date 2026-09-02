@@ -29,4 +29,14 @@ class ScheduleRegistrationTest extends TestCase
         $this->assertNotNull($event, 'raiderio:seed --phase=all is not scheduled');
         $this->assertSame('0 1 * * *', $event->expression);
     }
+
+    public function test_ranks_materialize_is_scheduled_daily_at_0400(): void
+    {
+        Artisan::call('list');
+        $events = collect(app(Schedule::class)->events());
+        $event = $events->first(fn ($e) => str_contains((string) $e->command, 'ranks:materialize'));
+
+        $this->assertNotNull($event, 'ranks:materialize is not scheduled');
+        $this->assertSame('0 4 * * *', $event->expression);
+    }
 }
