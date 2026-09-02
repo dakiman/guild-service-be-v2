@@ -281,6 +281,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             if ($mythicRating->rating !== null) {
                 $characterData['mythic_plus_rating'] = $mythicRating->rating;
                 $characterData['mythic_plus_rating_color'] = $mythicRating->color;
+                $characterData['rating_synced_at'] = now();
             }
         }
 
@@ -457,6 +458,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                     'mythic_plus_rating_color' => $rating->color,
                     'mythic_plus_rating_by_spec' => $rating->perSpec ?: null,
                     'mythics_synced_at' => now(),
+                    'rating_synced_at' => now(),
                 ]);
             });
         } catch (Throwable $e) {
