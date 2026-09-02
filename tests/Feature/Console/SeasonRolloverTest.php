@@ -11,6 +11,7 @@ use App\Models\DungeonRun;
 use App\Models\GameDataSeason;
 use App\Models\SeasonArchive;
 use App\Services\RaiderIO\RaiderIOClient;
+use App\Services\Ranks\RankMaterializer;
 use App\Support\Seasons;
 use Database\Seeders\GameDataExpansionSeeder;
 use Database\Seeders\GameDataSeasonSeeder;
@@ -170,5 +171,21 @@ class SeasonRolloverTest extends TestCase
             ->expectsConfirmation('Proceed with the rollover?', 'yes')
             ->expectsOutputToContain('GameDataExpansionSeeder')
             ->assertSuccessful();
+    }
+
+    public function test_failing_materialize_aborts_before_the_flip(): void
+    {
+        // currentSeasonId() -> null drives ranks:materialize to its FAILURE
+        // branch without touching the registry itself.
+        $this->mock(RankMaterializer::class, fn ($m) => $m->shouldReceive('currentSeasonId')->andReturnNull());
+
+        $this->rollover()
+            ->expectsConfirmation('Proceed with the rollover?', 'yes')
+            ->expectsOutputToContain('ranks:materialize failed — aborting before anything mutates.')
+            ->assertFailed();
+
+        $this->assertTrue((bool) GameDataSeason::find(17)->is_current);
+        $this->assertNull(GameDataSeason::find(18));
+        $this->assertSame(0, SeasonArchive::count());
     }
 }
