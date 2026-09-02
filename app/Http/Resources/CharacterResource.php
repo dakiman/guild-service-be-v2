@@ -43,6 +43,9 @@ class CharacterResource extends JsonResource
                     'per_spec' => $this->perSpecForResponse(),
                 ]
                 : null,
+            'rank' => $this->relationLoaded('rank') && $this->rank !== null
+                ? (new CharacterRankResource($this->rank))->toArray($request)
+                : null,
             'media' => $this->media,
             'talents' => $this->talents,
             'equipment' => $this->equipment ?? [],
@@ -64,6 +67,15 @@ class CharacterResource extends JsonResource
             'stats_synced_at' => $this->stats_synced_at?->toIso8601String(),
             'synced_at' => $this->updated_at?->toIso8601String(),
         ];
+    }
+
+    /**
+     * Preserve the trailing .0 on rank.percentile — plain json_encode()
+     * otherwise drops it, turning a float like 4.0 into the int 4 on the wire.
+     */
+    public function jsonOptions(): int
+    {
+        return JSON_PRESERVE_ZERO_FRACTION;
     }
 
     /**
