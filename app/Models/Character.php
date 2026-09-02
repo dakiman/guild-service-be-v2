@@ -267,6 +267,11 @@ class Character extends Model
         return $this->hasOne(GuildMember::class);
     }
 
+    public function rank(): HasOne
+    {
+        return $this->hasOne(CharacterRank::class);
+    }
+
     public function scopeByIdentity(Builder $query, string $name, string $realm, string $region): Builder
     {
         return $query->where('name', $name)
