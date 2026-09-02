@@ -19,9 +19,9 @@ class MaterializeRanks extends Command
 
     public function handle(RankMaterializer $ranks, RealmSlugMapBuilder $slugMap, RealmRunBoardBuilder $boards): int
     {
-        $season = $ranks->seasonStart();
-        if ($season === null) {
-            $this->error('No current season with started_at in game_data_seasons — nothing to rank.');
+        $seasonId = $ranks->currentSeasonId();
+        if ($seasonId === null) {
+            $this->error('No current season in game_data_seasons — nothing to rank.');
 
             return self::FAILURE;
         }
@@ -31,7 +31,7 @@ class MaterializeRanks extends Command
         $this->info("Realm slug map: {$mapped} slugs.");
 
         if ($this->option('dry-run')) {
-            $this->info($ranks->populationCount().' characters would be ranked for season '.$season['season_id'].'.');
+            $this->info($ranks->populationCount().' characters would be ranked for season '.$seasonId.'.');
 
             return self::SUCCESS;
         }
@@ -41,7 +41,7 @@ class MaterializeRanks extends Command
         $seconds = round(microtime(true) - $start, 1);
 
         $perRegion = collect($result['per_region'])->map(fn ($n, $r) => "{$r}={$n}")->implode(', ');
-        $this->info("Ranked {$result['ranked']} characters ({$perRegion}; {$result['unmapped']} on unmapped realms) in {$seconds}s.");
+        $this->info("Ranked {$result['ranked']} characters for season {$seasonId} ({$perRegion}; {$result['unmapped']} on unmapped realms) in {$seconds}s.");
 
         $boardsWritten = 0;
         foreach ((array) config('blizzard.mplus_leaderboard.regions', ['eu', 'us']) as $region) {

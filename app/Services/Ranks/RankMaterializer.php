@@ -30,27 +30,38 @@ class RankMaterializer
         return ['season_id' => (int) $current['id'], 'started_at' => Carbon::parse($startedAt)];
     }
 
-    private function populationWhere(): string
+    /** The season to rank — null when the registry is empty. */
+    public function currentSeasonId(): ?int
     {
-        return "c.game_version = 'retail' AND c.level >= ? AND c.mythic_plus_rating > 0 AND c.rating_synced_at >= ?";
+        return Seasons::currentId();
     }
 
-    /** @return array{0: int, 1: string} */
-    private function populationBindings(Carbon $startedAt): array
+    /**
+     * Only ratings tagged with the current season are ranked — Blizzard
+     * keeps reporting the last-played season's rating after a rollover, so
+     * rating_synced_at alone cannot tell them apart (spec §A).
+     */
+    private function populationWhere(): string
     {
-        return [(int) config('blizzard.endgame_level', 90), $startedAt->format('Y-m-d H:i:s')];
+        return "c.game_version = 'retail' AND c.level >= ? AND c.mythic_plus_rating > 0 AND c.rating_season_id = ?";
+    }
+
+    /** @return array{0: int, 1: int} */
+    private function populationBindings(int $seasonId): array
+    {
+        return [(int) config('blizzard.endgame_level', 90), $seasonId];
     }
 
     public function populationCount(): int
     {
-        $season = $this->seasonStart();
-        if ($season === null) {
+        $seasonId = $this->currentSeasonId();
+        if ($seasonId === null) {
             return 0;
         }
 
         return (int) DB::selectOne(
             'SELECT COUNT(*) AS n FROM characters c WHERE '.$this->populationWhere(),
-            $this->populationBindings($season['started_at']),
+            $this->populationBindings($seasonId),
         )->n;
     }
 
@@ -59,13 +70,13 @@ class RankMaterializer
      * share, next skips). CASE wraps the realm/spec windows so unmapped realms
      * and null specs get NULL instead of being ranked inside a NULL partition.
      *
-     * @return array{ranked: int, unmapped: int, per_region: array<string, int>}
+     * @return array{season_id: int, ranked: int, unmapped: int, per_region: array<string, int>}
      */
     public function materialize(Carbon $computedAt): array
     {
-        $season = $this->seasonStart();
-        if ($season === null) {
-            throw new \RuntimeException('No current season with a started_at — cannot rank.');
+        $seasonId = $this->currentSeasonId();
+        if ($seasonId === null) {
+            throw new \RuntimeException('No current season in game_data_seasons — cannot rank.');
         }
 
         $sql = <<<'SQL'
@@ -98,12 +109,14 @@ SQL;
         $sql .= ' '.$this->populationWhere();
 
         $bindings = array_merge(
-            [$season['season_id'], $computedAt->format('Y-m-d H:i:s')],
-            $this->populationBindings($season['started_at']),
+            [$seasonId, $computedAt->format('Y-m-d H:i:s')],
+            $this->populationBindings($seasonId),
         );
 
-        DB::transaction(function () use ($sql, $bindings) {
-            CharacterRank::query()->delete();
+        // Only this season's rows are replaced — older seasons stay frozen
+        // (their last materialization ran inside season:rollover).
+        DB::transaction(function () use ($sql, $bindings, $seasonId) {
+            CharacterRank::query()->where('season_id', $seasonId)->delete();
             DB::insert($sql, $bindings);
         });
 
@@ -113,7 +126,9 @@ SQL;
 
         Cache::forever(self::STAMP_KEY, $computedAt->toIso8601String());
 
-        $perRegion = CharacterRank::query()
+        $current = CharacterRank::query()->where('season_id', $seasonId);
+
+        $perRegion = (clone $current)
             ->selectRaw('region, COUNT(*) AS n')
             ->groupBy('region')
             ->pluck('n', 'region')
@@ -121,8 +136,9 @@ SQL;
             ->all();
 
         return [
-            'ranked' => (int) CharacterRank::count(),
-            'unmapped' => (int) CharacterRank::whereNull('connected_realm_id')->count(),
+            'season_id' => $seasonId,
+            'ranked' => (int) (clone $current)->count(),
+            'unmapped' => (int) (clone $current)->whereNull('connected_realm_id')->count(),
             'per_region' => $perRegion,
         ];
     }
