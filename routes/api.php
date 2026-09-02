@@ -12,6 +12,7 @@ use App\Http\Controllers\CharacterStatsController;
 use App\Http\Controllers\GameDataController;
 use App\Http\Controllers\GuildController;
 use App\Http\Controllers\GuildStatsController;
+use App\Http\Controllers\LeaderboardController;
 use App\Http\Controllers\MetaStatsController;
 use App\Http\Controllers\RaidKillStatsController;
 use App\Http\Controllers\SeasonArchiveController;
@@ -94,6 +95,19 @@ Route::get('/stats/characters/top-runs', TopRunsController::class)
 Route::get('/stats/characters/top-keys', TopKeysController::class)
     ->middleware('throttle:30,1')
     ->name('stats.characters.top-keys');
+
+/*
+|--------------------------------------------------------------------------
+| Leaderboard Routes (nightly character_ranks + realm_run_boards, cached)
+|--------------------------------------------------------------------------
+*/
+Route::get('/leaderboards/characters', [LeaderboardController::class, 'characters'])
+    ->middleware('throttle:60,1')
+    ->name('leaderboards.characters');
+Route::get('/leaderboards/realm-runs', [LeaderboardController::class, 'realmRuns'])
+    ->middleware('throttle:60,1')
+    ->name('leaderboards.realm-runs');
+
 Route::get('/stats/characters/raid-kills', RaidKillStatsController::class)
     ->middleware('throttle:30,1')
     ->name('stats.characters.raid-kills');
