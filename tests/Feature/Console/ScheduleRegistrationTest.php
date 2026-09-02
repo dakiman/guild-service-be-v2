@@ -39,4 +39,14 @@ class ScheduleRegistrationTest extends TestCase
         $this->assertNotNull($event, 'ranks:materialize is not scheduled');
         $this->assertSame('0 4 * * *', $event->expression);
     }
+
+    public function test_ratings_refresh_is_scheduled_daily_at_0630(): void
+    {
+        Artisan::call('list');
+        $event = collect(app(Schedule::class)->events())
+            ->first(fn ($e) => str_contains((string) $e->command, 'ratings:refresh'));
+
+        $this->assertNotNull($event, 'ratings:refresh is not scheduled');
+        $this->assertSame('30 6 * * *', $event->expression);
+    }
 }

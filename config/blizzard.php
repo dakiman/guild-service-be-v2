@@ -171,6 +171,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Rating Refresh Lane
+    |--------------------------------------------------------------------------
+    | ratings:refresh resyncs rated endgame characters whose rating predates
+    | the current season so character_ranks can grow toward the full census.
+    | ~5 Blizzard requests per character; 40k/day ≈ 200k req ≈ <1/3 budget.
+    */
+
+    'rating_refresh' => [
+        'enabled' => (bool) env('BLIZZARD_RATING_REFRESH_ENABLED', false),
+        'daily_cap' => (int) env('BLIZZARD_RATING_REFRESH_DAILY_CAP', 40000),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Cache TTLs for Game Data Endpoints
     |--------------------------------------------------------------------------
     */

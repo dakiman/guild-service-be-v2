@@ -47,6 +47,10 @@ return Application::configure(basePath: dirname(__DIR__))
             ->dailyAt('04:00') // after seed-ladders 03:30, before meta:warm 04:30
             ->withoutOverlapping()
             ->onOneServer();
+        $schedule->command('ratings:refresh')
+            ->dailyAt('06:30') // after the ladder fan-out, before organic traffic
+            ->withoutOverlapping()
+            ->onOneServer();
         $schedule->command('meta:warm')
             ->everyThirtyMinutes()
             ->between('4:30', '12:00')
