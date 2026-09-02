@@ -107,6 +107,16 @@ class SeasonRollover extends Command
             return self::FAILURE;
         }
 
+        // ── 3a. Freeze the outgoing season's standings ──
+        // The registry still names the old season here, so this rebuilds its
+        // character_ranks rows one last time under the old season_id. After
+        // the flip the nightly run targets the new id and never touches them.
+        if ($this->call('ranks:materialize') !== self::SUCCESS) {
+            $this->error('ranks:materialize failed — aborting before anything mutates.');
+
+            return self::FAILURE;
+        }
+
         // ── 3. Snapshot the outgoing season (before anything mutates) ──
         try {
             $archive = $archiveService->snapshot($old, force: (bool) $this->option('force'));
@@ -184,7 +194,8 @@ class SeasonRollover extends Command
         // ── 8. Always-relevant checklist ──
         $this->newLine();
         $this->line('- M+ ladder crawl: no manual action — blizzard:seed-ladders derives the dungeon pool from raider.io static-data for the current registry season (matched by slug); just confirm `blizzard:sync-game-data periods` has run since the rollover.');
-        $this->line('- Ranks: character_ranks is empty until characters resync this season (rating_synced_at gate) — ratings:refresh refills the backlog daily; run `php artisan ranks:materialize` after the first refresh day.');
+        $this->line("- Ranks: {$old->slug} standings are frozen (final nightly before this rollover) and stay at /leaderboards/".preg_replace('/^season-/', '', $old->slug).'/…; '
+            ."{$slug} ranks start empty and fill as characters play and resync (rating_season_id gate) — ratings:refresh drains the untagged backlog daily.");
         $this->line('- M+ brackets: confirm BLIZZARD_LADDER_BRACKETS floors match the new season\'s affix breakpoints, and update BRACKET_LABELS in frontend/src/utils/wowConstants.ts to the new affix names.');
 
         $this->newLine();

@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\Console;
 
 use App\Blizzard\Client\BlizzardGameDataClient;
+use App\Models\Character;
+use App\Models\CharacterRank;
 use App\Models\DungeonRun;
 use App\Models\GameDataSeason;
 use App\Models\SeasonArchive;
@@ -69,9 +71,12 @@ class SeasonRolloverTest extends TestCase
     public function test_happy_path_snapshots_and_flips(): void
     {
         DungeonRun::factory()->count(3)->create(['season' => 17, 'is_completed_on_time' => true]);
+        // Rated under the outgoing season → its standings must freeze as season 17.
+        Character::factory()->create(['name' => 'veteran', 'region' => 'eu', 'realm' => 'draenor', 'level' => 90, 'mythic_plus_rating' => 2500, 'rating_season_id' => 17]);
 
         $this->rollover()
             ->expectsConfirmation('Proceed with the rollover?', 'yes')
+            ->expectsOutputToContain('season-mn-1 standings are frozen')
             ->assertSuccessful();
 
         // Archive frozen for the outgoing season.
@@ -94,6 +99,11 @@ class SeasonRolloverTest extends TestCase
 
         // Registry cache cleared: resolver sees the new id immediately.
         $this->assertSame(18, Seasons::currentId());
+
+        // Ranks were materialized BEFORE the flip: the row carries the old season id
+        // and the new season starts empty.
+        $this->assertSame(1, CharacterRank::query()->where('season_id', 17)->count());
+        $this->assertSame(0, CharacterRank::query()->where('season_id', 18)->count());
     }
 
     public function test_rejects_tier_slug_raiderio_does_not_serve(): void
