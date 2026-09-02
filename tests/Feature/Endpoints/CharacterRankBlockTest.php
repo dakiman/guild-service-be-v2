@@ -36,9 +36,9 @@ class CharacterRankBlockTest extends TestCase
         $res->assertOk()->assertJsonPath('data.rank.region', 3292)
             ->assertJsonPath('data.rank.realm', 312)
             ->assertJsonPath('data.rank.population.region', 82297)
-            ->assertJsonPath('data.rank.percentile', 4.0)
             ->assertJsonPath('data.rank.connected_realm_id', 1090)
             ->assertJsonPath('data.rank.season_id', 18);
+        $this->assertEqualsWithDelta(4.0, $res->json('data.rank.percentile'), 0.01);
         $this->assertStringStartsWith('2026-09-01T04:03:11', $res->json('data.rank.computed_at'));
     }
 

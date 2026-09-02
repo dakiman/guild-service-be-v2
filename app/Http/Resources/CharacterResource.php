@@ -70,15 +70,6 @@ class CharacterResource extends JsonResource
     }
 
     /**
-     * Preserve the trailing .0 on rank.percentile — plain json_encode()
-     * otherwise drops it, turning a float like 4.0 into the int 4 on the wire.
-     */
-    public function jsonOptions(): int
-    {
-        return JSON_PRESERVE_ZERO_FRACTION;
-    }
-
-    /**
      * @return array<string, mixed>
      */
     public function with(Request $request): array
