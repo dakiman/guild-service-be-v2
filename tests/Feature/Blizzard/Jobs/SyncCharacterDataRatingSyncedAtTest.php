@@ -61,9 +61,11 @@ class SyncCharacterDataRatingSyncedAtTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_sync_without_a_rating_leaves_rating_synced_at_null(): void
+    public function test_sync_when_mythic_profile_unavailable_leaves_rating_synced_at_null(): void
     {
         Http::fake([
+            // Order matters: the first matching pattern wins.
+            'eu.api.blizzard.com/*/mythic-keystone-profile*' => Http::response([], 404),
             'eu.api.blizzard.com/*' => Http::response($this->profileResponse(90), 200),
         ]);
 
@@ -73,6 +75,39 @@ class SyncCharacterDataRatingSyncedAtTest extends TestCase
         $character = Character::where('name', 'unrated')->firstOrFail();
         $this->assertNull($character->mythic_plus_rating);
         $this->assertNull($character->rating_synced_at);
+    }
+
+    public function test_sync_with_no_current_season_rating_clears_stale_rating_and_stamps(): void
+    {
+        Carbon::setTestNow('2026-09-01 10:00:00');
+
+        Character::factory()->create([
+            'name' => 'stalerated',
+            'realm' => 'tarren-mill',
+            'region' => 'eu',
+            'game_version' => 'retail',
+            'mythic_plus_rating' => 2500,
+            'mythic_plus_rating_color' => '#a335ee',
+            'rating_synced_at' => '2026-08-01 00:00:00',
+        ]);
+
+        Http::fake([
+            // Order matters: the first matching pattern wins.
+            'eu.api.blizzard.com/*/mythic-keystone-profile*' => Http::response([
+                'current_mythic_rating' => null,
+            ], 200),
+            'eu.api.blizzard.com/*' => Http::response($this->profileResponse(90, 'Stalerated'), 200),
+        ]);
+
+        $job = new SyncCharacterData(region: 'eu', realm: 'tarren-mill', name: 'stalerated', depth: SyncDepth::Shallow);
+        app()->call([$job, 'handle']);
+
+        $character = Character::where('name', 'stalerated')->firstOrFail();
+        $this->assertNull($character->mythic_plus_rating);
+        $this->assertNull($character->mythic_plus_rating_color);
+        $this->assertSame('2026-09-01 10:00:00', $character->rating_synced_at->format('Y-m-d H:i:s'));
+
+        Carbon::setTestNow();
     }
 
     private function profileResponse(int $level, string $name = 'Testchar'): array

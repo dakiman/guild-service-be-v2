@@ -278,10 +278,13 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $mythicRating = $ratingMapper->map(
                 $response['mythic_keystone'], null, $this->name, $this->realm
             );
+            $characterData['rating_synced_at'] = now();
             if ($mythicRating->rating !== null) {
                 $characterData['mythic_plus_rating'] = $mythicRating->rating;
                 $characterData['mythic_plus_rating_color'] = $mythicRating->color;
-                $characterData['rating_synced_at'] = now();
+            } else {
+                $characterData['mythic_plus_rating'] = null;
+                $characterData['mythic_plus_rating_color'] = null;
             }
         }
 
