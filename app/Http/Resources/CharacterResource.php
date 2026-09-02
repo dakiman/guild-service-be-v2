@@ -41,10 +41,13 @@ class CharacterResource extends JsonResource
                     'rating' => (int) $this->mythic_plus_rating,
                     'color' => $this->mythic_plus_rating_color,
                     'per_spec' => $this->perSpecForResponse(),
-                ]
+                ] + $this->ratingSeasonBlock()
                 : null,
             'rank' => $this->relationLoaded('rank') && $this->rank !== null
                 ? (new CharacterRankResource($this->rank))->toArray($request)
+                : null,
+            'previous_rank' => $this->relationLoaded('previousRank') && $this->previousRank !== null
+                ? (new CharacterRankResource($this->previousRank))->toArray($request)
                 : null,
             'media' => $this->media,
             'talents' => $this->talents,

@@ -19,6 +19,8 @@ class Seasons
      */
     private const NULL_SENTINEL = '__none__';
 
+    private const ALL_CACHE_KEY = 'seasons:all';
+
     /**
      * The current season as a plain array (never a Model —
      * cache.serializable_classes is false, so cached objects come back as
@@ -61,6 +63,52 @@ class Seasons
         return self::current()['id'] ?? null;
     }
 
+    /**
+     * Every registry season keyed by id, newest first, as plain arrays
+     * (same serializable_classes caveat as current()). Empty array when
+     * the registry is empty or unmigrated.
+     *
+     * @return array<int, array{id: int, slug: string, name: string, is_current: bool, started_at: ?string, ended_at: ?string}>
+     */
+    public static function all(): array
+    {
+        try {
+            // An empty array is a real value to Cache::remember (only null re-evaluates).
+            return Cache::remember(self::ALL_CACHE_KEY, 3600, fn () => GameDataSeason::query()
+                ->orderByDesc('id')
+                ->get()
+                ->mapWithKeys(fn (GameDataSeason $s) => [(int) $s->id => [
+                    'id' => (int) $s->id,
+                    'slug' => (string) $s->slug,
+                    'name' => (string) $s->name,
+                    'is_current' => (bool) $s->is_current,
+                    'started_at' => $s->started_at?->toIso8601String(),
+                    'ended_at' => $s->ended_at?->toIso8601String(),
+                ]])
+                ->all());
+        } catch (QueryException) {
+            return [];
+        }
+    }
+
+    /** @return array{id: int, slug: string, name: string, is_current: bool, started_at: ?string, ended_at: ?string}|null */
+    public static function byId(?int $id): ?array
+    {
+        return $id === null ? null : (self::all()[$id] ?? null);
+    }
+
+    /** @return array{id: int, slug: string, name: string, is_current: bool, started_at: ?string, ended_at: ?string}|null */
+    public static function bySlug(string $slug): ?array
+    {
+        foreach (self::all() as $season) {
+            if ($season['slug'] === $slug) {
+                return $season;
+            }
+        }
+
+        return null;
+    }
+
     public static function raiderioSeasonSlug(): string
     {
         return self::current()['slug'] ?? (string) config('raiderio.season');
@@ -74,5 +122,6 @@ class Seasons
     public static function clearCache(): void
     {
         Cache::forget(self::CACHE_KEY);
+        Cache::forget(self::ALL_CACHE_KEY);
     }
 }

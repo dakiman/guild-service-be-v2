@@ -81,4 +81,35 @@ class SeasonsTest extends TestCase
         $this->assertNull(Seasons::current());
         $this->assertNull(Seasons::currentId());
     }
+
+    public function test_all_by_id_and_by_slug_read_the_registry_as_plain_arrays(): void
+    {
+        $this->seedSeason();
+        GameDataSeason::create([
+            'id' => 18, 'slug' => 'season-mn-2', 'name' => 'Midnight Season 2', 'raiderio_tier_slug' => 'tier-mn-2',
+            'raiderio_expansion_id' => 11, 'is_current' => false, 'started_at' => '2026-08-22 00:00:00',
+        ]);
+
+        $all = Seasons::all();
+        $this->assertSame([18, 17], array_keys($all));
+        $this->assertFalse($all[18]['is_current']);
+        $this->assertTrue($all[17]['is_current']);
+        $this->assertSame('2026-08-22T00:00:00+00:00', $all[18]['started_at']);
+
+        $this->assertSame('season-mn-1', Seasons::byId(17)['slug']);
+        $this->assertSame(18, Seasons::bySlug('season-mn-2')['id']);
+        $this->assertNull(Seasons::byId(99));
+        $this->assertNull(Seasons::byId(null));
+        $this->assertNull(Seasons::bySlug('season-nope'));
+    }
+
+    public function test_all_is_cached_until_clear_cache(): void
+    {
+        $this->assertSame([], Seasons::all());
+        $this->seedSeason();
+        $this->assertSame([], Seasons::all());
+
+        Seasons::clearCache();
+        $this->assertSame([17], array_keys(Seasons::all()));
+    }
 }

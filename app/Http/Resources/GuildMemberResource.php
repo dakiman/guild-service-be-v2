@@ -47,7 +47,7 @@ class GuildMemberResource extends JsonResource
                 ? [
                     'rating' => (int) $character->mythic_plus_rating,
                     'color' => $character->mythic_plus_rating_color,
-                ]
+                ] + $character->ratingSeasonBlock()
                 : null,
             'region_rank' => $hasCharacter && $character->relationLoaded('rank') ? $character->rank?->region_rank : null,
             'active_specialization_id' => $hasCharacter ? $character->active_specialization_id : null,

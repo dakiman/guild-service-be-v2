@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Resources;
 
 use App\Models\CharacterRank;
+use App\Support\Seasons;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -18,6 +19,9 @@ class CharacterRankResource extends JsonResource
 
         return [
             'season_id' => $r->season_id,
+            'season_slug' => Seasons::byId((int) $r->season_id)['slug'] ?? null,
+            'season_name' => Seasons::byId((int) $r->season_id)['name'] ?? null,
+            'is_current' => (int) $r->season_id === Seasons::currentId(),
             'rating' => $r->rating,
             'world' => $r->world_rank,
             'region' => $r->region_rank,

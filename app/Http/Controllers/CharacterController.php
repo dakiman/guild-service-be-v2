@@ -51,9 +51,9 @@ class CharacterController extends Controller
 
         // Basic-tier (sub-endgame) characters have no slice rows — skip the
         // slice eager-loads; whenLoaded omits those keys from the payload.
-        $relations = ['guild', 'rank'];
+        $relations = ['guild', 'rank', 'previousRank'];
         if ($result->isEndgame()) {
-            $relations = ['guild', 'rank', 'dungeonRuns.memberEntries', 'pvpBrackets', 'professions.expansion', 'raidEncounterKills'];
+            $relations = ['guild', 'rank', 'previousRank', 'dungeonRuns.memberEntries', 'pvpBrackets', 'professions.expansion', 'raidEncounterKills'];
             if (config('blizzard.sync.mounts_enabled')) {
                 $relations[] = 'mounts.gameData';
             }

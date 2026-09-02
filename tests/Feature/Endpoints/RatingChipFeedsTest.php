@@ -41,7 +41,8 @@ class RatingChipFeedsTest extends TestCase
         $res = $this->getJson('/api/v1/characters/suggest?q=mel')->assertOk();
 
         $rows = collect($res->json('suggestions'))->keyBy('name');
-        $this->assertSame(['rating' => 2847, 'color' => '#ff8000'], $rows['melaniya']['mythic_plus_rating']);
+        $this->assertSame(2847, $rows['melaniya']['mythic_plus_rating']['rating']);
+        $this->assertSame('#ff8000', $rows['melaniya']['mythic_plus_rating']['color']);
         $this->assertSame(4, $rows['melaniya']['region_rank']);
         $this->assertNull($rows['melvin']['mythic_plus_rating']);
         $this->assertNull($rows['melvin']['region_rank']);

@@ -64,7 +64,7 @@ class GuildController extends Controller
         $result->backfillMemberCharacterIds(throttled: true);
 
         $query = $result->members()
-            ->with(['character:id,equipped_item_level,mythic_plus_rating,mythic_plus_rating_color,active_specialization_id,updated_at', 'character.rank:character_id,region_rank'])
+            ->with(['character:id,equipped_item_level,mythic_plus_rating,mythic_plus_rating_color,rating_season_id,active_specialization_id,updated_at', 'character.rank:character_id,region_rank'])
             // Stable order: without it Postgres returns arbitrary order and
             // pages can repeat or skip rows across requests. (P1.11)
             ->orderBy('rank')

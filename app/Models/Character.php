@@ -304,6 +304,26 @@ class Character extends Model
             });
     }
 
+    /**
+     * Season keys shared by every mythic_plus_rating block (spec §D.1):
+     * which season the stored rating belongs to and whether that is the
+     * current one. Unknown/untagged → nulls and is_current=false.
+     *
+     * @return array{season_id: ?int, season_slug: ?string, season_name: ?string, is_current: bool}
+     */
+    public function ratingSeasonBlock(): array
+    {
+        $id = $this->rating_season_id === null ? null : (int) $this->rating_season_id;
+        $season = Seasons::byId($id);
+
+        return [
+            'season_id' => $id,
+            'season_slug' => $season['slug'] ?? null,
+            'season_name' => $season['name'] ?? null,
+            'is_current' => $id !== null && $id === Seasons::currentId(),
+        ];
+    }
+
     public function scopeByIdentity(Builder $query, string $name, string $realm, string $region): Builder
     {
         return $query->where('name', $name)
@@ -323,7 +343,7 @@ class Character extends Model
         'id', 'name', 'realm', 'region', 'display_name', 'display_realm',
         'class_id', 'level', 'faction', 'active_specialization', 'media',
         'num_of_searches', 'last_searched_at',
-        'mythic_plus_rating', 'mythic_plus_rating_color',
+        'mythic_plus_rating', 'mythic_plus_rating_color', 'rating_season_id',
     ];
 
     public function scopeMostPopular(Builder $query, int $limit = 5): Builder
@@ -358,7 +378,7 @@ class Character extends Model
         return $query
             // Only the columns CharacterSuggestionResource emits (+ ordering keys);
             // never haul media/talents/equipment/stats JSONB on a per-keystroke query. (P2.3)
-            ->select(['id', 'region', 'realm', 'display_realm', 'name', 'display_name', 'class_id', 'level', 'faction', 'num_of_searches', 'mythic_plus_rating', 'mythic_plus_rating_color'])
+            ->select(['id', 'region', 'realm', 'display_realm', 'name', 'display_name', 'class_id', 'level', 'faction', 'num_of_searches', 'mythic_plus_rating', 'mythic_plus_rating_color', 'rating_season_id'])
             ->with('rank:character_id,region_rank')
             ->where('game_version', 'retail')
             ->where(function ($q) use ($prefix, $substring) {
