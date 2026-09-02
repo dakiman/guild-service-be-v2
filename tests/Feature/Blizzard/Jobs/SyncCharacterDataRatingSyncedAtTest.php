@@ -38,75 +38,109 @@ class SyncCharacterDataRatingSyncedAtTest extends TestCase
         Bus::fake([SyncCharacterData::class]);
     }
 
-    public function test_shallow_sync_writes_rating_and_rating_synced_at(): void
+    /** @param list<int> $seasons */
+    private function keystoneProfile(?float $rating, array $seasons): array
+    {
+        return [
+            'current_mythic_rating' => $rating === null ? null : ['rating' => $rating, 'color' => ['r' => 255, 'g' => 128, 'b' => 0]],
+            'seasons' => array_map(fn (int $id) => ['key' => ['href' => "https://x/{$id}"], 'id' => $id], $seasons),
+        ];
+    }
+
+    private function staleRated(string $name): Character
+    {
+        return Character::factory()->create([
+            'name' => $name, 'realm' => 'tarren-mill', 'region' => 'eu', 'game_version' => 'retail',
+            'mythic_plus_rating' => 2500, 'mythic_plus_rating_color' => '#a335ee',
+            'rating_season_id' => null, 'rating_synced_at' => '2026-08-01 00:00:00',
+        ]);
+    }
+
+    private function shallowSync(string $name): Character
+    {
+        $job = new SyncCharacterData(region: 'eu', realm: 'tarren-mill', name: $name, depth: SyncDepth::Shallow);
+        app()->call([$job, 'handle']);
+
+        return Character::where('name', $name)->where('realm', 'tarren-mill')->firstOrFail();
+    }
+
+    public function test_shallow_sync_writes_rating_with_its_season_and_stamp(): void
     {
         Carbon::setTestNow('2026-09-01 10:00:00');
-
         Http::fake([
             // Order matters: the first matching pattern wins.
-            'eu.api.blizzard.com/*/mythic-keystone-profile*' => Http::response([
-                'current_mythic_rating' => ['rating' => 2846.7, 'color' => ['r' => 255, 'g' => 128, 'b' => 0]],
-            ], 200),
+            'eu.api.blizzard.com/*/mythic-keystone-profile*' => Http::response($this->keystoneProfile(2846.7, [15, 17]), 200),
             'eu.api.blizzard.com/*' => Http::response($this->profileResponse(90), 200),
         ]);
 
-        $job = new SyncCharacterData(region: 'eu', realm: 'tarren-mill', name: 'testchar', depth: SyncDepth::Shallow);
-        app()->call([$job, 'handle']);
+        $character = $this->shallowSync('testchar');
 
-        $character = Character::where('name', 'testchar')->where('realm', 'tarren-mill')->firstOrFail();
         $this->assertSame(2847, $character->mythic_plus_rating);
         $this->assertSame('#ff8000', $character->mythic_plus_rating_color);
+        $this->assertSame(17, $character->rating_season_id);
         $this->assertSame('2026-09-01 10:00:00', $character->rating_synced_at->format('Y-m-d H:i:s'));
-
         Carbon::setTestNow();
     }
 
-    public function test_sync_when_mythic_profile_unavailable_leaves_rating_synced_at_null(): void
+    public function test_season_tag_is_the_newest_season_played(): void
     {
         Http::fake([
-            // Order matters: the first matching pattern wins.
-            'eu.api.blizzard.com/*/mythic-keystone-profile*' => Http::response([], 404),
+            'eu.api.blizzard.com/*/mythic-keystone-profile*' => Http::response($this->keystoneProfile(2900.0, [15, 17, 18]), 200),
             'eu.api.blizzard.com/*' => Http::response($this->profileResponse(90), 200),
         ]);
 
-        $job = new SyncCharacterData(region: 'eu', realm: 'tarren-mill', name: 'unrated', depth: SyncDepth::Shallow);
-        app()->call([$job, 'handle']);
-
-        $character = Character::where('name', 'unrated')->firstOrFail();
-        $this->assertNull($character->mythic_plus_rating);
-        $this->assertNull($character->rating_synced_at);
+        $this->assertSame(18, $this->shallowSync('current')->rating_season_id);
     }
 
-    public function test_sync_with_no_current_season_rating_clears_stale_rating_and_stamps(): void
+    public function test_sync_when_mythic_profile_unavailable_touches_nothing(): void
     {
-        Carbon::setTestNow('2026-09-01 10:00:00');
-
-        Character::factory()->create([
-            'name' => 'stalerated',
-            'realm' => 'tarren-mill',
-            'region' => 'eu',
-            'game_version' => 'retail',
-            'mythic_plus_rating' => 2500,
-            'mythic_plus_rating_color' => '#a335ee',
-            'rating_synced_at' => '2026-08-01 00:00:00',
+        $this->staleRated('existing');
+        Http::fake([
+            'eu.api.blizzard.com/*/mythic-keystone-profile*' => Http::response([], 404),
+            'eu.api.blizzard.com/*' => Http::response($this->profileResponse(90, 'Existing'), 200),
         ]);
 
+        $character = $this->shallowSync('existing');
+
+        $this->assertSame(2500, $character->mythic_plus_rating);
+        $this->assertSame('#a335ee', $character->mythic_plus_rating_color);
+        $this->assertNull($character->rating_season_id);
+        $this->assertSame('2026-08-01 00:00:00', $character->rating_synced_at->format('Y-m-d H:i:s'));
+    }
+
+    public function test_absent_rating_with_season_history_keeps_the_rating_and_tags_it(): void
+    {
+        Carbon::setTestNow('2026-09-01 10:00:00');
+        $this->staleRated('stalerated');
         Http::fake([
-            // Order matters: the first matching pattern wins.
-            'eu.api.blizzard.com/*/mythic-keystone-profile*' => Http::response([
-                'current_mythic_rating' => null,
-            ], 200),
+            'eu.api.blizzard.com/*/mythic-keystone-profile*' => Http::response($this->keystoneProfile(null, [15, 17]), 200),
             'eu.api.blizzard.com/*' => Http::response($this->profileResponse(90, 'Stalerated'), 200),
         ]);
 
-        $job = new SyncCharacterData(region: 'eu', realm: 'tarren-mill', name: 'stalerated', depth: SyncDepth::Shallow);
-        app()->call([$job, 'handle']);
+        $character = $this->shallowSync('stalerated');
 
-        $character = Character::where('name', 'stalerated')->firstOrFail();
+        $this->assertSame(2500, $character->mythic_plus_rating);
+        $this->assertSame('#a335ee', $character->mythic_plus_rating_color);
+        $this->assertSame(17, $character->rating_season_id);
+        $this->assertSame('2026-09-01 10:00:00', $character->rating_synced_at->format('Y-m-d H:i:s'));
+        Carbon::setTestNow();
+    }
+
+    public function test_absent_rating_with_no_season_history_clears_the_rating(): void
+    {
+        Carbon::setTestNow('2026-09-01 10:00:00');
+        $this->staleRated('nohistory');
+        Http::fake([
+            'eu.api.blizzard.com/*/mythic-keystone-profile*' => Http::response($this->keystoneProfile(null, []), 200),
+            'eu.api.blizzard.com/*' => Http::response($this->profileResponse(90, 'Nohistory'), 200),
+        ]);
+
+        $character = $this->shallowSync('nohistory');
+
         $this->assertNull($character->mythic_plus_rating);
         $this->assertNull($character->mythic_plus_rating_color);
+        $this->assertNull($character->rating_season_id);
         $this->assertSame('2026-09-01 10:00:00', $character->rating_synced_at->format('Y-m-d H:i:s'));
-
         Carbon::setTestNow();
     }
 

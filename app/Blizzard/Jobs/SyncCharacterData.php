@@ -7,6 +7,7 @@ namespace App\Blizzard\Jobs;
 use App\Blizzard\Client\BlizzardGameDataClient;
 use App\Blizzard\Client\BlizzardProfileClient;
 use App\Blizzard\Contracts\TokenManagerInterface;
+use App\Blizzard\DTO\CharacterMythicPlusRating;
 use App\Blizzard\Exceptions\BlizzardNotFoundException;
 use App\Blizzard\Mappers\CharacterAchievementMapper;
 use App\Blizzard\Mappers\CharacterEquipmentMapper;
@@ -278,14 +279,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $mythicRating = $ratingMapper->map(
                 $response['mythic_keystone'], null, $this->name, $this->realm
             );
-            $characterData['rating_synced_at'] = now();
-            if ($mythicRating->rating !== null) {
-                $characterData['mythic_plus_rating'] = $mythicRating->rating;
-                $characterData['mythic_plus_rating_color'] = $mythicRating->color;
-            } else {
-                $characterData['mythic_plus_rating'] = null;
-                $characterData['mythic_plus_rating_color'] = null;
-            }
+            $characterData = array_merge($characterData, $this->ratingColumns($mythicRating));
         }
 
         // Upsert the character.
@@ -440,7 +434,7 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
             $runs = $mapper->map($seasonData ?? [], $season);
             $rating = $ratingMapper->map($base, $seasonData, $this->name, $this->realm);
 
-            DB::transaction(function () use ($runs, $rating, $character) {
+            DB::transaction(function () use ($runs, $rating, $character, $base) {
                 foreach ($runs as $run) {
                     $dungeonRun = DungeonRun::upsertRun([
                         'season' => $run->season,
@@ -456,13 +450,15 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                     $this->persistRunTeam($dungeonRun, $run->team);
                 }
 
-                $character->update([
-                    'mythic_plus_rating' => $rating->rating,
-                    'mythic_plus_rating_color' => $rating->color,
-                    'mythic_plus_rating_by_spec' => $rating->perSpec ?: null,
-                    'mythics_synced_at' => now(),
-                    'rating_synced_at' => now(),
-                ]);
+                $character->update(array_merge(
+                    [
+                        'mythic_plus_rating_by_spec' => $rating->perSpec ?: null,
+                        'mythics_synced_at' => now(),
+                    ],
+                    // A 404 on the base profile must not wipe a stored rating —
+                    // same contract as the profile-pool site.
+                    $base === null ? [] : $this->ratingColumns($rating),
+                ));
             });
         } catch (Throwable $e) {
             $this->rethrowIfRateLimited($e);
@@ -471,6 +467,34 @@ class SyncCharacterData implements ShouldBeUnique, ShouldQueue
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Rating columns for a fetched (200) base M+ profile. Blizzard keeps
+     * reporting the newest-played season's rating after a rollover, so the
+     * rating is stored together with the season it belongs to and is only
+     * cleared when the character has no M+ season history at all (a >0
+     * rating with a null season would otherwise sit in the ratings:refresh
+     * backlog forever). rating_synced_at means "base profile fetched at".
+     *
+     * @return array<string, mixed>
+     */
+    private function ratingColumns(CharacterMythicPlusRating $rating): array
+    {
+        $columns = [
+            'rating_season_id' => $rating->seasonId,
+            'rating_synced_at' => now(),
+        ];
+
+        if ($rating->rating !== null) {
+            $columns['mythic_plus_rating'] = $rating->rating;
+            $columns['mythic_plus_rating_color'] = $rating->color;
+        } elseif ($rating->seasonId === null) {
+            $columns['mythic_plus_rating'] = null;
+            $columns['mythic_plus_rating_color'] = null;
+        }
+
+        return $columns;
     }
 
     /**

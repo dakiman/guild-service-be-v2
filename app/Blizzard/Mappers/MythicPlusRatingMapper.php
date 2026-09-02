@@ -27,10 +27,18 @@ class MythicPlusRatingMapper
             $color = $this->rgbToHex($base['current_mythic_rating']['color'] ?? null);
         }
 
+        $seasonIds = [];
+        foreach ((array) ($base['seasons'] ?? []) as $seasonEntry) {
+            if (is_array($seasonEntry) && isset($seasonEntry['id'])) {
+                $seasonIds[] = (int) $seasonEntry['id'];
+            }
+        }
+
         return new CharacterMythicPlusRating(
             rating: $rating,
             color: $color,
             perSpec: $this->aggregatePerSpec($season['best_runs'] ?? [], $characterName, $characterRealm),
+            seasonId: $seasonIds === [] ? null : max($seasonIds),
         );
     }
 

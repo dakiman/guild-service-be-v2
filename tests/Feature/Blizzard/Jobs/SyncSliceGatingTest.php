@@ -278,6 +278,32 @@ class SyncSliceGatingTest extends TestCase
         $this->assertSame('#aabbcc', $character->mythic_plus_rating_color);
     }
 
+    public function test_full_sync_mythic_slice_keeps_rating_when_base_profile_is_unavailable(): void
+    {
+        Config::set('blizzard.sync.mythic_plus_enabled', true);
+        Config::set('blizzard.mythic_plus.season_override', 18);
+        Character::forceCreate([
+            'name' => 'slice404', 'realm' => 'tarren-mill', 'region' => 'eu', 'game_version' => 'retail',
+            'level' => 90, 'mythic_plus_rating' => 2000, 'mythic_plus_rating_color' => '#aabbcc',
+            'rating_season_id' => 17,
+        ]);
+
+        Http::fake([
+            // Order matters: the season detail must match before the base pattern.
+            'eu.api.blizzard.com/profile/wow/character/tarren-mill/slice404/mythic-keystone-profile/season/*' => Http::response(['best_runs' => []], 200),
+            'eu.api.blizzard.com/profile/wow/character/tarren-mill/slice404/mythic-keystone-profile*' => Http::response([], 404),
+            'eu.api.blizzard.com/*' => Http::response($this->minimalCharacterPoolResponse(), 200),
+        ]);
+
+        SyncCharacterData::dispatchSync('eu', 'tarren-mill', 'slice404', SyncDepth::Full);
+
+        $character = Character::where('name', 'slice404')->first();
+        $this->assertSame(2000, $character->mythic_plus_rating);
+        $this->assertSame('#aabbcc', $character->mythic_plus_rating_color);
+        $this->assertSame(17, $character->rating_season_id);
+        $this->assertNotNull($character->mythics_synced_at, 'the slice itself still completes');
+    }
+
     // -------------------------------------------------------------------------
     // Shared fixture helpers
     // -------------------------------------------------------------------------
