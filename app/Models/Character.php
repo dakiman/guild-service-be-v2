@@ -291,11 +291,13 @@ class Character extends Model
         'id', 'name', 'realm', 'region', 'display_name', 'display_realm',
         'class_id', 'level', 'faction', 'active_specialization', 'media',
         'num_of_searches', 'last_searched_at',
+        'mythic_plus_rating', 'mythic_plus_rating_color',
     ];
 
     public function scopeMostPopular(Builder $query, int $limit = 5): Builder
     {
         return $query->select(self::SUMMARY_COLUMNS)
+            ->with('rank:character_id,region_rank')
             ->orderByDesc('num_of_searches')
             ->limit($limit);
     }
@@ -303,6 +305,7 @@ class Character extends Model
     public function scopeRecentlySearched(Builder $query, int $limit = 5): Builder
     {
         return $query->select(self::SUMMARY_COLUMNS)
+            ->with('rank:character_id,region_rank')
             ->whereNotNull('last_searched_at')
             ->orderByDesc('last_searched_at')
             ->limit($limit);
@@ -323,7 +326,8 @@ class Character extends Model
         return $query
             // Only the columns CharacterSuggestionResource emits (+ ordering keys);
             // never haul media/talents/equipment/stats JSONB on a per-keystroke query. (P2.3)
-            ->select(['id', 'region', 'realm', 'display_realm', 'name', 'display_name', 'class_id', 'level', 'faction', 'num_of_searches'])
+            ->select(['id', 'region', 'realm', 'display_realm', 'name', 'display_name', 'class_id', 'level', 'faction', 'num_of_searches', 'mythic_plus_rating', 'mythic_plus_rating_color'])
+            ->with('rank:character_id,region_rank')
             ->where('game_version', 'retail')
             ->where(function ($q) use ($prefix, $substring) {
                 $q->where('name', 'LIKE', $prefix)
