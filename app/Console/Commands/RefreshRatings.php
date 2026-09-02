@@ -21,7 +21,7 @@ class RefreshRatings extends Command
 {
     protected $signature = 'ratings:refresh {--cap= : Override blizzard.rating_refresh.daily_cap}';
 
-    protected $description = 'Shallow-resync rated endgame characters whose rating predates the current season (ladder members first)';
+    protected $description = 'Shallow-resync rated endgame characters whose rating is untagged or predates the current season (ladder members first)';
 
     public function handle(RankMaterializer $ranks): int
     {
@@ -92,6 +92,13 @@ class RefreshRatings extends Command
         return self::SUCCESS;
     }
 
+    /**
+     * Characters whose rating we can't yet attribute to this season: never
+     * tagged (pre-tagging rows, or a profile without a seasons list) or not
+     * fetched since the season started. A resync always stamps
+     * rating_synced_at and tags the season, so one Shallow sync drains a
+     * row from the backlog whether or not it lands in the ladder.
+     */
     private function backlog(Carbon $seasonStart): Builder
     {
         return Character::query()
@@ -99,8 +106,9 @@ class RefreshRatings extends Command
             ->where('characters.level', '>=', (int) config('blizzard.endgame_level', 90))
             ->where('characters.mythic_plus_rating', '>', 0)
             ->where(function (Builder $q) use ($seasonStart) {
-                $q->whereNull('characters.rating_synced_at')
-                    ->orWhere('characters.rating_synced_at', '<', $seasonStart->format('Y-m-d H:i:s'));
+                $q->whereNull('characters.rating_season_id')
+                    ->orWhere('characters.rating_synced_at', '<', $seasonStart->format('Y-m-d H:i:s'))
+                    ->orWhereNull('characters.rating_synced_at');
             });
     }
 }

@@ -41,20 +41,25 @@ class RefreshRatingsTest extends TestCase
         ], $overrides));
     }
 
-    public function test_dispatches_shallow_proactive_syncs_for_stale_rated_endgame_characters(): void
+    public function test_backlog_is_untagged_or_not_synced_this_season(): void
     {
-        $this->stale('stale', 2000);
-        $this->stale('never', 2000, ['rating_synced_at' => null]);
-        $this->stale('fresh', 2000, ['rating_synced_at' => '2026-08-25 00:00:00']);
+        $this->stale('untagged', 2000, ['rating_season_id' => null, 'rating_synced_at' => '2026-08-25 00:00:00']);
+        $this->stale('never', 2000, ['rating_season_id' => null, 'rating_synced_at' => null]);
+        $this->stale('lastseason_stale', 2000, ['rating_season_id' => 17, 'rating_synced_at' => '2026-08-01 00:00:00']);
+        $this->stale('lastseason_checked', 2000, ['rating_season_id' => 17, 'rating_synced_at' => '2026-08-25 00:00:00']);
+        $this->stale('current', 2000, ['rating_season_id' => 18, 'rating_synced_at' => '2026-08-25 00:00:00']);
         $this->stale('unrated', 0);
         $this->stale('lowbie', 2000, ['level' => 80]);
 
         $this->artisan('ratings:refresh')->assertExitCode(0);
 
-        Bus::assertDispatchedTimes(SyncCharacterData::class, 2);
-        Bus::assertDispatched(SyncCharacterData::class, fn (SyncCharacterData $j) => $j->name === 'stale'
-            && $j->depth === SyncDepth::Shallow && $j->origin === SyncOrigin::Proactive);
-        Bus::assertDispatched(SyncCharacterData::class, fn (SyncCharacterData $j) => $j->name === 'never');
+        Bus::assertDispatchedTimes(SyncCharacterData::class, 3);
+        foreach (['untagged', 'never', 'lastseason_stale'] as $name) {
+            Bus::assertDispatched(SyncCharacterData::class, fn (SyncCharacterData $j) => $j->name === $name
+                && $j->depth === SyncDepth::Shallow && $j->origin === SyncOrigin::Proactive);
+        }
+        Bus::assertNotDispatched(SyncCharacterData::class, fn (SyncCharacterData $j) => $j->name === 'lastseason_checked');
+        Bus::assertNotDispatched(SyncCharacterData::class, fn (SyncCharacterData $j) => $j->name === 'current');
     }
 
     public function test_ladder_members_come_first_then_highest_rating_and_cap_applies(): void
