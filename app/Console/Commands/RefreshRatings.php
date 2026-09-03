@@ -57,6 +57,9 @@ class RefreshRatings extends Command
             ->whereIn('r.period_id', $periods->all() ?: [-1])
             ->selectRaw('DISTINCT LOWER(lm.name) AS name, lm.realm_slug, r.region');
 
+        // ->toBase()->cursor() streams plain stdClass rows one at a time instead
+        // of hydrating Eloquent models: at cap=80000 (prod), ->get() materialised
+        // 80k Character models and blew the 256M CLI memory_limit (silent exit 255).
         $rows = $backlog
             ->leftJoinSub($members, 'lm', function ($join) {
                 $join->on('lm.name', '=', 'characters.name')
@@ -67,8 +70,11 @@ class RefreshRatings extends Command
             ->orderByDesc('characters.mythic_plus_rating')
             ->orderBy('characters.id')
             ->limit($cap)
-            ->get(['characters.region', 'characters.realm', 'characters.name']);
+            ->select(['characters.region', 'characters.realm', 'characters.name'])
+            ->toBase()
+            ->cursor();
 
+        $dispatched = 0;
         foreach ($rows as $row) {
             SyncCharacterData::dispatch(
                 region: $row->region,
@@ -77,9 +83,9 @@ class RefreshRatings extends Command
                 depth: SyncDepth::Shallow,
                 origin: SyncOrigin::Proactive,
             );
+            $dispatched++;
         }
 
-        $dispatched = $rows->count();
         $remaining = max(0, $total - $dispatched);
         // Two separate writes (not one combined line): Laravel's test double
         // matches each expectsOutputToContain() substring against a distinct
