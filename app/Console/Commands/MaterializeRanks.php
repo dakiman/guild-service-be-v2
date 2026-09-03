@@ -15,7 +15,7 @@ class MaterializeRanks extends Command
 {
     protected $signature = 'ranks:materialize {--dry-run : Count the population without writing}';
 
-    protected $description = 'Rebuild character_ranks (world/region/realm/class/spec) and realm_run_boards from season-fresh ratings';
+    protected $description = 'Rebuild character_ranks for the current season from ratings tagged with it (rating_season_id), plus realm_run_boards';
 
     public function handle(RankMaterializer $ranks, RealmSlugMapBuilder $slugMap, RealmRunBoardBuilder $boards): int
     {
