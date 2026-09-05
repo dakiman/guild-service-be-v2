@@ -33,6 +33,7 @@ class CharacterSummaryResource extends JsonResource
                 ? ['rating' => (int) $this->mythic_plus_rating, 'color' => $this->mythic_plus_rating_color] + $this->ratingSeasonBlock()
                 : null,
             'region_rank' => $this->relationLoaded('rank') ? $this->rank?->region_rank : null,
+            'recruitment' => (bool) $this->recruitment,
         ];
     }
 }
