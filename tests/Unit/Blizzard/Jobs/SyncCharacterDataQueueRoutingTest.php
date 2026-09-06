@@ -23,7 +23,7 @@ final class SyncCharacterDataQueueRoutingTest extends TestCase
         $expectations = [
             [SyncOrigin::UserLookup, 'blizzard-user-sync'],
             [SyncOrigin::RosterFanout, 'blizzard-roster-sync'],
-            [SyncOrigin::TeammateCrawl, 'blizzard-background'],
+            [SyncOrigin::TeammateCrawl, 'blizzard-crawl'],
             [SyncOrigin::Proactive, 'blizzard-background'],
         ];
 

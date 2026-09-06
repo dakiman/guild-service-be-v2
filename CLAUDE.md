@@ -109,9 +109,10 @@ Sanctum bearer tokens (issued on register/login, deleted on logout). Blizzard OA
 1. `blizzard-auth` — token refresh
 2. `blizzard-user-sync` — user-initiated lookups
 3. `blizzard-roster-sync` — guild roster fan-out
-4. `blizzard-background` — proactive sync
+4. `blizzard-background` — refresh (Shallow) batch + proactive/discovery syncs
+5. `blizzard-crawl` — teammate crawls, best-effort discovery
 
-`SyncCharacterData` routing is declared via the `SyncOrigin` enum (`app/Enums/SyncOrigin.php`) — UserLookup → user-sync, RosterFanout → roster-sync, TeammateCrawl/Proactive → background. Never infer lanes from `crawlDepth`/`depth`. Roster fan-out is staggered at `blizzard.roster_fanout.jobs_per_minute` (default 30) so a cold guild can't flood a lane or churn jobs into `retryUntil`.
+`SyncCharacterData` routing is declared via the `SyncOrigin` enum (`app/Enums/SyncOrigin.php`) — UserLookup → user-sync, RosterFanout → roster-sync, TeammateCrawl → crawl (its own lane so it can neither starve nor be starved by the refresh/proactive lane), Proactive/Discovery → background. Never infer lanes from `crawlDepth`/`depth`. Roster fan-out is staggered at `blizzard.roster_fanout.jobs_per_minute` (default 30) so a cold guild can't flood a lane or churn jobs into `retryUntil`. Horizon (`config/horizon.php`) runs `blizzard-background`, `blizzard-crawl`, and `blizzard-fanout` (roster-sync + ladder) as three explicit supervisors — not one `auto`-balanced pool — so a Full-heavy crawl stretch can't starve the daily refresh batch and vice versa.
 
 `SyncGuildData` routes the same way (origin param: `UserLookup` → user-sync; `Discovery` → background). Its `SyncGuildRoster` fan-out is opt-in via `forceRosterFanout` — only the raider.io seeder passes it.
 

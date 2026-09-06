@@ -27,7 +27,11 @@ enum SyncOrigin: string
         return match ($this) {
             self::UserLookup => 'blizzard-user-sync',
             self::RosterFanout => 'blizzard-roster-sync',
-            self::TeammateCrawl, self::Proactive, self::Discovery => 'blizzard-background',
+            // Teammate crawls are best-effort discovery and get their own lane so
+            // they can neither starve the refresh/proactive lane behind a Full-heavy
+            // stretch, nor be starved themselves behind the daily refresh batch.
+            self::TeammateCrawl => 'blizzard-crawl',
+            self::Proactive, self::Discovery => 'blizzard-background',
         };
     }
 }

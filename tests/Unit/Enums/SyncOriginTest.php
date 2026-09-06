@@ -13,7 +13,7 @@ final class SyncOriginTest extends TestCase
     {
         $this->assertSame('blizzard-user-sync', SyncOrigin::UserLookup->queue());
         $this->assertSame('blizzard-roster-sync', SyncOrigin::RosterFanout->queue());
-        $this->assertSame('blizzard-background', SyncOrigin::TeammateCrawl->queue());
+        $this->assertSame('blizzard-crawl', SyncOrigin::TeammateCrawl->queue());
         $this->assertSame('blizzard-background', SyncOrigin::Proactive->queue());
     }
 

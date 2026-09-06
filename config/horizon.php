@@ -229,14 +229,50 @@ return [
                 'timeout' => 120,
                 'nice' => 0,
             ],
+            // The single blizzard-background supervisor used to balance 'auto' over
+            // roster fan-out, the refresh/proactive lane, and ladder seeding — in
+            // practice keeping 6 of 8 workers on the two mostly-idle queues while the
+            // hot background queue got 2-3. It also queued teammate crawls behind the
+            // daily refresh batch on the same FIFO queue, so a Full-heavy stretch made
+            // the day's Shallows run late (and expire), while crawls sitting behind a
+            // full day of Shallows expired at their 24h retryUntil unrun (3,500+
+            // expired on 2026-09-05). Split into three explicit supervisors so the
+            // refresh/proactive lane, best-effort crawls, and bursty fan-out/ladder
+            // work each get a dedicated, correctly-sized pool.
             'blizzard-background' => [
                 'connection' => 'redis',
-                'queue' => ['blizzard-roster-sync', 'blizzard-background', 'blizzard-ladder'],
+                'queue' => ['blizzard-background'],
+                'balance' => 'simple',
+                'minProcesses' => 4,
+                'maxProcesses' => 4,
+                'maxTime' => 3600,
+                'maxJobs' => 1000,
+                'memory' => 256,
+                'tries' => 3,
+                'timeout' => 120,
+                'nice' => 0,
+            ],
+            'blizzard-crawl' => [
+                'connection' => 'redis',
+                'queue' => ['blizzard-crawl'],
+                'balance' => 'simple',
+                'minProcesses' => 2,
+                'maxProcesses' => 2,
+                'maxTime' => 3600,
+                'maxJobs' => 1000,
+                'memory' => 256,
+                'tries' => 3,
+                'timeout' => 120,
+                'nice' => 0,
+            ],
+            'blizzard-fanout' => [
+                'connection' => 'redis',
+                'queue' => ['blizzard-roster-sync', 'blizzard-ladder'],
                 'balance' => 'auto',
                 'autoScalingStrategy' => 'time',
-                'minProcesses' => 2,
-                'maxProcesses' => 8,
-                'balanceMaxShift' => 2,
+                'minProcesses' => 1,
+                'maxProcesses' => 3,
+                'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
                 'maxTime' => 3600,
                 'maxJobs' => 1000,
@@ -292,14 +328,44 @@ return [
                 'timeout' => 120,
                 'nice' => 0,
             ],
+            // See the production section above for why blizzard-background was split
+            // into three explicit supervisors (FIFO starvation of crawls behind the
+            // refresh batch on 2026-09-05; auto-balance left the hot queue
+            // under-served).
             'blizzard-background' => [
                 'connection' => 'redis',
-                'queue' => ['blizzard-roster-sync', 'blizzard-background', 'blizzard-ladder'],
+                'queue' => ['blizzard-background'],
+                'balance' => 'simple',
+                'minProcesses' => 4,
+                'maxProcesses' => 4,
+                'maxTime' => 3600,
+                'maxJobs' => 1000,
+                'memory' => 256,
+                'tries' => 3,
+                'timeout' => 120,
+                'nice' => 0,
+            ],
+            'blizzard-crawl' => [
+                'connection' => 'redis',
+                'queue' => ['blizzard-crawl'],
+                'balance' => 'simple',
+                'minProcesses' => 2,
+                'maxProcesses' => 2,
+                'maxTime' => 3600,
+                'maxJobs' => 1000,
+                'memory' => 256,
+                'tries' => 3,
+                'timeout' => 120,
+                'nice' => 0,
+            ],
+            'blizzard-fanout' => [
+                'connection' => 'redis',
+                'queue' => ['blizzard-roster-sync', 'blizzard-ladder'],
                 'balance' => 'auto',
                 'autoScalingStrategy' => 'time',
-                'minProcesses' => 3,
-                'maxProcesses' => 8,
-                'balanceMaxShift' => 2,
+                'minProcesses' => 1,
+                'maxProcesses' => 3,
+                'balanceMaxShift' => 1,
                 'balanceCooldown' => 3,
                 'maxTime' => 3600,
                 'maxJobs' => 1000,

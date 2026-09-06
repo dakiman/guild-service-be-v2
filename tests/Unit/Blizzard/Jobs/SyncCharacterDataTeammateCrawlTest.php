@@ -171,7 +171,7 @@ final class SyncCharacterDataTeammateCrawlTest extends TestCase
             SyncCharacterData::class,
             fn ($d) => $d->crawlDepth === 1
                 && $d->depth === SyncDepth::Full
-                && $d->queue === 'blizzard-background',
+                && $d->queue === 'blizzard-crawl',
         );
     }
 
