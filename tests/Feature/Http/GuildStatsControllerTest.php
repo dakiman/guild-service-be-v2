@@ -54,6 +54,7 @@ class GuildStatsControllerTest extends TestCase
 
         $char2 = $this->createActiveGuildMember($guild, [
             'name' => 'healchar',
+            'display_name' => 'Healchar',
             'realm' => 'test-realm',
             'average_item_level' => 630,
             'mythic_plus_rating' => 3200,
@@ -84,7 +85,7 @@ class GuildStatsControllerTest extends TestCase
                 'member_count',
                 'avg_item_level',
                 'avg_mythic_plus_rating',
-                'top_mythic_plus' => ['rating', 'character' => ['name', 'realm', 'region', 'class_id']],
+                'top_mythic_plus' => ['rating', 'character' => ['name', 'display_name', 'realm', 'region', 'class_id']],
                 'role_coverage' => ['tank', 'healer', 'dps'],
                 'best_keys' => [['dungeon_id', 'dungeon_name', 'key_level']],
             ]);
@@ -98,6 +99,8 @@ class GuildStatsControllerTest extends TestCase
         // Top M+ should be char2 (3200 rating)
         $this->assertEquals(3200, $data['top_mythic_plus']['rating']);
         $this->assertEquals('healchar', $data['top_mythic_plus']['character']['name']);
+        $response->assertJsonPath('top_mythic_plus.character.name', 'healchar')
+            ->assertJsonPath('top_mythic_plus.character.display_name', 'Healchar');
 
         // Role coverage: 1 tank, 1 healer, 0 dps
         $this->assertEquals(1, $data['role_coverage']['tank']);

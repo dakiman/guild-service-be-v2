@@ -63,6 +63,7 @@ class GuildStatsService
                 'rating' => (int) $topMplus->mythic_plus_rating,
                 'character' => [
                     'name' => $topMplus->name,
+                    'display_name' => $topMplus->display_name,
                     'realm' => $topMplus->realm,
                     'region' => $topMplus->region,
                     'class_id' => $topMplus->class_id,
