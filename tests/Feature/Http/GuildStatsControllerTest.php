@@ -99,8 +99,7 @@ class GuildStatsControllerTest extends TestCase
         // Top M+ should be char2 (3200 rating)
         $this->assertEquals(3200, $data['top_mythic_plus']['rating']);
         $this->assertEquals('healchar', $data['top_mythic_plus']['character']['name']);
-        $response->assertJsonPath('top_mythic_plus.character.name', 'healchar')
-            ->assertJsonPath('top_mythic_plus.character.display_name', 'Healchar');
+        $response->assertJsonPath('top_mythic_plus.character.display_name', 'Healchar');
 
         // Role coverage: 1 tank, 1 healer, 0 dps
         $this->assertEquals(1, $data['role_coverage']['tank']);
